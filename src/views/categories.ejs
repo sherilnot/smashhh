@@ -1,0 +1,26 @@
+<%- include('partials/header', { title: 'Collections' }) %>
+
+<section class="page-section">
+  <div class="page-header">
+    <p class="eyebrow">Our Collections</p>
+    <h2 class="page-title">Browse by Category</h2>
+  </div>
+
+  <div class="category-grid">
+    <% categories.forEach(cat => { %>
+    <a href="/categories/<%= cat.id %>" class="category-card">
+      <div class="category-card-img-wrap">
+        <img src="<%= cat.image_url %>" alt="<%= cat.name %>" class="category-card-img" />
+        <div class="category-card-overlay"></div>
+      </div>
+      <div class="category-card-body">
+        <h3 class="category-card-name"><%= cat.name %></h3>
+        <p class="category-card-desc"><%= cat.description %></p>
+        <span class="category-card-link">Shop Now →</span>
+      </div>
+    </a>
+    <% }) %>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

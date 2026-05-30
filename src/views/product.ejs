@@ -1,0 +1,36 @@
+<%- include('partials/header', { title: product.name }) %>
+
+<section class="page-section">
+  <div class="breadcrumb">
+    <a href="/categories">Collections</a>
+    <span>›</span>
+    <a href="/categories/<%= product.category_id %>"><%= product.category_name %></a>
+    <span>›</span>
+    <span><%= product.name %></span>
+  </div>
+
+  <div class="product-detail">
+    <div class="product-detail-img-wrap">
+      <img src="<%= product.image_url %>" alt="<%= product.name %>" class="product-detail-img" />
+    </div>
+    <div class="product-detail-info">
+      <p class="eyebrow"><%= product.category_name %></p>
+      <h1 class="product-detail-name"><%= product.name %></h1>
+      <p class="product-detail-price">₹<%= Number(product.price).toFixed(2) %></p>
+      <p class="product-detail-desc"><%= product.description %></p>
+
+      <div class="product-sizes">
+        <p class="sizes-label">Available Sizes</p>
+        <div class="sizes-list">
+          <% product.sizes.split(',').forEach(s => { %>
+          <span class="size-chip"><%= s.trim() %></span>
+          <% }) %>
+        </div>
+      </div>
+
+      <a href="/categories/<%= product.category_id %>" class="btn btn-outline">← Back to <%= product.category_name %></a>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,36 @@
+<%- include('partials/header', { title: category.name }) %>
+
+<section class="page-section">
+  <div class="breadcrumb">
+    <a href="/categories">Collections</a>
+    <span>›</span>
+    <span><%= category.name %></span>
+  </div>
+
+  <div class="page-header">
+    <p class="eyebrow">Collection</p>
+    <h2 class="page-title"><%= category.name %></h2>
+    <p class="page-desc"><%= category.description %></p>
+  </div>
+
+  <% if (products.length === 0) { %>
+    <p class="empty-msg">No products in this collection yet.</p>
+  <% } else { %>
+  <div class="product-grid">
+    <% products.forEach(p => { %>
+    <a href="/products/<%= p.id %>" class="product-card">
+      <div class="product-card-img-wrap">
+        <img src="<%= p.image_url %>" alt="<%= p.name %>" class="product-card-img" />
+      </div>
+      <div class="product-card-body">
+        <h3 class="product-card-name"><%= p.name %></h3>
+        <p class="product-card-price">₹<%= Number(p.price).toFixed(2) %></p>
+        <p class="product-card-sizes"><%= p.sizes %></p>
+      </div>
+    </a>
+    <% }) %>
+  </div>
+  <% } %>
+</section>
+
+<%- include('partials/footer') %>

@@ -20,7 +20,7 @@ This implementation plan breaks down the Employee Management System into discret
     - Export pool instance for use across application
     - _Requirements: 19.5, 16.1, 16.2_
 
-- [ ] 2. Authentication Service implementation
+- [x] 2. Authentication Service implementation
   - [x] 2.1 Implement password hashing and verification functions
     - Create src/services/authService.js
     - Implement hashPassword() function using bcrypt with cost factor 12
@@ -41,13 +41,13 @@ This implementation plan breaks down the Employee Management System into discret
     - Log failed authentication attempts without exposing passwords
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 16.3, 16.6, 19.1_
   
-  - [ ] 2.4 Implement verifySession() function
+  - [x] 2.4 Implement verifySession() function
     - Query session from database by token
     - Check session is_active and not expired (expires_at > NOW())
     - Return SessionData with userId and userRole, or null if invalid
     - _Requirements: 2.1, 2.2, 2.3_
   
-  - [ ] 2.5 Implement logout() function
+  - [x] 2.5 Implement logout() function
     - Mark session as inactive in database
     - _Requirements: 2.4_
   
@@ -67,8 +67,8 @@ This implementation plan breaks down the Employee Management System into discret
     - Test session verification with expired token
     - Test logout marks session inactive
 
-- [ ] 3. Authentication routes and middleware
-  - [ ] 3.1 Implement authentication middleware
+- [x] 3. Authentication routes and middleware
+  - [x] 3.1 Implement authentication middleware
     - Create src/middleware/auth.js
     - Implement requireAuth middleware to verify session from cookie
     - Implement roleGuard middleware to check user role (employee, store_manager, warehouse_manager)
@@ -76,7 +76,7 @@ This implementation plan breaks down the Employee Management System into discret
     - Return 403 Forbidden for unauthorized role access
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
   
-  - [ ] 3.2 Create login and logout routes
+  - [x] 3.2 Create login and logout routes
     - Create src/routes/auth.js
     - Implement GET /login route to render login page
     - Implement POST /login route to authenticate and set session cookie
@@ -85,7 +85,7 @@ This implementation plan breaks down the Employee Management System into discret
     - Redirect based on user role after successful login
     - _Requirements: 1.1, 1.2, 2.4, 2.5, 2.6, 2.7, 17.1, 17.2, 17.3_
   
-  - [ ] 3.3 Create login view template
+  - [x] 3.3 Create login view template
     - Create src/views/auth/login.ejs
     - Include form with user_id and password fields
     - Display error messages from authentication failures

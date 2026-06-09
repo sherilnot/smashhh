@@ -195,17 +195,122 @@ async function authenticate(userId, password) {
 }
 
 /**
- * Authentication Service object.
+ * Verify a session token and return the associated user data if the session is
+ * valid, active, and not expired.
  *
- * Subsequent subtasks will extend this object with:
- *   - verifySession()       (2.4)
- *   - logout()              (2.5)
+ * Algorithm:
+ *   1. Validate input (reject non-string or empty tokens) and return null.
+ *   2. Look up the session joined with its user using a parameterized query
+ *      (Req 17.5), filtering on session_token, sessions.is_active = true, and
+ *      expires_at > NOW() so that expired or inactive sessions are excluded by
+ *      the query and naturally return null.
+ *   3. Return a SessionData object on success, otherwise null.
+ *
+ * Requirements:
+ *   - 2.1: a valid, non-expired token returns the associated user data.
+ *   - 2.2: an expired token is rejected and returns null.
+ *   - 2.3: an inactive session is rejected and returns null.
+ *
+ * @param {string} sessionToken - The session token to verify
+ * @returns {Promise<SessionData|null>} SessionData when valid, otherwise null
+ */
+async function verifySession(sessionToken) {
+  // Step 1: Input validation. Missing or malformed tokens are never valid.
+  if (typeof sessionToken !== 'string' || sessionToken.trim() === '') {
+    return null;
+  }
+
+  try {
+    // Step 2: Query the session joined with the user using a parameterized
+    // query (Req 17.5). Filtering on is_active = true and expires_at > NOW()
+    // ensures inactive (Req 2.3) and expired (Req 2.2) sessions are excluded.
+    const result = await pool.query(
+      `SELECT u.id AS user_id, u.role, s.created_at, s.expires_at
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+        WHERE s.session_token = $1
+          AND s.is_active = true
+          AND s.expires_at > NOW()`,
+      [sessionToken]
+    );
+
+    if (!result || result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+
+    // Step 3: Return the session data for the valid session (Req 2.1).
+    return {
+      userId: row.user_id,
+      userRole: row.role,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at
+    };
+  } catch (error) {
+    // Log database/internal errors with a stack trace (Req 16.1) and fail
+    // closed by returning null.
+    console.error('[Auth] Session verification error', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    return null;
+  }
+}
+
+/**
+ * Log a user out by marking their session as inactive.
+ *
+ * Sets sessions.is_active = false for the row matching the given session_token
+ * using a parameterized query (Req 17.5). After this the session will be
+ * rejected by verifySession (which filters on is_active = true), so the token
+ * can no longer be used.
+ *
+ * The operation is idempotent: logging out with an unknown or already-inactive
+ * token simply updates zero rows and still resolves successfully. Invalid or
+ * empty tokens are treated as no-ops and return without touching the database.
+ *
+ * Requirement 2.4: when a user logs out, the session is marked as inactive.
+ *
+ * @param {string} sessionToken - The session token to invalidate
+ * @returns {Promise<void>}
+ */
+async function logout(sessionToken) {
+  // Missing or malformed tokens have no corresponding session to invalidate.
+  if (typeof sessionToken !== 'string' || sessionToken.trim() === '') {
+    return;
+  }
+
+  try {
+    // Mark the matching session inactive using a parameterized query
+    // (Req 17.5) to prevent SQL injection.
+    await pool.query(
+      'UPDATE sessions SET is_active = false WHERE session_token = $1',
+      [sessionToken]
+    );
+  } catch (error) {
+    // Log database/internal errors with a stack trace (Req 16.1) and rethrow so
+    // callers can surface the failure rather than assume a successful logout.
+    console.error('[Auth] Logout error', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
+/**
+ * Authentication Service object.
  */
 const AuthenticationService = {
   hashPassword,
   verifyPassword,
   generateSecureToken,
-  authenticate
+  authenticate,
+  verifySession,
+  logout
 };
 
 module.exports = AuthenticationService;

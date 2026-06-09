@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>No Checklist</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    nav a { margin-right: 1rem; }
+    nav button { background: none; border: none; color: #2563eb; cursor: pointer; text-decoration: underline; }
+    .info { background: #eff6ff; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+    form.date-form { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
+    input[type=date] { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; }
+    button[type=submit] { background: #2563eb; color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Inventory Checklist</h1>
+  <nav>
+    <a href="/warehouse/dashboard">Dashboard</a>
+    <a href="/warehouse/history">History</a>
+    <form style="display:inline" method="POST" action="/logout">
+      <button type="submit">Logout</button>
+    </form>
+  </nav>
+  <form class="date-form" method="GET" action="/warehouse/checklist">
+    <label>Date: <input type="date" name="date" value="<%= date.toISOString().split('T')[0] %>" /></label>
+    <button type="submit">Load</button>
+  </form>
+  <div class="info">No deliveries expected for <%= date.toLocaleDateString() %>.</div>
+</body>
+</html>

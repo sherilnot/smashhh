@@ -1,26 +1,88 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Store Manager Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    .card { background: #f4f5f7; padding: 1.5rem; border-radius: 8px; margin-top: 1rem; }
-    button { background: none; border: none; color: #2563eb; cursor: pointer; text-decoration: underline; }
-  </style>
-</head>
-<body>
-  <h1>Store Manager Dashboard</h1>
-  <nav>
-    <a href="/manager/wages">Wage Reports</a>
-    <a href="/manager/employees">Employees</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'Manager Dashboard - Burger Store', role: 'store_manager', active: 'dashboard' }) %>
+
+  <h1><span class="emoji">🍔</span>Store Manager Dashboard</h1>
+
   <div class="card">
-    <p>Welcome! Use the links above to view wage reports and manage employee hourly rates.</p>
+    <p>Review pending booking requests, end active shifts, track wages, and manage your crew.</p>
   </div>
-</body>
-</html>
+
+  <h2>Active Shifts</h2>
+  <% var bookings = (typeof activeBookings !== 'undefined' && activeBookings) ? activeBookings : []; %>
+  <% if (bookings.length === 0) { %>
+    <p class="empty">No active shifts to end at this time.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Shift Start</th>
+          <th>Shift End</th>
+          <th>Store</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% bookings.forEach(b => { %>
+        <tr>
+          <td><%= b.first_name %> <%= b.last_name %></td>
+          <td><%= new Date(b.start_time).toLocaleDateString() %> <%= new Date(b.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+          <td><%= new Date(b.end_time).toLocaleDateString() %> <%= new Date(b.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+          <td><%= b.store_location %></td>
+          <td>
+            <form method="POST" action="/manager/end-shift">
+              <input type="hidden" name="bookingId" value="<%= b.booking_id %>" />
+              <button type="submit" class="end-btn">End Shift</button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <h2>Earned Wages</h2>
+
+  <% if (typeof wageErrors !== 'undefined' && wageErrors && wageErrors.length > 0) { %>
+    <div class="notice">
+      Some employees were excluded due to invalid wage configuration:
+      <ul>
+        <% wageErrors.forEach(err => { %>
+          <li><%= err %></li>
+        <% }) %>
+      </ul>
+    </div>
+  <% } %>
+
+  <% var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : []; %>
+  <% if (entries.length === 0) { %>
+    <p class="empty">No wage entries are available.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Shift Date</th>
+          <th>Worked Hours</th>
+          <th class="amount">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% entries.forEach(entry => { %>
+        <tr>
+          <td><%= entry.employeeName %></td>
+          <td><%= new Date(entry.date).toLocaleDateString() %></td>
+          <td><%= entry.hoursWorked %></td>
+          <td class="amount">$<%= Number(entry.wageEarned).toFixed(2) %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total</td>
+          <td class="amount">$<%= Number(typeof wageTotal !== 'undefined' ? wageTotal : 0).toFixed(2) %></td>
+        </tr>
+      </tfoot>
+    </table>
+  <% } %>
+
+<%- include('../partials/footer') %>

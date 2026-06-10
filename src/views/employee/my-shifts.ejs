@@ -1,35 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>My Shifts</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
-    th { background: #f4f5f7; }
-    .error { background: #fee2e2; color: #b91c1c; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    .status-confirmed { color: #15803d; font-weight: bold; }
-    .status-cancelled { color: #b91c1c; }
-    .status-completed { color: #1d4ed8; }
-    button.cancel-btn { background: #dc2626; color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <h1>My Shifts</h1>
-  <nav>
-    <a href="/employee/dashboard">Dashboard</a>
-    <a href="/employee/shifts">Available Shifts</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'My Shifts - Burger Store', role: 'employee', active: 'my-shifts' }) %>
+
+  <h1><span class="emoji">🧾</span>My Shifts</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
   <% if (shifts.length === 0) { %>
-    <p>No shifts found in this period.</p>
+    <p class="empty">No shifts found in this period.</p>
   <% } else { %>
     <table>
       <thead>
@@ -44,14 +20,15 @@
       </thead>
       <tbody>
         <% shifts.forEach(shift => { %>
+          <% const status = (shift.bookingStatus === null || shift.bookingStatus === undefined || shift.bookingStatus === '') ? null : String(shift.bookingStatus); %>
           <tr>
             <td><%= new Date(shift.startTime).toLocaleDateString() %></td>
             <td><%= new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
             <td><%= new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
             <td><%= shift.storeLocation %></td>
-            <td class="status-<%= shift.bookingStatus %>"><%= shift.bookingStatus %></td>
+            <td class="status-<%= status === null ? 'unknown' : status %>"><%= status === null ? 'Unknown' : status %></td>
             <td>
-              <% if (shift.bookingStatus === 'confirmed') { %>
+              <% if (status === 'confirmed') { %>
                 <form method="POST" action="/employee/cancel">
                   <input type="hidden" name="shiftId" value="<%= shift.id %>" />
                   <button type="submit" class="cancel-btn">Cancel</button>
@@ -63,5 +40,5 @@
       </tbody>
     </table>
   <% } %>
-</body>
-</html>
+
+<%- include('../partials/footer') %>

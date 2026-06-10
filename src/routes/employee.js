@@ -1,14 +1,21 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getAvailableShifts, bookShift, cancelShift, getEmployeeShifts } = require('../services/shiftService');
+const { getEmployeeWageEntries, totalWage } = require('../services/wageService');
 
 const router = express.Router();
 
 router.use(requireAuth, roleGuard('employee'));
 
-// Dashboard
-router.get('/dashboard', (req, res) => {
-  res.render('employee/dashboard', { user: req.user });
+// Dashboard - shows the employee's own completed-shift wage entries and total
+router.get('/dashboard', async (req, res) => {
+  try {
+    const { entries } = await getEmployeeWageEntries(req.user.userId);
+    const total = totalWage(entries);
+    res.render('employee/dashboard', { user: req.user, wageEntries: entries, wageTotal: total });
+  } catch (e) {
+    res.render('employee/dashboard', { user: req.user, wageEntries: [], wageTotal: 0 });
+  }
 });
 
 // Available shifts (next 7 days by default)

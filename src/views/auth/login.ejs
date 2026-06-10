@@ -1,117 +1,41 @@
 <!DOCTYPE html>
 <!--
-  Login view (task 3.3)
-
-  Renders the login form posting to POST /login with user_id and password
-  fields and displays authentication error messages.
-
-  Requirement 18.1: all user-provided/dynamic content is rendered with EJS
-  auto-escaping (<%= %>). Never use <%- %> for user input here.
-
-  Template locals:
-    - error  {string|null} Optional error message to display.
-    - userId {string}      Previously submitted user id, re-populated on error.
+  Login view — Burger Store themed.
+  Requirement 18.1: dynamic content rendered with EJS auto-escaping (<%= %>).
+  Locals: error {string|null}, userId {string}
 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login - Employee Management System</title>
-  <style>
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      background: #f4f5f7;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-    }
-    .login-card {
-      background: #ffffff;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      width: 320px;
-    }
-    .login-card h1 {
-      font-size: 1.25rem;
-      margin-top: 0;
-      text-align: center;
-    }
-    .form-group {
-      margin-bottom: 1rem;
-    }
-    .form-group label {
-      display: block;
-      margin-bottom: 0.25rem;
-      font-size: 0.875rem;
-      color: #333;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-    }
-    .btn {
-      width: 100%;
-      padding: 0.6rem;
-      background: #2563eb;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    .btn:hover {
-      background: #1d4ed8;
-    }
-    .error-message {
-      background: #fee2e2;
-      color: #b91c1c;
-      padding: 0.5rem 0.75rem;
-      border-radius: 4px;
-      font-size: 0.875rem;
-      margin-bottom: 1rem;
-    }
-  </style>
+  <title>Login - Burger Store</title>
+  <link rel="stylesheet" href="/css/theme.css" />
 </head>
 <body>
-  <div class="login-card">
-    <h1>Employee Management System</h1>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand-big">🍔 Burger Store</div>
+      <div class="tagline">Staff &amp; Shift Management</div>
 
-    <% if (typeof error !== 'undefined' && error) { %>
-      <div class="error-message"><%= error %></div>
-    <% } %>
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="error"><%= error %></div>
+      <% } %>
 
-    <form method="POST" action="/login">
-      <div class="form-group">
-        <label for="user_id">User ID</label>
-        <input
-          type="text"
-          id="user_id"
-          name="user_id"
-          value="<%= typeof userId !== 'undefined' && userId ? userId : '' %>"
-          autocomplete="username"
-          required
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          name="password"
-          autocomplete="current-password"
-          required
-        />
-      </div>
-
-      <button type="submit" class="btn">Log In</button>
-    </form>
+      <form method="POST" action="/login">
+        <div class="form-group">
+          <label for="user_id">User ID</label>
+          <input type="text" id="user_id" name="user_id"
+            value="<%= typeof userId !== 'undefined' && userId ? userId : '' %>"
+            autocomplete="username" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password"
+            autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn">Log In</button>
+      </form>
+    </div>
   </div>
 </body>
 </html>

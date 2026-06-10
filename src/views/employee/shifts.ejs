@@ -1,32 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Available Shifts</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
-    th { background: #f4f5f7; }
-    .error { background: #fee2e2; color: #b91c1c; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    button { background: #2563eb; color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <h1>Available Shifts</h1>
-  <nav>
-    <a href="/employee/dashboard">Dashboard</a>
-    <a href="/employee/my-shifts">My Shifts</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'Available Shifts - Burger Store', role: 'employee', active: 'shifts' }) %>
+
+  <h1><span class="emoji">🗓️</span>Available Shifts</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
   <% if (shifts.length === 0) { %>
-    <p>No available shifts in this period.</p>
+    <p class="empty">No available shifts in this period.</p>
   <% } else { %>
     <table>
       <thead>
@@ -58,5 +37,5 @@
       </tbody>
     </table>
   <% } %>
-</body>
-</html>
+
+<%- include('../partials/footer') %>

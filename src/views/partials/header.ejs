@@ -1,0 +1,56 @@
+<%
+  /* Expected locals: title, role ('employee'|'store_manager'|'warehouse_manager'), active (key) */
+  var navRole = (typeof role !== 'undefined' && role) ? role : '';
+  var activeKey = (typeof active !== 'undefined' && active) ? active : '';
+  var menus = {
+    employee: [
+      { key: 'dashboard', href: '/employee/dashboard', ico: '🍔', label: 'Dashboard' },
+      { key: 'shifts',    href: '/employee/shifts',    ico: '🗓️', label: 'Available Shifts' },
+      { key: 'my-shifts', href: '/employee/my-shifts', ico: '🧾', label: 'My Shifts' }
+    ],
+    store_manager: [
+      { key: 'dashboard', href: '/manager/dashboard', ico: '🍔', label: 'Dashboard' },
+      { key: 'pending',   href: '/manager/pending',   ico: '⏳', label: 'Pending Requests' },
+      { key: 'wages',     href: '/manager/wages',      ico: '💵', label: 'Wage Reports' },
+      { key: 'employees', href: '/manager/employees',  ico: '🧑\u200d🍳', label: 'Employees' }
+    ],
+    warehouse_manager: [
+      { key: 'dashboard',  href: '/warehouse/dashboard', ico: '🍔', label: 'Dashboard' },
+      { key: 'checklist',  href: '/warehouse/checklist', ico: '📦', label: "Today's Checklist" },
+      { key: 'history',    href: '/warehouse/history',   ico: '📚', label: 'History' }
+    ]
+  };
+  var items = menus[navRole] || [];
+  var roleLabel = { employee: 'Crew Member', store_manager: 'Store Manager', warehouse_manager: 'Warehouse Manager' }[navRole] || '';
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= typeof title !== 'undefined' ? title : 'Burger Store' %></title>
+  <link rel="stylesheet" href="/css/theme.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand"><span class="logo">🍔</span> Burger <span class="accent">Store</span></span>
+    <span class="spacer"></span>
+    <% if (roleLabel) { %><span class="who"><%= roleLabel %></span><% } %>
+  </header>
+  <div class="layout">
+    <% if (items.length) { %>
+    <aside class="sidebar">
+      <div class="section-label">Menu</div>
+      <% items.forEach(function(it){ %>
+        <a href="<%= it.href %>" class="<%= activeKey === it.key ? 'active' : '' %>">
+          <span class="ico"><%= it.ico %></span><span><%= it.label %></span>
+        </a>
+      <% }); %>
+      <div class="logout">
+        <form method="POST" action="/logout">
+          <button type="submit"><span class="ico">🚪</span><span>Logout</span></button>
+        </form>
+      </div>
+    </aside>
+    <% } %>
+    <main class="content">

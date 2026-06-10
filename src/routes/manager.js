@@ -1,13 +1,130 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
-const { calculateAllWages, updateHourlyRate } = require('../services/wageService');
+const { calculateAllWages, updateHourlyRate, getManagerWageEntries, totalWage } = require('../services/wageService');
+const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
+const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
 
-router.get('/dashboard', (req, res) => {
-  res.render('manager/dashboard', { user: req.user });
+// Manager dashboard: active (confirmed, started) bookings + wage entries (Req 7.1, 9.1, 9.3).
+router.get('/dashboard', async (req, res) => {
+  try {
+    const { entries, errors } = await getManagerWageEntries(req.user.userId);
+    const total = totalWage(entries);
+
+    // Fetch confirmed bookings on shifts that have already started (eligible to end).
+    const activeRes = await pool.query(
+      `SELECT sb.id AS booking_id, u.first_name, u.last_name,
+              s.start_time, s.end_time, s.store_location
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       JOIN users u ON u.id = sb.employee_id
+       WHERE sma.manager_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time <= NOW()
+       ORDER BY s.start_time ASC`,
+      [req.user.userId]
+    );
+
+    res.render('manager/dashboard', {
+      user: req.user,
+      wageEntries: entries,
+      wageTotal: total,
+      wageErrors: errors,
+      activeBookings: activeRes.rows
+    });
+  } catch (e) {
+    console.error('[Manager] dashboard error', e);
+    res.render('manager/dashboard', {
+      user: req.user,
+      wageEntries: [],
+      wageTotal: 0,
+      wageErrors: [],
+      activeBookings: []
+    });
+  }
+});
+
+// Pending confirmation queue for the manager's stores (Req 4.1, 4.2, 4.3).
+router.get('/pending', async (req, res) => {
+  const { hasManagedStore, requests } = await getPendingRequests(req.user.userId);
+  res.render('manager/pending', {
+    user: req.user,
+    hasManagedStore,
+    requests,
+    error: null
+  });
+});
+
+// Confirm a pending booking (Req 5.1, 12.1, 12.2).
+router.post('/confirm', async (req, res) => {
+  const { bookingId } = req.body;
+  const result = await confirmBooking(req.user.userId, req.user.userRole, bookingId);
+  if (result.status === 403) {
+    return res.status(403).send('403 Forbidden: You do not have access to this resource.');
+  }
+  if (result.success) {
+    return res.redirect('/manager/pending');
+  }
+  const { hasManagedStore, requests } = await getPendingRequests(req.user.userId);
+  return res.render('manager/pending', {
+    user: req.user,
+    hasManagedStore,
+    requests,
+    error: result.error
+  });
+});
+
+// Reject a pending booking (Req 6.1, 12.1, 12.2).
+router.post('/reject', async (req, res) => {
+  const { bookingId } = req.body;
+  const result = await rejectBooking(req.user.userId, req.user.userRole, bookingId);
+  if (result.status === 403) {
+    return res.status(403).send('403 Forbidden: You do not have access to this resource.');
+  }
+  if (result.success) {
+    return res.redirect('/manager/pending');
+  }
+  const { hasManagedStore, requests } = await getPendingRequests(req.user.userId);
+  return res.render('manager/pending', {
+    user: req.user,
+    hasManagedStore,
+    requests,
+    error: result.error
+  });
+});
+
+// End (complete) a confirmed shift (Req 7.1, 12.1, 12.2).
+router.post('/end-shift', async (req, res) => {
+  const { bookingId } = req.body;
+  const result = await endShift(req.user.userId, bookingId);
+  if (result.status === 403) {
+    return res.status(403).send('403 Forbidden: You do not have access to this resource.');
+  }
+  if (result.success) {
+    return res.redirect('/manager/dashboard');
+  }
+  // Non-authorization failure: re-render the dashboard surfacing the error.
+  try {
+    const { entries, errors } = await getManagerWageEntries(req.user.userId);
+    return res.render('manager/dashboard', {
+      user: req.user,
+      wageEntries: entries,
+      wageTotal: totalWage(entries),
+      wageErrors: [...errors, result.error]
+    });
+  } catch (e) {
+    console.error('[Manager] end-shift dashboard reload error', e);
+    return res.render('manager/dashboard', {
+      user: req.user,
+      wageEntries: [],
+      wageTotal: 0,
+      wageErrors: [result.error]
+    });
+  }
 });
 
 router.get('/wages', async (req, res) => {

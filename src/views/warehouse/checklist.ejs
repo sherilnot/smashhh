@@ -1,38 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Inventory Checklist</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    nav button { background: none; border: none; color: #2563eb; cursor: pointer; text-decoration: underline; }
-    .error { background: #fee2e2; color: #b91c1c; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
-    th { background: #f4f5f7; }
-    .status-pending { color: #92400e; }
-    .status-arrived { color: #15803d; }
-    .status-partial { color: #1d4ed8; }
-    .status-missing { color: #b91c1c; }
-    input[type=number] { width: 70px; padding: 0.3rem; border: 1px solid #ccc; border-radius: 4px; }
-    button.check-btn { background: #2563eb; color: #fff; border: none; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer; }
-    .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;
-             background: #e0f2fe; color: #0369a1; }
-    form.date-form { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
-    input[type=date] { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; }
-    button[type=submit] { background: #2563eb; color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <h1>Inventory Checklist</h1>
-  <nav>
-    <a href="/warehouse/dashboard">Dashboard</a>
-    <a href="/warehouse/history">History</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'Inventory Checklist - Burger Store', role: 'warehouse_manager', active: 'checklist' }) %>
+
+  <h1><span class="emoji">📦</span>Inventory Checklist</h1>
 
   <form class="date-form" method="GET" action="/warehouse/checklist">
     <label>Date: <input type="date" name="date" value="<%= date.toISOString().split('T')[0] %>" /></label>
@@ -61,7 +29,7 @@
             <button type="submit" class="check-btn">Submit</button>
           </form>
           <% } else { %>
-          <span style="color:#666;font-size:0.875rem">Checked <%= item.checked_at ? new Date(item.checked_at).toLocaleTimeString() : '' %></span>
+          <span style="color:#8a7765;font-size:0.875rem">Checked <%= item.checked_at ? new Date(item.checked_at).toLocaleTimeString() : '' %></span>
           <% } %>
         </td>
       </tr>
@@ -83,5 +51,5 @@
       else alert(data.error || 'Failed to update item');
     }
   </script>
-</body>
-</html>
+
+<%- include('../partials/footer') %>

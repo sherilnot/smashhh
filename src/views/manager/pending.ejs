@@ -1,0 +1,47 @@
+<%- include('../partials/header', { title: 'Pending Requests - Burger Store', role: 'store_manager', active: 'pending' }) %>
+
+  <h1><span class="emoji">⏳</span>Pending Requests</h1>
+
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+
+  <% if (!hasManagedStore) { %>
+    <div class="notice">No store assigned. You are not currently managing any store, so there are no pending requests to review.</div>
+  <% } else if (requests.length === 0) { %>
+    <p class="empty">No pending requests at this time.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Shift Start</th>
+          <th>Shift End</th>
+          <th>Store</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% requests.forEach(request => { %>
+          <tr>
+            <td><%= request.employeeName %></td>
+            <td><%= new Date(request.shiftStartTime).toLocaleDateString() %> <%= new Date(request.shiftStartTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+            <td><%= new Date(request.shiftEndTime).toLocaleDateString() %> <%= new Date(request.shiftEndTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+            <td><%= request.storeId %></td>
+            <td>
+              <div class="actions">
+                <form method="POST" action="/manager/confirm">
+                  <input type="hidden" name="bookingId" value="<%= request.bookingId %>" />
+                  <button type="submit" class="confirm-btn">Confirm</button>
+                </form>
+                <form method="POST" action="/manager/reject">
+                  <input type="hidden" name="bookingId" value="<%= request.bookingId %>" />
+                  <button type="submit" class="reject-btn">Reject</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+<%- include('../partials/footer') %>

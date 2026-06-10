@@ -1,36 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Wage Reports</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    .error { background: #fee2e2; color: #b91c1c; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    .summary { background: #eff6ff; padding: 1rem; border-radius: 8px; margin: 1rem 0; display: flex; gap: 2rem; }
-    .summary div { text-align: center; }
-    .summary strong { display: block; font-size: 1.5rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
-    th { background: #f4f5f7; }
-    details summary { cursor: pointer; color: #2563eb; }
-    .breakdown-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-    .breakdown-table td { padding: 0.3rem 0.6rem; border: 1px solid #eee; font-size: 0.875rem; }
-    form.filter { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; }
-    input[type=date] { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; }
-    button { background: #2563eb; color: #fff; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; }
-    nav button { background: none; color: #2563eb; text-decoration: underline; padding: 0; }
-  </style>
-</head>
-<body>
-  <h1>Wage Reports</h1>
-  <nav>
-    <a href="/manager/dashboard">Dashboard</a>
-    <a href="/manager/employees">Employees</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'Wage Reports - Burger Store', role: 'store_manager', active: 'wages' }) %>
+
+  <h1><span class="emoji">💵</span>Wage Reports</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
@@ -50,7 +20,7 @@
   <% } %>
 
   <% if (reports.length === 0) { %>
-    <p>No completed shifts in this period.</p>
+    <p class="empty">No completed shifts in this period.</p>
   <% } else { %>
     <table>
       <thead>
@@ -83,5 +53,5 @@
       </tbody>
     </table>
   <% } %>
-</body>
-</html>
+
+<%- include('../partials/footer') %>

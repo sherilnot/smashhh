@@ -1,26 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Warehouse Manager Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    nav a { margin-right: 1rem; }
-    .card { background: #f4f5f7; padding: 1.5rem; border-radius: 8px; margin-top: 1rem; }
-    nav button { background: none; border: none; color: #2563eb; cursor: pointer; text-decoration: underline; }
-  </style>
-</head>
-<body>
-  <h1>Warehouse Manager Dashboard</h1>
-  <nav>
-    <a href="/warehouse/checklist">Today's Checklist</a>
-    <a href="/warehouse/history">History</a>
-    <form style="display:inline" method="POST" action="/logout">
-      <button type="submit">Logout</button>
-    </form>
-  </nav>
+<%- include('../partials/header', { title: 'Warehouse Dashboard - Burger Store', role: 'warehouse_manager', active: 'dashboard' }) %>
+
+  <h1><span class="emoji">🍔</span>Warehouse Manager Dashboard</h1>
   <div class="card">
-    <p>Welcome! Use the links above to view and verify your daily inventory checklist.</p>
+    <p>Welcome! Use the menu to view and verify your daily inventory checklist.</p>
   </div>
-</body>
-</html>
+
+<%- include('../partials/footer') %>

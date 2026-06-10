@@ -60,10 +60,11 @@ async function bookShift(employeeId, shiftId) {
       return { success: false, error: 'Shift already booked' };
     }
 
-    // Lock and check capacity
+    // Lock the shift row, then count bookings
+    await client.query('SELECT id FROM shifts WHERE id = $1 FOR UPDATE', [shiftId]);
     const countRes = await client.query(
       `SELECT COUNT(*) AS count FROM shift_bookings
-       WHERE shift_id = $1 AND booking_status = 'confirmed' FOR UPDATE`,
+       WHERE shift_id = $1 AND booking_status = 'confirmed'`,
       [shiftId]
     );
     if (parseInt(countRes.rows[0].count) >= shiftRes.rows[0].capacity) {

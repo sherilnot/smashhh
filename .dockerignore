@@ -1,0 +1,7 @@
+node_modules
+.env
+.git
+.kiro
+*.test.js
+tmp_ejs_check.js
+db/schema.sql

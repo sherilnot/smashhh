@@ -18,12 +18,12 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// Available shifts (next 7 days by default)
+// Available shifts (next 7 days by default) — filtered to employee's assigned store
 router.get('/shifts', async (req, res) => {
   const start = req.query.start ? new Date(req.query.start) : new Date();
   const end = req.query.end ? new Date(req.query.end) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   try {
-    const shifts = await getAvailableShifts(start, end);
+    const shifts = await getAvailableShifts(start, end, req.user.userId);
     res.render('employee/shifts', { shifts, error: null });
   } catch (e) {
     res.render('employee/shifts', { shifts: [], error: 'Failed to load shifts' });
@@ -49,7 +49,7 @@ router.post('/book', async (req, res) => {
   if (result.success) return res.redirect('/employee/my-shifts');
   // Re-render shifts with error
   try {
-    const shifts = await getAvailableShifts(new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const shifts = await getAvailableShifts(new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), req.user.userId);
     return res.render('employee/shifts', { shifts, error: result.error });
   } catch (e) {
     return res.render('employee/shifts', { shifts: [], error: result.error });

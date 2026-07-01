@@ -9,14 +9,29 @@ async function seed() {
 
     // Seed users (4 managers — one per store, pre-assigned below)
     const users = [
-      { user_id: 'emp001', password: 'jjj', role: 'employee', first: 'Alice', last: 'Smith', email: 'alice@example.com', wage: 15.50 },
-      { user_id: 'emp002', password: 'Employee123!', role: 'employee', first: 'Bob', last: 'Jones', email: 'bob@example.com', wage: 17.00 },
-      { user_id: 'emp003', password: 'Employee123!', role: 'employee', first: 'Eve', last: 'Taylor', email: 'eve@example.com', wage: 16.00 },
-      { user_id: 'mgr001', password: 'Manager123!', role: 'store_manager', first: 'Carol', last: 'White', email: 'carol@example.com', wage: null },
-      { user_id: 'mgr002', password: 'Manager123!', role: 'store_manager', first: 'Frank', last: 'Garcia', email: 'frank@example.com', wage: null },
-      { user_id: 'mgr003', password: 'Manager123!', role: 'store_manager', first: 'Grace', last: 'Lee', email: 'grace@example.com', wage: null },
-      { user_id: 'mgr004', password: 'Manager123!', role: 'store_manager', first: 'Henry', last: 'Patel', email: 'henry@example.com', wage: null },
-      { user_id: 'wh001',  password: 'Warehouse123!', role: 'warehouse_manager', first: 'Dave', last: 'Brown', email: 'dave@example.com', wage: null },
+      // Store A employees
+      { user_id: 'emp001', password: '123', role: 'employee', first: 'Alice', last: 'Smith', email: 'alice@example.com', wage: 15.50, store: 'Store A' },
+      { user_id: 'emp002', password: '123', role: 'employee', first: 'Bob', last: 'Jones', email: 'bob@example.com', wage: 17.00, store: 'Store A' },
+      { user_id: 'emp003', password: '123', role: 'employee', first: 'Eve', last: 'Taylor', email: 'eve@example.com', wage: 16.00, store: 'Store A' },
+      // Store B employees
+      { user_id: 'emp004', password: '123', role: 'employee', first: 'Liam', last: 'Nguyen', email: 'liam@example.com', wage: 16.50, store: 'Store B' },
+      { user_id: 'emp005', password: '123', role: 'employee', first: 'Mia', last: 'Chen', email: 'mia@example.com', wage: 15.00, store: 'Store B' },
+      { user_id: 'emp006', password: '123', role: 'employee', first: 'Noah', last: 'Kumar', email: 'noah@example.com', wage: 17.50, store: 'Store B' },
+      // Store C employees
+      { user_id: 'emp007', password: '123', role: 'employee', first: 'Olivia', last: 'Park', email: 'olivia@example.com', wage: 16.00, store: 'Store C' },
+      { user_id: 'emp008', password: '123', role: 'employee', first: 'James', last: 'Singh', email: 'james@example.com', wage: 15.50, store: 'Store C' },
+      { user_id: 'emp009', password: '123', role: 'employee', first: 'Sophia', last: 'Ali', email: 'sophia@example.com', wage: 18.00, store: 'Store C' },
+      // Store D employees
+      { user_id: 'emp010', password: '123', role: 'employee', first: 'Lucas', last: 'Russo', email: 'lucas@example.com', wage: 16.50, store: 'Store D' },
+      { user_id: 'emp011', password: '123', role: 'employee', first: 'Ava', last: 'Kim', email: 'ava@example.com', wage: 17.00, store: 'Store D' },
+      { user_id: 'emp012', password: '123', role: 'employee', first: 'Ethan', last: 'Pham', email: 'ethan@example.com', wage: 15.00, store: 'Store D' },
+      // Managers
+      { user_id: 'mgr001', password: '123', role: 'store_manager', first: 'Carol', last: 'White', email: 'carol@example.com', wage: null },
+      { user_id: 'mgr002', password: '123', role: 'store_manager', first: 'Frank', last: 'Garcia', email: 'frank@example.com', wage: null },
+      { user_id: 'mgr003', password: '123', role: 'store_manager', first: 'Grace', last: 'Lee', email: 'grace@example.com', wage: null },
+      { user_id: 'mgr004', password: '123', role: 'store_manager', first: 'Henry', last: 'Patel', email: 'henry@example.com', wage: null },
+      { user_id: 'wh001',  password: '123', role: 'warehouse_manager', first: 'Dave', last: 'Brown', email: 'dave@example.com', wage: null },
+      { user_id: 'rm001',  password: '123', role: 'receiving_manager', first: 'Sarah', last: 'Wilson', email: 'sarah@example.com', wage: null },
     ];
 
     const userIds = {};
@@ -62,6 +77,18 @@ async function seed() {
       }
     }
     console.log(`[Seed] Stores: ${Object.keys(storeIds).length} (each with a pre-assigned manager)`);
+
+    // Assign employees exclusively to their stores
+    for (const u of users) {
+      if (u.role === 'employee' && u.store) {
+        await client.query(
+          `INSERT INTO store_employee_assignments (store_id, employee_id)
+           VALUES ($1, $2) ON CONFLICT (employee_id) DO NOTHING`,
+          [storeIds[u.store], userIds[u.user_id]]
+        );
+      }
+    }
+    console.log(`[Seed] Employees assigned to stores (exclusive — no mixing)`);
 
     // Seed shifts for next 14 days (with store_id assigned)
     const storeNames = storeConfig.map(s => s.name);
@@ -109,19 +136,100 @@ async function seed() {
       console.log(`[Seed] Expected deliveries for tomorrow: ${productIds.length}`);
     }
 
+    // Seed store checklist templates (supply items each store orders)
+    const checklistItems = [
+      { name: 'Beef', qty: '5 crates' },
+      { name: 'Buns', qty: '17 trays' },
+      { name: 'Fried Chicken', qty: '5 packets' },
+      { name: 'Grilled Chicken', qty: '5 packets' },
+      { name: 'Nuggets', qty: '4 containers' },
+      { name: 'Chicken Wings', qty: '5 packets' },
+      { name: 'Tomato', qty: '3 packets' },
+      { name: 'Lettuce', qty: '3 boxes' },
+      { name: 'Onions', qty: '6 boxes' },
+      { name: 'Cheese Sauce', qty: '1 tub (3kg)' },
+      { name: 'Classic Sauce', qty: '50 pieces' },
+      { name: 'Spicy Sauce', qty: '2 containers' },
+      { name: 'Sweet Sauce', qty: '2 containers' },
+      { name: 'Flour', qty: '1 containers' },
+      { name: 'Salt', qty: '1 whole packets' },
+      { name: 'Garlic Powder', qty: '1 packet' },
+      { name: 'Bacon', qty: '2 whole containers' },
+      { name: 'Spicy Seasoning', qty: '2 thawed packets' },
+      { name: 'Burger Seasoning', qty: '1 unopened box' },
+      { name: 'Mango Pulp', qty: '1 unopened box' },
+      { name: 'Milk', qty: '6 tins' },
+      { name: 'Mushroom', qty: '2 cans' },
+      { name: 'Paper Bags', qty: '40 patties' },
+      { name: 'Burger Boxes', qty: '3 boxes' },
+      { name: 'Combo Cups', qty: '2 boxes' },
+      { name: 'Fries Boxes', qty: '2 boxes' },
+      { name: 'Tray Sheets', qty: '2 boxes' },
+      { name: 'Napkins', qty: '1 box' },
+      { name: 'Centrefeed Hand Towel', qty: '1 box' },
+      { name: 'Jumbo Toilet Roll', qty: '1 box' },
+      { name: 'Dipping Sauce Containers', qty: '1 box' },
+      { name: 'Brown Bags', qty: '1 box' },
+      { name: 'Printer Till Rolls', qty: '2 bundles' },
+      { name: 'Oil Filter Paper', qty: '1 box' },
+      { name: 'Apple Juice', qty: '1 box' },
+      { name: 'Orange Juice', qty: '2 boxes' },
+      { name: 'Thickshake Cups', qty: '2 boxes' },
+      { name: 'Thickshake Straws', qty: '1 box' },
+      { name: 'Thickshake Lids', qty: '1 box' },
+      { name: 'Paper Straws', qty: '1 box' },
+      { name: 'White SOS Bags', qty: '1 box' },
+      { name: 'Toilet Paper Rolls', qty: '1 box' },
+      { name: 'Wooden Forks', qty: '1 box' },
+      { name: 'Wooden Knives', qty: '1 box' },
+      { name: 'Hairnets', qty: '1 box' },
+      { name: 'Bin Liners (240ltr)', qty: '1 packet' },
+      { name: 'Bin Liners (75ltr)', qty: '1 box' },
+      { name: 'Gloves (Medium)', qty: '3 cans' },
+      { name: 'Gloves (Large)', qty: '1 box' },
+      { name: 'Chux Roll', qty: '1 box' },
+      { name: 'Oil Cans', qty: '1 box' },
+    ];
+
+    // Add template for all stores
+    for (const storeName of Object.keys(storeIds)) {
+      for (let i = 0; i < checklistItems.length; i++) {
+        await client.query(
+          `INSERT INTO store_checklist_templates (store_id, product_name, default_quantity, sort_order)
+           VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+          [storeIds[storeName], checklistItems[i].name, checklistItems[i].qty, i + 1]
+        );
+      }
+    }
+    console.log(`[Seed] Store checklist templates: ${checklistItems.length} items per store`);
+
     await client.query('COMMIT');
-    console.log('\n[Seed] Done! Test credentials:');
-    console.log('  Employees:');
-    console.log('    emp001 / Employee123!  (Alice Smith, $15.50/hr)');
-    console.log('    emp002 / Employee123!  (Bob Jones, $17.00/hr)');
-    console.log('    emp003 / Employee123!  (Eve Taylor, $16.00/hr)');
+    console.log('\n[Seed] Done! Test credentials (all passwords: 123):');
+    console.log('  Employees (Store A):');
+    console.log('    emp001 (Alice Smith, $15.50/hr)');
+    console.log('    emp002 (Bob Jones, $17.00/hr)');
+    console.log('    emp003 (Eve Taylor, $16.00/hr)');
+    console.log('  Employees (Store B):');
+    console.log('    emp004 (Liam Nguyen, $16.50/hr)');
+    console.log('    emp005 (Mia Chen, $15.00/hr)');
+    console.log('    emp006 (Noah Kumar, $17.50/hr)');
+    console.log('  Employees (Store C):');
+    console.log('    emp007 (Olivia Park, $16.00/hr)');
+    console.log('    emp008 (James Singh, $15.50/hr)');
+    console.log('    emp009 (Sophia Ali, $18.00/hr)');
+    console.log('  Employees (Store D):');
+    console.log('    emp010 (Lucas Russo, $16.50/hr)');
+    console.log('    emp011 (Ava Kim, $17.00/hr)');
+    console.log('    emp012 (Ethan Pham, $15.00/hr)');
     console.log('  Store Managers (each owns one store):');
-    console.log('    mgr001 / Manager123!  (Carol White  → Store A)');
-    console.log('    mgr002 / Manager123!  (Frank Garcia → Store B)');
-    console.log('    mgr003 / Manager123!  (Grace Lee    → Store C)');
-    console.log('    mgr004 / Manager123!  (Henry Patel  → Store D)');
+    console.log('    mgr001 (Carol White  → Store A)');
+    console.log('    mgr002 (Frank Garcia → Store B)');
+    console.log('    mgr003 (Grace Lee    → Store C)');
+    console.log('    mgr004 (Henry Patel  → Store D)');
     console.log('  Warehouse Manager:');
-    console.log('    wh001  / Warehouse123!');
+    console.log('    wh001  (Dave Brown)');
+    console.log('  Receiving Manager:');
+    console.log('    rm001  (Sarah Wilson)');
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[Seed] Failed:', error.message);

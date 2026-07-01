@@ -4,6 +4,9 @@ const { calculateAllWages, updateHourlyRate, getManagerWageEntries, totalWage } 
 const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
 const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
+const { getRosterWeek, validateRosterRequest, isWithinNavigationBounds, getRoster } = require('../services/rosterService');
+const { generateTimesheet, submitTimesheet } = require('../services/timesheetService');
+const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = require('../services/storeChecklistService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
@@ -170,5 +173,218 @@ router.get('/employees', async (req, res) => {
   );
   res.render('manager/employees', { employees: result.rows, error: null });
 });
+
+// ─── Weekly Roster ─────────────────────────────────────────────────────────────
+
+router.get('/roster', async (req, res) => {
+  try {
+    const validation = validateRosterRequest({ date: req.query.date || null });
+
+    if (!validation.valid) {
+      return res.render('manager/roster', {
+        user: req.user, error: validation.error,
+        hasManagedStore: true, roster: [],
+        weekStartFormatted: '', weekEndFormatted: '',
+        prevWeekDate: '', nextWeekDate: '',
+        canGoPrev: false, canGoNext: false
+      });
+    }
+
+    const { start: weekStart, end: weekEnd } = validation.week;
+    const result = await getRoster(req.user.userId, weekStart, weekEnd);
+    const bounds = isWithinNavigationBounds(weekStart, new Date());
+
+    // Compute prev/next week dates
+    const prevMonday = new Date(weekStart);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const nextMonday = new Date(weekStart);
+    nextMonday.setDate(nextMonday.getDate() + 7);
+
+    res.render('manager/roster', {
+      user: req.user,
+      error: null,
+      hasManagedStore: result.hasManagedStore,
+      roster: result.roster,
+      weekStartFormatted: weekStart.toISOString().split('T')[0],
+      weekEndFormatted: weekEnd.toISOString().split('T')[0],
+      prevWeekDate: prevMonday.toISOString().split('T')[0],
+      nextWeekDate: nextMonday.toISOString().split('T')[0],
+      canGoPrev: bounds.canGoPrev,
+      canGoNext: bounds.canGoNext
+    });
+  } catch (e) {
+    console.error('[Manager] roster error', e);
+    res.render('manager/roster', {
+      user: req.user, error: 'Failed to load roster',
+      hasManagedStore: true, roster: [],
+      weekStartFormatted: '', weekEndFormatted: '',
+      prevWeekDate: '', nextWeekDate: '',
+      canGoPrev: false, canGoNext: false
+    });
+  }
+});
+
+// ─── Weekly Timesheet ──────────────────────────────────────────────────────────
+
+router.get('/timesheet', async (req, res) => {
+  try {
+    const validation = validateRosterRequest({ date: req.query.date || null });
+
+    if (!validation.valid) {
+      return res.render('manager/timesheet', {
+        user: req.user, error: validation.error, success: false,
+        hasStore: true, timesheet: null, isFutureWeek: false,
+        weekStartFormatted: '', weekEndFormatted: '',
+        prevWeekDate: '', nextWeekDate: '',
+        canGoPrev: false, canGoNext: false
+      });
+    }
+
+    const { start: weekStart, end: weekEnd } = validation.week;
+    const result = await generateTimesheet(req.user.userId, weekStart, weekEnd);
+    const bounds = isWithinNavigationBounds(weekStart, new Date());
+    const isFutureWeek = weekEnd.getTime() > Date.now();
+
+    const prevMonday = new Date(weekStart);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const nextMonday = new Date(weekStart);
+    nextMonday.setDate(nextMonday.getDate() + 7);
+
+    if (!result.success) {
+      return res.render('manager/timesheet', {
+        user: req.user, error: result.error, success: false,
+        hasStore: false, timesheet: null, isFutureWeek,
+        weekStartFormatted: weekStart.toISOString().split('T')[0],
+        weekEndFormatted: weekEnd.toISOString().split('T')[0],
+        prevWeekDate: prevMonday.toISOString().split('T')[0],
+        nextWeekDate: nextMonday.toISOString().split('T')[0],
+        canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
+      });
+    }
+
+    res.render('manager/timesheet', {
+      user: req.user, error: null, success: false,
+      hasStore: true, timesheet: result.timesheet, isFutureWeek,
+      weekStartFormatted: weekStart.toISOString().split('T')[0],
+      weekEndFormatted: weekEnd.toISOString().split('T')[0],
+      prevWeekDate: prevMonday.toISOString().split('T')[0],
+      nextWeekDate: nextMonday.toISOString().split('T')[0],
+      canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
+    });
+  } catch (e) {
+    console.error('[Manager] timesheet error', e);
+    res.render('manager/timesheet', {
+      user: req.user, error: 'Failed to load timesheet', success: false,
+      hasStore: true, timesheet: null, isFutureWeek: false,
+      weekStartFormatted: '', weekEndFormatted: '',
+      prevWeekDate: '', nextWeekDate: '',
+      canGoPrev: false, canGoNext: false
+    });
+  }
+});
+
+router.post('/timesheet/submit', async (req, res) => {
+  try {
+    const { weekStart, weekEnd } = req.body;
+    const wsDate = new Date(weekStart);
+    const weDate = new Date(weekEnd);
+    weDate.setHours(23, 59, 59, 999);
+
+    const result = await submitTimesheet(req.user.userId, wsDate, weDate);
+
+    if (!result.success) {
+      const bounds = isWithinNavigationBounds(wsDate, new Date());
+      const isFutureWeek = weDate.getTime() > Date.now();
+      const tsResult = await generateTimesheet(req.user.userId, wsDate, weDate);
+
+      const prevMonday = new Date(wsDate);
+      prevMonday.setDate(prevMonday.getDate() - 7);
+      const nextMonday = new Date(wsDate);
+      nextMonday.setDate(nextMonday.getDate() + 7);
+
+      return res.render('manager/timesheet', {
+        user: req.user, error: result.error, success: false,
+        hasStore: true, timesheet: tsResult.success ? tsResult.timesheet : null, isFutureWeek,
+        weekStartFormatted: weekStart,
+        weekEndFormatted: weekEnd,
+        prevWeekDate: prevMonday.toISOString().split('T')[0],
+        nextWeekDate: nextMonday.toISOString().split('T')[0],
+        canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
+      });
+    }
+
+    // Success — redirect back to timesheet view
+    res.redirect(`/manager/timesheet?date=${weekStart}`);
+  } catch (e) {
+    console.error('[Manager] timesheet submit error', e);
+    res.redirect('/manager/timesheet');
+  }
+});
+
+// ─── Store Daily Checklist ──────────────────────────────────────────────────────
+
+router.get('/store-checklist', async (req, res) => {
+  try {
+    const result = await getOrCreateTodayChecklist(req.user.userId);
+    if (!result.success) {
+      return res.render('manager/store-checklist', {
+        user: req.user, checklist: null, error: result.error, success: false, edit: false
+      });
+    }
+    res.render('manager/store-checklist', {
+      user: req.user, checklist: result.checklist, error: null, success: false, edit: req.query.edit === '1'
+    });
+  } catch (e) {
+    console.error('[Manager] store-checklist error', e);
+    res.render('manager/store-checklist', {
+      user: req.user, checklist: null, error: 'Failed to load checklist', success: false, edit: false
+    });
+  }
+});
+
+router.post('/store-checklist/submit', async (req, res) => {
+  try {
+    const { checklistId, ...body } = req.body;
+
+    // Extract quantities from form (fields named qty_<itemId>)
+    const quantities = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (key.startsWith('qty_')) {
+        const itemId = key.replace('qty_', '');
+        quantities[itemId] = value;
+      }
+    }
+
+    const result = await submitStoreChecklist(req.user.userId, checklistId, quantities);
+
+    if (!result.success) {
+      const checklistResult = await getOrCreateTodayChecklist(req.user.userId);
+      return res.render('manager/store-checklist', {
+        user: req.user,
+        checklist: checklistResult.success ? checklistResult.checklist : null,
+        error: result.error,
+        success: false,
+        edit: false
+      });
+    }
+
+    // Reload to show submitted state
+    const checklistResult = await getOrCreateTodayChecklist(req.user.userId);
+    res.render('manager/store-checklist', {
+      user: req.user,
+      checklist: checklistResult.success ? checklistResult.checklist : null,
+      error: null,
+      success: true,
+      edit: false
+    });
+  } catch (e) {
+    console.error('[Manager] store-checklist submit error', e);
+    res.render('manager/store-checklist', {
+      user: req.user, checklist: null, error: 'Failed to submit checklist', success: false, edit: false
+    });
+  }
+});
+
+// ─── (Legacy checklist upload removed — replaced by store-checklist) ────────────
 
 module.exports = router;

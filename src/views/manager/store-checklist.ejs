@@ -1,0 +1,83 @@
+<%- include('../partials/header', { title: 'Daily Store Checklist', role: 'store_manager', active: 'checklist' }) %>
+
+  <h1>Daily Checklist</h1>
+
+  <% if (checklist) { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <strong><%= checklist.storeName %></strong> &nbsp;—&nbsp; <%= checklist.checkDate %>
+    </div>
+  <% } %>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (success) { %>
+    <div class="msg">✅ Checklist submitted to warehouse manager successfully!</div>
+  <% } %>
+
+  <% if (!checklist) { %>
+    <div class="empty">Unable to load checklist.</div>
+  <% } else if (checklist.status === 'submitted' && !edit) { %>
+    <div class="info" style="display: flex; justify-content: space-between; align-items: center;">
+      <span>✓ Submitted to warehouse manager.</span>
+      <a href="/manager/store-checklist?edit=1" class="btn" style="background: linear-gradient(180deg, var(--mustard), var(--mustard-dark)); color: var(--bun-dark); font-size: 0.85rem;">✏️ Edit & Resubmit</a>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:5%">#</th>
+          <th style="width:45%">Product</th>
+          <th style="width:25%">Qty Needed</th>
+          <th style="width:25%">Qty To Bring</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% checklist.items.forEach((item, idx) => { %>
+          <tr>
+            <td style="color: var(--muted);"><%= idx + 1 %></td>
+            <td><%= item.product_name %></td>
+            <td><span class="badge"><%= item.quantity_needed %></span></td>
+            <td><strong><%= item.quantity_to_bring || '—' %></strong></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+  <% } else { %>
+    <form method="POST" action="/manager/store-checklist/submit">
+      <input type="hidden" name="checklistId" value="<%= checklist.id %>">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:5%">#</th>
+            <th style="width:40%">Product</th>
+            <th style="width:25%">Qty Needed</th>
+            <th style="width:30%">Qty To Bring</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% checklist.items.forEach((item, idx) => { %>
+            <tr>
+              <td style="color: var(--muted);"><%= idx + 1 %></td>
+              <td><strong><%= item.product_name %></strong></td>
+              <td><span class="badge"><%= item.quantity_needed %></span></td>
+              <td>
+                <input type="text" name="qty_<%= item.id %>" value="<%= item.quantity_to_bring || '' %>"
+                  placeholder="—" style="width: 100%;">
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <div style="margin-top: 1.25rem;">
+        <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem;">
+          📤 Send to Warehouse Manager
+        </button>
+      </div>
+    </form>
+  <% } %>
+
+<%- include('../partials/footer') %>

@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
 const managerRoutes = require('./routes/manager');
 const warehouseRoutes = require('./routes/warehouse');
+const receivingManagerRoutes = require('./routes/receiving-manager');
 
 const { scheduleNightlyJob } = require('./services/schedulerService');
 const { generateNightlyChecklists } = require('./services/inventoryService');
@@ -39,6 +40,7 @@ app.use('/', authRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/manager', managerRoutes);
 app.use('/warehouse', warehouseRoutes);
+app.use('/receiving-manager', receivingManagerRoutes);
 
 // Root redirect based on session role
 app.get('/', requireAuth, (req, res) => {
@@ -46,6 +48,7 @@ app.get('/', requireAuth, (req, res) => {
   if (role === 'employee') return res.redirect('/employee/dashboard');
   if (role === 'store_manager') return res.redirect('/manager/dashboard');
   if (role === 'warehouse_manager') return res.redirect('/warehouse/dashboard');
+  if (role === 'receiving_manager') return res.redirect('/receiving-manager/dashboard');
   res.redirect('/login');
 });
 

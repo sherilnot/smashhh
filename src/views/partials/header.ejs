@@ -1,54 +1,66 @@
 <%
-  /* Expected locals: title, role ('employee'|'store_manager'|'warehouse_manager'), active (key) */
   var navRole = (typeof role !== 'undefined' && role) ? role : '';
   var activeKey = (typeof active !== 'undefined' && active) ? active : '';
   var menus = {
     employee: [
-      { key: 'dashboard', href: '/employee/dashboard', ico: '🍔', label: 'Dashboard' },
-      { key: 'shifts',    href: '/employee/shifts',    ico: '🗓️', label: 'Available Shifts' },
-      { key: 'my-shifts', href: '/employee/my-shifts', ico: '🧾', label: 'My Shifts' }
+      { key: 'dashboard', href: '/employee/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'shifts',    href: '/employee/shifts',    icon: 'calendar-plus',    label: 'Available Shifts' },
+      { key: 'my-shifts', href: '/employee/my-shifts', icon: 'calendar-check',   label: 'My Shifts' }
     ],
     store_manager: [
-      { key: 'dashboard', href: '/manager/dashboard', ico: '🍔', label: 'Dashboard' },
-      { key: 'pending',   href: '/manager/pending',   ico: '⏳', label: 'Pending Requests' },
-      { key: 'wages',     href: '/manager/wages',      ico: '💵', label: 'Wage Reports' },
-      { key: 'employees', href: '/manager/employees',  ico: '🧑\u200d🍳', label: 'Employees' }
+      { key: 'dashboard', href: '/manager/dashboard',        icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'checklist', href: '/manager/store-checklist',  icon: 'clipboard-list',   label: 'Daily Checklist' },
+      { key: 'roster',    href: '/manager/roster',           icon: 'users',            label: 'Weekly Roster' },
+      { key: 'timesheet', href: '/manager/timesheet',        icon: 'clock',            label: 'Timesheet' },
+      { key: 'pending',   href: '/manager/pending',          icon: 'bell-dot',         label: 'Pending' },
+      { key: 'wages',     href: '/manager/wages',            icon: 'banknote',         label: 'Wages' },
+      { key: 'employees', href: '/manager/employees',        icon: 'user-circle',      label: 'Employees' }
     ],
     warehouse_manager: [
-      { key: 'dashboard',  href: '/warehouse/dashboard', ico: '🍔', label: 'Dashboard' },
-      { key: 'checklist',  href: '/warehouse/checklist', ico: '📦', label: "Today's Checklist" },
-      { key: 'history',    href: '/warehouse/history',   ico: '📚', label: 'History' }
+      { key: 'dashboard',        href: '/warehouse/dashboard',        icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'store-checklists', href: '/warehouse/store-checklists', icon: 'clipboard-list',   label: 'Store Orders' },
+      { key: 'checklist',        href: '/warehouse/checklist',        icon: 'package-check',    label: "Today's Check" },
+      { key: 'history',          href: '/warehouse/history',          icon: 'history',          label: 'History' }
+    ],
+    receiving_manager: [
+      { key: 'dashboard',  href: '/receiving-manager/timesheets', icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' }
     ]
   };
   var items = menus[navRole] || [];
-  var roleLabel = { employee: 'Crew Member', store_manager: 'Store Manager', warehouse_manager: 'Warehouse Manager' }[navRole] || '';
+  var roleLabel = { employee: 'Crew', store_manager: 'Manager', warehouse_manager: 'Warehouse', receiving_manager: 'Receiver' }[navRole] || '';
 %>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title><%= typeof title !== 'undefined' ? title : 'Burger Store' %></title>
+  <title><%= typeof title !== 'undefined' ? title : 'Rizins' %></title>
   <link rel="stylesheet" href="/css/theme.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <span class="brand"><span class="logo">🍔</span> Burger <span class="accent">Store</span></span>
+    <span class="brand">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" x2="18" y1="17" y2="17"/></svg>
+      Rizins <span class="accent">Smash</span>
+    </span>
     <span class="spacer"></span>
     <% if (roleLabel) { %><span class="who"><%= roleLabel %></span><% } %>
   </header>
   <div class="layout">
     <% if (items.length) { %>
     <aside class="sidebar">
-      <div class="section-label">Menu</div>
+      <div class="section-label">Navigation</div>
       <% items.forEach(function(it){ %>
         <a href="<%= it.href %>" class="<%= activeKey === it.key ? 'active' : '' %>">
-          <span class="ico"><%= it.ico %></span><span><%= it.label %></span>
+          <i data-lucide="<%= it.icon %>" class="nav-icon"></i>
+          <span><%= it.label %></span>
         </a>
       <% }); %>
       <div class="logout">
         <form method="POST" action="/logout">
-          <button type="submit"><span class="ico">🚪</span><span>Logout</span></button>
+          <button type="submit"><i data-lucide="log-out" class="nav-icon"></i><span>Sign out</span></button>
         </form>
       </div>
     </aside>

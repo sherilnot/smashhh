@@ -1,0 +1,59 @@
+<%- include('../partials/header', { title: 'Timesheet Detail', role: 'receiving_manager', active: 'timesheets' }) %>
+
+  <h1>Timesheet Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (timesheet) { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Store:</strong> <%= timesheet.store_name %></div>
+        <div><strong>Week:</strong> <%= new Date(timesheet.week_start).toISOString().split('T')[0] %> — <%= new Date(timesheet.week_end).toISOString().split('T')[0] %></div>
+        <div><strong>By:</strong> <%= timesheet.submitted_first %> <%= timesheet.submitted_last %></div>
+        <div><strong>Submitted:</strong> <%= new Date(timesheet.submitted_at).toLocaleString('en-AU') %></div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div><strong><%= timesheet.employee_count %></strong><span>Employees</span></div>
+      <div><strong><%= parseFloat(timesheet.total_hours).toFixed(2) %></strong><span>Total Hours</span></div>
+    </div>
+
+    <% if (timesheet.employees && timesheet.employees.length > 0) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Shift Date</th>
+            <th class="amount">Hours</th>
+            <th class="amount">Employee Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% timesheet.employees.forEach(emp => { %>
+            <% emp.shifts.forEach((shift, idx) => { %>
+              <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
+                <td><%= idx === 0 ? '<strong>' + emp.last_name + ', ' + emp.first_name + '</strong>' : '' %></td>
+                <td><%= shift.shift_date instanceof Date ? shift.shift_date.toISOString().split('T')[0] : new Date(shift.shift_date).toISOString().split('T')[0] %></td>
+                <td class="amount"><%= shift.hours_worked.toFixed(2) %></td>
+                <td class="amount"><%= idx === emp.shifts.length - 1 ? '<strong>' + emp.totalHours.toFixed(2) + '</strong>' : '' %></td>
+              </tr>
+            <% }) %>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">Grand Total</td>
+            <td></td>
+            <td class="amount"><%= parseFloat(timesheet.total_hours).toFixed(2) %> hrs</td>
+          </tr>
+        </tfoot>
+      </table>
+    <% } %>
+  <% } %>
+
+  <p style="margin-top: 1.25rem;"><a href="/receiving-manager/timesheets" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Timesheets</a></p>
+
+<%- include('../partials/footer') %>

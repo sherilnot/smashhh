@@ -1,0 +1,62 @@
+<%- include('../partials/header', { title: 'Weekly Roster', role: 'store_manager', active: 'roster' }) %>
+
+  <h1>Weekly Roster</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (!hasManagedStore) { %>
+    <div class="empty">You are not assigned to any store. Contact an administrator.</div>
+  <% } else { %>
+    <!-- Week Navigation -->
+    <div class="summary" style="justify-content: space-between; gap: 1rem;">
+      <% if (canGoPrev) { %>
+        <a href="/manager/roster?date=<%= prevWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
+      <% } else { %>
+        <span style="color: var(--muted);">← Previous</span>
+      <% } %>
+
+      <div style="text-align: center;">
+        <strong style="font-size: 1.1rem; color: var(--bun-dark);"><%= weekStartFormatted %> — <%= weekEndFormatted %></strong>
+      </div>
+
+      <% if (canGoNext) { %>
+        <a href="/manager/roster?date=<%= nextWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
+      <% } else { %>
+        <span style="color: var(--muted);">Next →</span>
+      <% } %>
+    </div>
+
+    <% if (roster.length === 0) { %>
+      <div class="empty">No confirmed shifts booked for this week.</div>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Shift Date</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% roster.forEach(entry => { %>
+            <% entry.shifts.forEach((shift, idx) => { %>
+              <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
+                <td><%= idx === 0 ? '<strong>' + entry.employee.last_name + ', ' + entry.employee.first_name + '</strong>' : '' %></td>
+                <td><%= new Date(shift.start_time).toISOString().split('T')[0] %></td>
+                <td><%= new Date(shift.start_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %></td>
+                <td><%= new Date(shift.end_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %></td>
+                <td><%= shift.store_location %></td>
+              </tr>
+            <% }) %>
+          <% }) %>
+        </tbody>
+      </table>
+      <div class="info" style="margin-top: 1rem;"><%= roster.length %> employee(s) with confirmed shifts this week.</div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

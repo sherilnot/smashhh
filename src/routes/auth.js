@@ -57,6 +57,8 @@ function dashboardPathForRole(role) {
       return '/manager/dashboard';
     case 'warehouse_manager':
       return '/warehouse/dashboard';
+    case 'receiving_manager':
+      return '/receiving-manager/dashboard';
     default:
       return LOGIN_PATH;
   }

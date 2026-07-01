@@ -130,17 +130,27 @@ function validateEndShift({ status, shiftStartTime, now }) {
  *
  * Requirements: 2.2, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 19.2
  */
-async function getAvailableShifts(startDate, endDate) {
+async function getAvailableShifts(startDate, endDate, employeeId = null) {
+  // If employeeId provided, filter shifts to only the employee's assigned store
+  let storeFilter = '';
+  const params = [startDate, endDate];
+
+  if (employeeId) {
+    params.push(employeeId);
+    storeFilter = `AND s.store_id IN (SELECT store_id FROM store_employee_assignments WHERE employee_id = $${params.length})`;
+  }
+
   const result = await pool.query(
     `SELECT s.id, s.start_time, s.end_time, s.store_location, s.store_id, s.capacity,
             COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) AS current_bookings
      FROM shifts s
      LEFT JOIN shift_bookings sb ON sb.shift_id = s.id
      WHERE s.start_time >= $1 AND s.start_time <= $2 AND s.start_time > NOW()
+     ${storeFilter}
      GROUP BY s.id
      HAVING COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) < s.capacity
      ORDER BY s.start_time ASC`,
-    [startDate, endDate]
+    params
   );
   return result.rows.map(r => ({
     id: r.id,
@@ -183,6 +193,18 @@ async function bookShift(employeeId, shiftId) {
       return { success: false, error: 'Shift not found' };
     }
     const shift = shiftRes.rows[0];
+
+    // Store exclusivity check: employee can only book shifts at their assigned store
+    if (shift.store_id) {
+      const storeCheck = await client.query(
+        `SELECT id FROM store_employee_assignments WHERE employee_id = $1 AND store_id = $2`,
+        [employeeId, shift.store_id]
+      );
+      if (storeCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'You can only book shifts at your assigned store' };
+      }
+    }
 
     // Lock the shift row before counting so concurrent bookings cannot both
     // pass the capacity check.

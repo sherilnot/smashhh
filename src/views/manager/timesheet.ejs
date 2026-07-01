@@ -1,0 +1,82 @@
+<%- include('../partials/header', { title: 'Weekly Timesheet', role: 'store_manager', active: 'timesheet' }) %>
+
+  <h1>Weekly Timesheet</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (success) { %>
+    <div class="msg">Timesheet submitted successfully!</div>
+  <% } %>
+
+  <% if (!hasStore) { %>
+    <div class="empty">You are not assigned to any store. Contact an administrator.</div>
+  <% } else { %>
+    <!-- Week Navigation -->
+    <div class="summary" style="justify-content: space-between; gap: 1rem;">
+      <% if (canGoPrev) { %>
+        <a href="/manager/timesheet?date=<%= prevWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
+      <% } else { %>
+        <span style="color: var(--muted);">← Previous</span>
+      <% } %>
+
+      <div style="text-align: center;">
+        <strong style="font-size: 1.1rem; color: var(--bun-dark);"><%= weekStartFormatted %> — <%= weekEndFormatted %></strong>
+      </div>
+
+      <% if (canGoNext) { %>
+        <a href="/manager/timesheet?date=<%= nextWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
+      <% } else { %>
+        <span style="color: var(--muted);">Next →</span>
+      <% } %>
+    </div>
+
+    <% if (timesheet && timesheet.employees && timesheet.employees.length > 0) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Shift Date</th>
+            <th class="amount">Hours</th>
+            <th class="amount">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% timesheet.employees.forEach(emp => { %>
+            <% emp.shifts.forEach((shift, idx) => { %>
+              <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
+                <td><%= idx === 0 ? '<strong>' + emp.last_name + ', ' + emp.first_name + '</strong>' : '' %></td>
+                <td><%= shift.shift_date instanceof Date ? shift.shift_date.toISOString().split('T')[0] : new Date(shift.shift_date).toISOString().split('T')[0] %></td>
+                <td class="amount"><%= shift.hours_worked.toFixed(2) %></td>
+                <td class="amount"><%= idx === emp.shifts.length - 1 ? '<strong>' + emp.totalHours.toFixed(2) + '</strong>' : '' %></td>
+              </tr>
+            <% }) %>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">Total (<%= timesheet.employeeCount %> employees)</td>
+            <td></td>
+            <td class="amount"><%= timesheet.totalHours.toFixed(2) %> hrs</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <% if (!timesheet.alreadySubmitted && !isFutureWeek) { %>
+        <form method="POST" action="/manager/timesheet/submit" style="margin-top: 1.25rem;">
+          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+          <input type="hidden" name="weekEnd" value="<%= weekEndFormatted %>">
+          <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem;">📤 Submit Timesheet</button>
+        </form>
+      <% } else if (timesheet.alreadySubmitted) { %>
+        <div class="msg" style="margin-top: 1rem;">✓ This timesheet has already been submitted.</div>
+      <% } else { %>
+        <div class="info" style="margin-top: 1rem;">Cannot submit timesheet for a future week.</div>
+      <% } %>
+    <% } else { %>
+      <div class="empty">No completed shifts for this week.</div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

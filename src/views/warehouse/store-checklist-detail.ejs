@@ -1,0 +1,55 @@
+<%- include('../partials/header', { title: 'Checklist Detail', role: 'warehouse_manager', active: 'store-checklists' }) %>
+
+  <h1>Checklist Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (checklist) { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Store:</strong> <%= checklist.store_name %></div>
+        <div><strong>Date:</strong> <%= new Date(checklist.check_date).toISOString().split('T')[0] %></div>
+        <div><strong>By:</strong> <%= checklist.first_name %> <%= checklist.last_name %></div>
+        <div><strong>Status:</strong>
+          <span class="badge" style="background: <%= checklist.status === 'reviewed' ? 'var(--lettuce)' : 'var(--mustard)' %>; color: <%= checklist.status === 'reviewed' ? '#fff' : 'var(--bun-dark)' %>;">
+            <%= checklist.status %>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:5%">#</th>
+          <th style="width:40%">Product</th>
+          <th style="width:25%">Qty Needed</th>
+          <th style="width:30%">Qty To Bring</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% checklist.items.forEach((item, idx) => { %>
+          <tr>
+            <td style="color: var(--muted);"><%= idx + 1 %></td>
+            <td><%= item.product_name %></td>
+            <td><span class="badge"><%= item.quantity_needed %></span></td>
+            <td><strong style="color: <%= item.quantity_to_bring ? 'var(--lettuce-dark)' : 'var(--muted)' %>;"><%= item.quantity_to_bring || '—' %></strong></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <% if (checklist.status === 'submitted') { %>
+      <form method="POST" action="/warehouse/store-checklists/<%= checklist.id %>/review" style="margin-top: 1.25rem;">
+        <button type="submit" class="btn confirm-btn" style="padding: 0.75rem 2rem; font-size: 1rem;">✓ Mark as Reviewed</button>
+      </form>
+    <% } else if (checklist.status === 'reviewed') { %>
+      <div class="msg" style="margin-top: 1rem;">✓ This checklist has been reviewed.</div>
+    <% } %>
+  <% } %>
+
+  <p style="margin-top: 1.25rem;"><a href="/warehouse/store-checklists" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Store Orders</a></p>
+
+<%- include('../partials/footer') %>

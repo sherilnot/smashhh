@@ -18,6 +18,8 @@
   --border: rgba(61, 30, 6, 0.08);
   --border-strong: rgba(61, 30, 6, 0.12);
   --green: #2d9c5a;
+  --lettuce: #2d9c5a;
+  --lettuce-dark: #1f7a44;
   --green-bg: rgba(45, 156, 90, 0.08);
   --red-bg: rgba(230, 57, 70, 0.08);
   --yellow-bg: rgba(244, 163, 0, 0.08);
@@ -150,6 +152,7 @@ a:hover { color: var(--ketchup-dark); }
   padding: 2rem 2.5rem;
   max-width: 1000px;
 }
+.content-wide { max-width: 100%; }
 .content h1 {
   margin: 0 0 1.5rem;
   font-size: 1.5rem;
@@ -384,3 +387,15 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
   table { font-size: 0.85rem; }
   th, td { padding: 0.5rem 0.6rem; }
 }
+
+/* Small action buttons for inline forms */
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.btn-sm:hover { opacity: 0.85; }

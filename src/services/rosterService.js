@@ -40,8 +40,10 @@ function validateRosterRequest(facts) {
     return { valid: true, week };
   }
 
-  const parsed = new Date(facts.date);
-  if (isNaN(parsed.getTime())) {
+  const parts = String(facts.date).split('-').map(Number);
+  const [year, month, day] = parts;
+  const parsed = new Date(year, (month || 1) - 1, day || 1);
+  if (parts.length !== 3 || isNaN(parsed.getTime())) {
     return { valid: false, error: 'Invalid date: could not determine roster week' };
   }
 
@@ -128,7 +130,7 @@ async function getRoster(managerId, weekStart, weekEnd) {
   // Fetch confirmed bookings for those stores in the week
   const bookingsRes = await pool.query(
     `SELECT
-       u.id AS employee_id, u.first_name, u.last_name,
+       u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
        s.start_time, s.end_time, s.store_location,
        sb.booking_status, s.store_id
      FROM shift_bookings sb
@@ -152,7 +154,8 @@ async function getRoster(managerId, weekStart, weekEnd) {
         employee: {
           id: row.employee_id,
           first_name: row.first_name,
-          last_name: row.last_name
+          last_name: row.last_name,
+          employment_type: row.employment_type
         },
         shifts: []
       });

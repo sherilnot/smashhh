@@ -3,7 +3,7 @@
   <h1><span class="emoji">📦</span>Inventory Checklist</h1>
 
   <form class="date-form" method="GET" action="/warehouse/checklist">
-    <label>Date: <input type="date" name="date" value="<%= date.toISOString().split('T')[0] %>" /></label>
+    <label>Date: <input type="date" name="date" value="<%= date.getFullYear() %>-<%= String(date.getMonth()+1).padStart(2,'0') %>-<%= String(date.getDate()).padStart(2,'0') %>" /></label>
     <button type="submit">Load</button>
   </form>
 

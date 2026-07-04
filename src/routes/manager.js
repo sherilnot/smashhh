@@ -168,10 +168,20 @@ router.post('/update-rate', async (req, res) => {
 // Get all employees for rate management
 router.get('/employees', async (req, res) => {
   const result = await pool.query(
-    `SELECT id, user_id, first_name, last_name, hourly_wage
-     FROM users WHERE role = 'employee' AND is_active = true ORDER BY last_name`
+    `SELECT u.id, u.user_id, u.first_name, u.last_name, u.hourly_wage, u.employment_type
+     FROM users u
+     JOIN store_employee_assignments sea ON sea.employee_id = u.id
+     JOIN store_manager_assignments sma ON sma.store_id = sea.store_id
+     WHERE u.role = 'employee' AND u.is_active = true
+       AND sma.manager_id = $1
+     ORDER BY u.last_name`,
+    [req.user.userId]
   );
-  res.render('manager/employees', { employees: result.rows, error: null });
+
+  const permanent = result.rows.filter(e => e.employment_type === 'permanent');
+  const casual = result.rows.filter(e => e.employment_type === 'casual');
+
+  res.render('manager/employees', { permanent, casual, error: null });
 });
 
 // ─── Weekly Roster ─────────────────────────────────────────────────────────────
@@ -183,7 +193,7 @@ router.get('/roster', async (req, res) => {
     if (!validation.valid) {
       return res.render('manager/roster', {
         user: req.user, error: validation.error,
-        hasManagedStore: true, roster: [],
+        hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
         weekStartFormatted: '', weekEndFormatted: '',
         prevWeekDate: '', nextWeekDate: '',
         canGoPrev: false, canGoNext: false
@@ -200,15 +210,69 @@ router.get('/roster', async (req, res) => {
     const nextMonday = new Date(weekStart);
     nextMonday.setDate(nextMonday.getDate() + 7);
 
+    const toLocalDateString = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    // Build Monday..Sunday day labels + date keys for this week's grid columns
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      dayDates.push(toLocalDateString(d));
+    }
+
+    // Index each employee's shifts by day-of-week (0=Mon..6=Sun) and split
+    // worked hours into weekday (Mon-Fri) vs weekend (Sat-Sun) totals.
+    const rosterRows = result.roster.map(entry => {
+      const byDay = Array(7).fill(null);
+      let weekdayHours = 0;
+      let weekendHours = 0;
+
+      entry.shifts.forEach(shift => {
+        const start = new Date(shift.start_time);
+        const end = new Date(shift.end_time);
+        const dateKey = toLocalDateString(start);
+        const dayIdx = dayDates.indexOf(dateKey);
+        const hours = (end - start) / 3600000;
+
+        if (dayIdx === 5 || dayIdx === 6) {
+          weekendHours += hours;
+        } else {
+          weekdayHours += hours;
+        }
+
+        if (dayIdx !== -1) {
+          byDay[dayIdx] = {
+            startLabel: start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
+            endLabel: end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
+            location: shift.store_location
+          };
+        }
+      });
+
+      return {
+        name: `${entry.employee.last_name}, ${entry.employee.first_name}`,
+        employmentType: entry.employee.employment_type,
+        byDay,
+        weekdayHours: Math.round(weekdayHours * 100) / 100,
+        weekendHours: Math.round(weekendHours * 100) / 100,
+        totalHours: Math.round((weekdayHours + weekendHours) * 100) / 100
+      };
+    });
+
     res.render('manager/roster', {
       user: req.user,
       error: null,
       hasManagedStore: result.hasManagedStore,
       roster: result.roster,
-      weekStartFormatted: weekStart.toISOString().split('T')[0],
-      weekEndFormatted: weekEnd.toISOString().split('T')[0],
-      prevWeekDate: prevMonday.toISOString().split('T')[0],
-      nextWeekDate: nextMonday.toISOString().split('T')[0],
+      rosterRows,
+      dayLabels,
+      dayDates,
+      weekStartFormatted: toLocalDateString(weekStart),
+      weekEndFormatted: toLocalDateString(weekEnd),
+      prevWeekDate: toLocalDateString(prevMonday),
+      nextWeekDate: toLocalDateString(nextMonday),
       canGoPrev: bounds.canGoPrev,
       canGoNext: bounds.canGoNext
     });
@@ -216,7 +280,7 @@ router.get('/roster', async (req, res) => {
     console.error('[Manager] roster error', e);
     res.render('manager/roster', {
       user: req.user, error: 'Failed to load roster',
-      hasManagedStore: true, roster: [],
+      hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',
       canGoPrev: false, canGoNext: false
@@ -233,7 +297,8 @@ router.get('/timesheet', async (req, res) => {
     if (!validation.valid) {
       return res.render('manager/timesheet', {
         user: req.user, error: validation.error, success: false,
-        hasStore: true, timesheet: null, isFutureWeek: false,
+        hasStore: true, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek: false,
+        query: req.query,
         weekStartFormatted: '', weekEndFormatted: '',
         prevWeekDate: '', nextWeekDate: '',
         canGoPrev: false, canGoNext: false
@@ -250,32 +315,91 @@ router.get('/timesheet', async (req, res) => {
     const nextMonday = new Date(weekStart);
     nextMonday.setDate(nextMonday.getDate() + 7);
 
+    const toLocalDateString = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
     if (!result.success) {
       return res.render('manager/timesheet', {
         user: req.user, error: result.error, success: false,
-        hasStore: false, timesheet: null, isFutureWeek,
-        weekStartFormatted: weekStart.toISOString().split('T')[0],
-        weekEndFormatted: weekEnd.toISOString().split('T')[0],
-        prevWeekDate: prevMonday.toISOString().split('T')[0],
-        nextWeekDate: nextMonday.toISOString().split('T')[0],
+        hasStore: false, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek,
+        query: req.query,
+        weekStartFormatted: toLocalDateString(weekStart),
+        weekEndFormatted: toLocalDateString(weekEnd),
+        prevWeekDate: toLocalDateString(prevMonday),
+        nextWeekDate: toLocalDateString(nextMonday),
         canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
       });
     }
 
+    // Build day labels and date keys (Mon..Sun)
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      dayDates.push(toLocalDateString(d));
+    }
+
+    // Build grid rows: one per employee, with shifts indexed by day
+    const timesheetRows = result.timesheet.employees.map(emp => {
+      const byDay = Array(7).fill(null);
+      let weekdayHours = 0;
+      let weekendHours = 0;
+
+      emp.shifts.forEach(shift => {
+        const dateKey = shift.shift_date instanceof Date
+          ? toLocalDateString(shift.shift_date)
+          : toLocalDateString(new Date(shift.shift_date));
+        const dayIdx = dayDates.indexOf(dateKey);
+        if (dayIdx !== -1) {
+          const start = new Date(shift.shift_start);
+          const end = new Date(shift.shift_end);
+          const startLabel = start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+          const endLabel = end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+
+          byDay[dayIdx] = {
+            booking_id: shift.booking_id,
+            startLabel,
+            endLabel,
+            hours_worked: shift.hours_worked,
+            no_show: shift.no_show,
+            adjusted: shift.adjusted
+          };
+
+          if (dayIdx >= 5) {
+            weekendHours += shift.hours_worked;
+          } else {
+            weekdayHours += shift.hours_worked;
+          }
+        }
+      });
+
+      return {
+        name: emp.last_name + ', ' + emp.first_name,
+        employmentType: emp.employment_type || null,
+        totalHours: emp.totalHours,
+        weekdayHours: Math.round(weekdayHours * 100) / 100,
+        weekendHours: Math.round(weekendHours * 100) / 100,
+        byDay
+      };
+    });
+
     res.render('manager/timesheet', {
       user: req.user, error: null, success: false,
-      hasStore: true, timesheet: result.timesheet, isFutureWeek,
-      weekStartFormatted: weekStart.toISOString().split('T')[0],
-      weekEndFormatted: weekEnd.toISOString().split('T')[0],
-      prevWeekDate: prevMonday.toISOString().split('T')[0],
-      nextWeekDate: nextMonday.toISOString().split('T')[0],
+      hasStore: true, timesheet: result.timesheet, timesheetRows, dayLabels, dayDates, isFutureWeek,
+      query: req.query,
+      weekStartFormatted: toLocalDateString(weekStart),
+      weekEndFormatted: toLocalDateString(weekEnd),
+      prevWeekDate: toLocalDateString(prevMonday),
+      nextWeekDate: toLocalDateString(nextMonday),
       canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
     });
   } catch (e) {
     console.error('[Manager] timesheet error', e);
     res.render('manager/timesheet', {
       user: req.user, error: 'Failed to load timesheet', success: false,
-      hasStore: true, timesheet: null, isFutureWeek: false,
+      hasStore: true, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek: false,
+      query: req.query,
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',
       canGoPrev: false, canGoNext: false
@@ -283,11 +407,91 @@ router.get('/timesheet', async (req, res) => {
   }
 });
 
+// ─── Timesheet Edit: mark no-show or adjust hours ───────────────────────────
+
+router.post('/timesheet/edit', async (req, res) => {
+  try {
+    const { bookingId, action, adjustedHours, weekStart } = req.body;
+
+    // Verify the booking belongs to a shift in the manager's store
+    const verifyRes = await pool.query(
+      `SELECT sb.id, sb.booking_status, s.start_time, s.end_time
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE sb.id = $1 AND sma.manager_id = $2`,
+      [bookingId, req.user.userId]
+    );
+
+    if (verifyRes.rows.length === 0) {
+      return res.redirect(`/manager/timesheet?date=${weekStart || ''}&error=Booking not found or not in your store`);
+    }
+
+    const booking = verifyRes.rows[0];
+
+    if (action === 'no_show') {
+      await pool.query(
+        `UPDATE shift_bookings SET no_show = true, adjusted_hours = 0 WHERE id = $1`,
+        [bookingId]
+      );
+    } else if (action === 'delete_entry') {
+      // Toggle: if already marked no_show, undo it; otherwise mark it
+      const checkRes = await pool.query(
+        `SELECT no_show FROM shift_bookings WHERE id = $1`,
+        [bookingId]
+      );
+      if (checkRes.rows.length > 0 && checkRes.rows[0].no_show) {
+        await pool.query(
+          `UPDATE shift_bookings SET no_show = false, adjusted_hours = NULL WHERE id = $1`,
+          [bookingId]
+        );
+      } else {
+        await pool.query(
+          `UPDATE shift_bookings SET no_show = true, adjusted_hours = 0 WHERE id = $1`,
+          [bookingId]
+        );
+      }
+    } else if (action === 'undo_no_show') {
+      await pool.query(
+        `UPDATE shift_bookings SET no_show = false, adjusted_hours = NULL WHERE id = $1`,
+        [bookingId]
+      );
+    } else if (action === 'adjust_hours') {
+      const hours = parseFloat(adjustedHours);
+      if (isNaN(hours) || hours < 0 || hours > 24) {
+        return res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1&error=Invalid hours value`);
+      }
+      await pool.query(
+        `UPDATE shift_bookings SET adjusted_hours = $1, no_show = false WHERE id = $2`,
+        [hours, bookingId]
+      );
+    } else if (action === 'reset_hours') {
+      await pool.query(
+        `UPDATE shift_bookings SET adjusted_hours = NULL, no_show = false WHERE id = $1`,
+        [bookingId]
+      );
+    }
+
+    res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1`);
+  } catch (e) {
+    console.error('[Manager] timesheet edit error', e);
+    res.redirect('/manager/timesheet');
+  }
+});
+
 router.post('/timesheet/submit', async (req, res) => {
   try {
     const { weekStart, weekEnd } = req.body;
-    const wsDate = new Date(weekStart);
-    const weDate = new Date(weekEnd);
+
+    const parseLocalDate = (str) => {
+      const [y, m, d] = String(str).split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1);
+    };
+    const toLocalDateString = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const wsDate = parseLocalDate(weekStart);
+    const weDate = parseLocalDate(weekEnd);
     weDate.setHours(23, 59, 59, 999);
 
     const result = await submitTimesheet(req.user.userId, wsDate, weDate);
@@ -307,8 +511,8 @@ router.post('/timesheet/submit', async (req, res) => {
         hasStore: true, timesheet: tsResult.success ? tsResult.timesheet : null, isFutureWeek,
         weekStartFormatted: weekStart,
         weekEndFormatted: weekEnd,
-        prevWeekDate: prevMonday.toISOString().split('T')[0],
-        nextWeekDate: nextMonday.toISOString().split('T')[0],
+        prevWeekDate: toLocalDateString(prevMonday),
+        nextWeekDate: toLocalDateString(nextMonday),
         canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
       });
     }

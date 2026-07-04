@@ -1,4 +1,4 @@
-<%- include('../partials/header', { title: 'Weekly Roster', role: 'store_manager', active: 'roster' }) %>
+<%- include('../partials/header', { title: 'Weekly Roster', role: 'store_manager', active: 'roster', wide: true }) %>
 
   <h1>Weekly Roster</h1>
 
@@ -28,34 +28,61 @@
       <% } %>
     </div>
 
-    <% if (roster.length === 0) { %>
+    <% if (rosterRows.length === 0) { %>
       <div class="empty">No confirmed shifts booked for this week.</div>
     <% } else { %>
-      <table>
+      <table style="table-layout: fixed; width: 100%;">
+        <colgroup>
+          <col style="width: 15%;">
+          <col style="width: 8%;">
+          <% dayLabels.forEach(function() { %><col style="width: 8.5%;"><% }) %>
+          <col style="width: 8%;">
+          <col style="width: 8%;">
+          <col style="width: 8%;">
+        </colgroup>
         <thead>
           <tr>
             <th>Employee</th>
-            <th>Shift Date</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Location</th>
+            <th>Type</th>
+            <% dayLabels.forEach(function(label, i) { %>
+              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
+            <% }) %>
+            <th class="amount">Weekday hrs</th>
+            <th class="amount">Weekend hrs</th>
+            <th class="amount">Total hrs</th>
           </tr>
         </thead>
         <tbody>
-          <% roster.forEach(entry => { %>
-            <% entry.shifts.forEach((shift, idx) => { %>
-              <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
-                <td><%= idx === 0 ? '<strong>' + entry.employee.last_name + ', ' + entry.employee.first_name + '</strong>' : '' %></td>
-                <td><%= new Date(shift.start_time).toISOString().split('T')[0] %></td>
-                <td><%= new Date(shift.start_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %></td>
-                <td><%= new Date(shift.end_time).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %></td>
-                <td><%= shift.store_location %></td>
-              </tr>
-            <% }) %>
+          <% rosterRows.forEach(function(row) { %>
+            <tr>
+              <td><strong><%= row.name %></strong></td>
+              <td>
+                <% if (row.employmentType === 'permanent') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
+                <% } else if (row.employmentType === 'casual') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
+                <% } else { %>
+                  <span style="color: var(--muted);">—</span>
+                <% } %>
+              </td>
+              <% row.byDay.forEach(function(cell) { %>
+                <td>
+                  <% if (cell) { %>
+                    <%= cell.startLabel %>–<%= cell.endLabel %>
+                    <div style="font-size: 0.75em; color: var(--muted);"><%= cell.location %></div>
+                  <% } else { %>
+                    <span style="color: var(--muted);">—</span>
+                  <% } %>
+                </td>
+              <% }) %>
+              <td class="amount"><%= row.weekdayHours.toFixed(2) %></td>
+              <td class="amount"><%= row.weekendHours.toFixed(2) %></td>
+              <td class="amount"><strong><%= row.totalHours.toFixed(2) %></strong></td>
+            </tr>
           <% }) %>
         </tbody>
       </table>
-      <div class="info" style="margin-top: 1rem;"><%= roster.length %> employee(s) with confirmed shifts this week.</div>
+      <div class="info" style="margin-top: 1rem;"><%= rosterRows.length %> employee(s) with confirmed shifts this week.</div>
     <% } %>
   <% } %>
 

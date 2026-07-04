@@ -28,7 +28,7 @@
     ]
   };
   var items = menus[navRole] || [];
-  var roleLabel = { employee: 'Crew', store_manager: 'Manager', warehouse_manager: 'Warehouse', receiving_manager: 'Receiver' }[navRole] || '';
+  var roleLabel = { employee: 'Crew', store_manager: 'Manager', warehouse_manager: 'Warehouse', receiving_manager: 'Payroll' }[navRole] || '';
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -65,4 +65,4 @@
       </div>
     </aside>
     <% } %>
-    <main class="content">
+    <main class="content<%= (typeof wide !== 'undefined' && wide) ? ' content-wide' : '' %>">

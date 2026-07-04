@@ -1,6 +1,6 @@
 <%- include('../partials/header', { title: 'Timesheet Detail', role: 'receiving_manager', active: 'timesheets' }) %>
 
-  <h1>Timesheet Detail</h1>
+  <h1>Payroll — Timesheet Detail</h1>
 
   <% if (error) { %>
     <div class="error"><%= error %></div>
@@ -35,10 +35,10 @@
           <% timesheet.employees.forEach(emp => { %>
             <% emp.shifts.forEach((shift, idx) => { %>
               <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
-                <td><%= idx === 0 ? '<strong>' + emp.last_name + ', ' + emp.first_name + '</strong>' : '' %></td>
+                <td><% if (idx === 0) { %><strong><%= emp.last_name %>, <%= emp.first_name %></strong><% } %></td>
                 <td><%= shift.shift_date instanceof Date ? shift.shift_date.toISOString().split('T')[0] : new Date(shift.shift_date).toISOString().split('T')[0] %></td>
                 <td class="amount"><%= shift.hours_worked.toFixed(2) %></td>
-                <td class="amount"><%= idx === emp.shifts.length - 1 ? '<strong>' + emp.totalHours.toFixed(2) + '</strong>' : '' %></td>
+                <td class="amount"><% if (idx === emp.shifts.length - 1) { %><strong><%= emp.totalHours.toFixed(2) %></strong><% } %></td>
               </tr>
             <% }) %>
           <% }) %>

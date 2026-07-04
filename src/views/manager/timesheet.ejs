@@ -1,4 +1,4 @@
-<%- include('../partials/header', { title: 'Weekly Timesheet', role: 'store_manager', active: 'timesheet' }) %>
+<%- include('../partials/header', { title: 'Weekly Timesheet', role: 'store_manager', active: 'timesheet', wide: true }) %>
 
   <h1>Weekly Timesheet</h1>
 
@@ -32,33 +32,110 @@
       <% } %>
     </div>
 
-    <% if (timesheet && timesheet.employees && timesheet.employees.length > 0) { %>
-      <table>
+    <% if (timesheetRows && timesheetRows.length > 0) { %>
+
+      <% var editMode = (typeof query !== 'undefined' && query.edit === '1') || false; %>
+
+      <% if (!timesheet.alreadySubmitted && !isFutureWeek) { %>
+        <div style="margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: center;">
+          <% if (!editMode) { %>
+            <a href="/manager/timesheet?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">✎ Edit Timesheet</a>
+          <% } else { %>
+            <a href="/manager/timesheet?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">✓ Done Editing</a>
+          <% } %>
+        </div>
+      <% } %>
+
+      <table style="table-layout: fixed; width: 100%;">
+        <colgroup>
+          <col style="width: 14%;">
+          <col style="width: 7%;">
+          <% dayLabels.forEach(function() { %><col style="width: 9%;"><% }) %>
+          <col style="width: 7%;">
+          <col style="width: 7%;">
+          <col style="width: 7%;">
+        </colgroup>
         <thead>
           <tr>
             <th>Employee</th>
-            <th>Shift Date</th>
-            <th class="amount">Hours</th>
+            <th>Type</th>
+            <% dayLabels.forEach(function(label, i) { %>
+              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
+            <% }) %>
+            <th class="amount">Weekday</th>
+            <th class="amount">Weekend</th>
             <th class="amount">Total</th>
           </tr>
         </thead>
         <tbody>
-          <% timesheet.employees.forEach(emp => { %>
-            <% emp.shifts.forEach((shift, idx) => { %>
-              <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
-                <td><%= idx === 0 ? '<strong>' + emp.last_name + ', ' + emp.first_name + '</strong>' : '' %></td>
-                <td><%= shift.shift_date instanceof Date ? shift.shift_date.toISOString().split('T')[0] : new Date(shift.shift_date).toISOString().split('T')[0] %></td>
-                <td class="amount"><%= shift.hours_worked.toFixed(2) %></td>
-                <td class="amount"><%= idx === emp.shifts.length - 1 ? '<strong>' + emp.totalHours.toFixed(2) + '</strong>' : '' %></td>
-              </tr>
-            <% }) %>
+          <% timesheetRows.forEach(function(row) { %>
+            <tr>
+              <td><strong><%= row.name %></strong></td>
+              <td>
+                <% if (row.employmentType === 'permanent') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
+                <% } else if (row.employmentType === 'casual') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
+                <% } else { %>
+                  <span style="color: var(--muted);">—</span>
+                <% } %>
+              </td>
+              <% row.byDay.forEach(function(cell) { %>
+                <td>
+                  <% if (cell) { %>
+                    <% if (editMode) { %>
+                      <% if (cell.no_show) { %>
+                        <div style="text-decoration: line-through; opacity: 0.5; font-size: 0.8em; color: var(--muted);"><%= cell.startLabel %>–<%= cell.endLabel %></div>
+                        <form method="POST" action="/manager/timesheet/edit" style="margin-top: 0.2rem;">
+                          <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                          <input type="hidden" name="action" value="delete_entry">
+                          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                          <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark);">↩ Undo</button>
+                        </form>
+                      <% } else { %>
+                        <div style="font-size: 0.8em; color: var(--muted); margin-bottom: 0.2rem;"><%= cell.startLabel %>–<%= cell.endLabel %></div>
+                        <form method="POST" action="/manager/timesheet/edit" style="display:flex; gap: 0.2rem; align-items: center;">
+                          <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                          <input type="hidden" name="action" value="adjust_hours">
+                          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                          <input type="number" name="adjustedHours" step="0.25" min="0" max="24"
+                                 style="width: 4rem; padding: 0.25rem 0.4rem; border: 1px solid var(--line); border-radius: 4px; font-size: 0.85rem;"
+                                 value="<%= cell.hours_worked.toFixed(2) %>">
+                          <button type="submit" class="btn-sm" style="background: var(--mustard); color: var(--bun-dark);">✓</button>
+                        </form>
+                        <form method="POST" action="/manager/timesheet/edit" style="margin-top: 0.25rem;">
+                          <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                          <input type="hidden" name="action" value="delete_entry">
+                          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                          <button type="submit" class="btn-sm" style="background: var(--tomato); color: #fff;">🗑</button>
+                        </form>
+                      <% } %>
+                    <% } else { %>
+                      <% if (cell.no_show) { %>
+                        <span style="text-decoration: line-through; opacity: 0.5;"><%= cell.startLabel %>–<%= cell.endLabel %></span>
+                      <% } else { %>
+                        <span><%= cell.startLabel %>–<%= cell.endLabel %></span>
+                        <div style="font-size: 0.75em; color: var(--muted);"><%= cell.hours_worked.toFixed(2) %> hrs<%= cell.adjusted ? ' (edited)' : '' %></div>
+                      <% } %>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color: var(--muted);">—</span>
+                  <% } %>
+                </td>
+              <% }) %>
+              <td class="amount"><%= row.weekdayHours.toFixed(2) %></td>
+              <td class="amount"><%= row.weekendHours.toFixed(2) %></td>
+              <td class="amount"><strong><%= row.totalHours.toFixed(2) %></strong></td>
+            </tr>
           <% }) %>
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="2">Total (<%= timesheet.employeeCount %> employees)</td>
+            <td colspan="2"><strong>Total (<%= timesheet.employeeCount %> employees)</strong></td>
+            <% dayLabels.forEach(function() { %><td></td><% }) %>
             <td></td>
-            <td class="amount"><%= timesheet.totalHours.toFixed(2) %> hrs</td>
+            <td></td>
+            <td class="amount"><strong><%= timesheet.totalHours.toFixed(2) %></strong></td>
           </tr>
         </tfoot>
       </table>

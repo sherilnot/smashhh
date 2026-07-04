@@ -19,7 +19,7 @@
           <td><%= h.total_items %></td>
           <td><%= h.checked_items %> / <%= h.total_items %></td>
           <td>
-            <a class="btn" href="/warehouse/checklist?date=<%= new Date(h.check_date).toISOString().split('T')[0] %>" style="text-decoration:none;display:inline-block;">View</a>
+            <a class="btn" href="/warehouse/checklist?date=<%= new Date(h.check_date).toLocaleDateString('en-CA') %>" style="text-decoration:none;display:inline-block;">View</a>
           </td>
         </tr>
         <% }) %>

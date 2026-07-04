@@ -10,21 +10,21 @@ async function seed() {
     // Seed users (4 managers — one per store, pre-assigned below)
     const users = [
       // Store A employees
-      { user_id: 'emp001', password: '123', role: 'employee', first: 'Alice', last: 'Smith', email: 'alice@example.com', wage: 15.50, store: 'Store A' },
-      { user_id: 'emp002', password: '123', role: 'employee', first: 'Bob', last: 'Jones', email: 'bob@example.com', wage: 17.00, store: 'Store A' },
-      { user_id: 'emp003', password: '123', role: 'employee', first: 'Eve', last: 'Taylor', email: 'eve@example.com', wage: 16.00, store: 'Store A' },
+      { user_id: 'emp001', password: '123', role: 'employee', first: 'Alice', last: 'Smith', email: 'alice@example.com', wage: 15.50, store: 'Store A', employmentType: 'permanent' },
+      { user_id: 'emp002', password: '123', role: 'employee', first: 'Bob', last: 'Jones', email: 'bob@example.com', wage: 17.00, store: 'Store A', employmentType: 'permanent' },
+      { user_id: 'emp003', password: '123', role: 'employee', first: 'Eve', last: 'Taylor', email: 'eve@example.com', wage: 16.00, store: 'Store A', employmentType: 'casual' },
       // Store B employees
-      { user_id: 'emp004', password: '123', role: 'employee', first: 'Liam', last: 'Nguyen', email: 'liam@example.com', wage: 16.50, store: 'Store B' },
-      { user_id: 'emp005', password: '123', role: 'employee', first: 'Mia', last: 'Chen', email: 'mia@example.com', wage: 15.00, store: 'Store B' },
-      { user_id: 'emp006', password: '123', role: 'employee', first: 'Noah', last: 'Kumar', email: 'noah@example.com', wage: 17.50, store: 'Store B' },
+      { user_id: 'emp004', password: '123', role: 'employee', first: 'Liam', last: 'Nguyen', email: 'liam@example.com', wage: 16.50, store: 'Store B', employmentType: 'permanent' },
+      { user_id: 'emp005', password: '123', role: 'employee', first: 'Mia', last: 'Chen', email: 'mia@example.com', wage: 15.00, store: 'Store B', employmentType: 'casual' },
+      { user_id: 'emp006', password: '123', role: 'employee', first: 'Noah', last: 'Kumar', email: 'noah@example.com', wage: 17.50, store: 'Store B', employmentType: 'casual' },
       // Store C employees
-      { user_id: 'emp007', password: '123', role: 'employee', first: 'Olivia', last: 'Park', email: 'olivia@example.com', wage: 16.00, store: 'Store C' },
-      { user_id: 'emp008', password: '123', role: 'employee', first: 'James', last: 'Singh', email: 'james@example.com', wage: 15.50, store: 'Store C' },
-      { user_id: 'emp009', password: '123', role: 'employee', first: 'Sophia', last: 'Ali', email: 'sophia@example.com', wage: 18.00, store: 'Store C' },
+      { user_id: 'emp007', password: '123', role: 'employee', first: 'Olivia', last: 'Park', email: 'olivia@example.com', wage: 16.00, store: 'Store C', employmentType: 'permanent' },
+      { user_id: 'emp008', password: '123', role: 'employee', first: 'James', last: 'Singh', email: 'james@example.com', wage: 15.50, store: 'Store C', employmentType: 'permanent' },
+      { user_id: 'emp009', password: '123', role: 'employee', first: 'Sophia', last: 'Ali', email: 'sophia@example.com', wage: 18.00, store: 'Store C', employmentType: 'casual' },
       // Store D employees
-      { user_id: 'emp010', password: '123', role: 'employee', first: 'Lucas', last: 'Russo', email: 'lucas@example.com', wage: 16.50, store: 'Store D' },
-      { user_id: 'emp011', password: '123', role: 'employee', first: 'Ava', last: 'Kim', email: 'ava@example.com', wage: 17.00, store: 'Store D' },
-      { user_id: 'emp012', password: '123', role: 'employee', first: 'Ethan', last: 'Pham', email: 'ethan@example.com', wage: 15.00, store: 'Store D' },
+      { user_id: 'emp010', password: '123', role: 'employee', first: 'Lucas', last: 'Russo', email: 'lucas@example.com', wage: 16.50, store: 'Store D', employmentType: 'permanent' },
+      { user_id: 'emp011', password: '123', role: 'employee', first: 'Ava', last: 'Kim', email: 'ava@example.com', wage: 17.00, store: 'Store D', employmentType: 'casual' },
+      { user_id: 'emp012', password: '123', role: 'employee', first: 'Ethan', last: 'Pham', email: 'ethan@example.com', wage: 15.00, store: 'Store D', employmentType: 'casual' },
       // Managers
       { user_id: 'mgr001', password: '123', role: 'store_manager', first: 'Carol', last: 'White', email: 'carol@example.com', wage: null },
       { user_id: 'mgr002', password: '123', role: 'store_manager', first: 'Frank', last: 'Garcia', email: 'frank@example.com', wage: null },
@@ -38,13 +38,17 @@ async function seed() {
     for (const u of users) {
       const hash = await hashPassword(u.password);
       const res = await client.query(
-        `INSERT INTO users (user_id, password_hash, role, first_name, last_name, email, hourly_wage)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash RETURNING id`,
-        [u.user_id, hash, u.role, u.first, u.last, u.email, u.wage]
+        `INSERT INTO users (user_id, password_hash, role, first_name, last_name, email, hourly_wage, employment_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (user_id) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           hourly_wage = EXCLUDED.hourly_wage,
+           employment_type = EXCLUDED.employment_type
+         RETURNING id`,
+        [u.user_id, hash, u.role, u.first, u.last, u.email, u.wage, u.employmentType || null]
       );
       userIds[u.user_id] = res.rows[0].id;
-      console.log(`[Seed] User: ${u.user_id} (${u.role})`);
+      console.log(`[Seed] User: ${u.user_id} (${u.role}${u.employmentType ? ', ' + u.employmentType : ''})`);
     }
 
     // Seed 4 stores — each one pre-assigned to a manager (no manual assignment needed)
@@ -206,21 +210,21 @@ async function seed() {
     await client.query('COMMIT');
     console.log('\n[Seed] Done! Test credentials (all passwords: 123):');
     console.log('  Employees (Store A):');
-    console.log('    emp001 (Alice Smith, $15.50/hr)');
-    console.log('    emp002 (Bob Jones, $17.00/hr)');
-    console.log('    emp003 (Eve Taylor, $16.00/hr)');
+    console.log('    emp001 (Alice Smith, $15.50/hr, permanent)');
+    console.log('    emp002 (Bob Jones, $17.00/hr, permanent)');
+    console.log('    emp003 (Eve Taylor, $16.00/hr, casual)');
     console.log('  Employees (Store B):');
-    console.log('    emp004 (Liam Nguyen, $16.50/hr)');
-    console.log('    emp005 (Mia Chen, $15.00/hr)');
-    console.log('    emp006 (Noah Kumar, $17.50/hr)');
+    console.log('    emp004 (Liam Nguyen, $16.50/hr, permanent)');
+    console.log('    emp005 (Mia Chen, $15.00/hr, casual)');
+    console.log('    emp006 (Noah Kumar, $17.50/hr, casual)');
     console.log('  Employees (Store C):');
-    console.log('    emp007 (Olivia Park, $16.00/hr)');
-    console.log('    emp008 (James Singh, $15.50/hr)');
-    console.log('    emp009 (Sophia Ali, $18.00/hr)');
+    console.log('    emp007 (Olivia Park, $16.00/hr, permanent)');
+    console.log('    emp008 (James Singh, $15.50/hr, permanent)');
+    console.log('    emp009 (Sophia Ali, $18.00/hr, casual)');
     console.log('  Employees (Store D):');
-    console.log('    emp010 (Lucas Russo, $16.50/hr)');
-    console.log('    emp011 (Ava Kim, $17.00/hr)');
-    console.log('    emp012 (Ethan Pham, $15.00/hr)');
+    console.log('    emp010 (Lucas Russo, $16.50/hr, permanent)');
+    console.log('    emp011 (Ava Kim, $17.00/hr, casual)');
+    console.log('    emp012 (Ethan Pham, $15.00/hr, casual)');
     console.log('  Store Managers (each owns one store):');
     console.log('    mgr001 (Carol White  → Store A)');
     console.log('    mgr002 (Frank Garcia → Store B)');

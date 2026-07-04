@@ -61,7 +61,13 @@ router.post('/store-checklists/:id/review', async (req, res) => {
 });
 
 router.get('/checklist', async (req, res) => {
-  const date = req.query.date ? new Date(req.query.date) : new Date();
+  let date;
+  if (req.query.date) {
+    const [y, m, d] = String(req.query.date).split('-').map(Number);
+    date = new Date(y, (m || 1) - 1, d || 1);
+  } else {
+    date = new Date();
+  }
   date.setHours(0, 0, 0, 0);
   try {
     const checklist = await getChecklist(req.user.userId, date);

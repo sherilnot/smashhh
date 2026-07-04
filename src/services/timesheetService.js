@@ -58,16 +58,20 @@ function aggregateTimesheet(entries) {
         employee_id: entry.employee_id,
         first_name: entry.first_name,
         last_name: entry.last_name,
+        employment_type: entry.employment_type || null,
         shifts: [],
         totalHours: 0
       });
     }
     const emp = employeeMap.get(key);
     emp.shifts.push({
+      booking_id: entry.booking_id || null,
       shift_date: entry.shift_date,
       shift_start: entry.shift_start,
       shift_end: entry.shift_end,
-      hours_worked: entry.hours_worked
+      hours_worked: entry.hours_worked,
+      no_show: entry.no_show || false,
+      adjusted: entry.adjusted_hours !== null && entry.adjusted_hours !== undefined
     });
     emp.totalHours = Math.round((emp.totalHours + entry.hours_worked) * 100) / 100;
   }
@@ -114,7 +118,8 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
   // Fetch completed bookings for this store during the week
   const bookingsRes = await pool.query(
     `SELECT
-       u.id AS employee_id, u.first_name, u.last_name,
+       sb.id AS booking_id, sb.no_show, sb.adjusted_hours,
+       u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
        s.start_time AS shift_start, s.end_time AS shift_end,
        s.start_time::date AS shift_date
      FROM shift_bookings sb
@@ -128,11 +133,21 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
     [storeId, weekStart, weekEnd]
   );
 
-  // Compute hours for each entry
-  const entries = bookingsRes.rows.map(row => ({
-    ...row,
-    hours_worked: computeHours(row.shift_start, row.shift_end)
-  }));
+  // Compute hours for each entry (respecting no_show and adjusted_hours)
+  const entries = bookingsRes.rows.map(row => {
+    let hours;
+    if (row.no_show) {
+      hours = 0;
+    } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
+      hours = parseFloat(row.adjusted_hours);
+    } else {
+      hours = computeHours(row.shift_start, row.shift_end);
+    }
+    return {
+      ...row,
+      hours_worked: hours
+    };
+  });
 
   const timesheet = aggregateTimesheet(entries);
   timesheet.alreadySubmitted = alreadySubmitted;

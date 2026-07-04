@@ -9,10 +9,12 @@
   <% if (!hasManagedStore) { %>
     <div class="empty">You are not assigned to any store. Contact an administrator.</div>
   <% } else { %>
+    <% var editMode = (typeof query !== 'undefined' && query.edit === '1') || false; %>
+
     <!-- Week Navigation -->
     <div class="summary" style="justify-content: space-between; gap: 1rem;">
       <% if (canGoPrev) { %>
-        <a href="/manager/roster?date=<%= prevWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
+        <a href="/manager/roster?date=<%= prevWeekDate %><%= editMode ? '&edit=1' : '' %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
       <% } else { %>
         <span style="color: var(--muted);">← Previous</span>
       <% } %>
@@ -22,23 +24,36 @@
       </div>
 
       <% if (canGoNext) { %>
-        <a href="/manager/roster?date=<%= nextWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
+        <a href="/manager/roster?date=<%= nextWeekDate %><%= editMode ? '&edit=1' : '' %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
       <% } else { %>
         <span style="color: var(--muted);">Next →</span>
       <% } %>
     </div>
 
-    <% if (rosterRows.length === 0) { %>
+    <!-- Edit / Auto-fill controls -->
+    <div style="margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <% if (!editMode) { %>
+        <a href="/manager/roster?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">✎ Edit Roster</a>
+      <% } else { %>
+        <a href="/manager/roster?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">✓ Done Editing</a>
+      <% } %>
+      <form method="POST" action="/manager/roster/auto-fill" style="display: inline;">
+        <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+        <button type="submit" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--lettuce); color: var(--bun-dark);">⚡ Auto-fill (Priority)</button>
+      </form>
+    </div>
+
+    <% if (rosterRows.length === 0 && !editMode) { %>
       <div class="empty">No confirmed shifts booked for this week.</div>
     <% } else { %>
       <table style="table-layout: fixed; width: 100%;">
         <colgroup>
-          <col style="width: 15%;">
-          <col style="width: 8%;">
-          <% dayLabels.forEach(function() { %><col style="width: 8.5%;"><% }) %>
-          <col style="width: 8%;">
-          <col style="width: 8%;">
-          <col style="width: 8%;">
+          <col style="width: 14%;">
+          <col style="width: 7%;">
+          <% dayLabels.forEach(function() { %><col style="width: 9%;"><% }) %>
+          <col style="width: 7%;">
+          <col style="width: 7%;">
+          <col style="width: 7%;">
         </colgroup>
         <thead>
           <tr>
@@ -47,18 +62,23 @@
             <% dayLabels.forEach(function(label, i) { %>
               <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
             <% }) %>
-            <th class="amount">Weekday hrs</th>
-            <th class="amount">Weekend hrs</th>
-            <th class="amount">Total hrs</th>
+            <th class="amount">Weekday</th>
+            <th class="amount">Weekend</th>
+            <th class="amount">Total</th>
           </tr>
         </thead>
         <tbody>
           <% rosterRows.forEach(function(row) { %>
             <tr>
-              <td><strong><%= row.name %></strong></td>
+              <td>
+                <strong><%= row.name %></strong>
+                <% if (editMode) { %>
+                  <div style="font-size: 0.7em; color: var(--muted);">ID: <%= row.employeeId ? row.employeeId.slice(0, 8) : '' %></div>
+                <% } %>
+              </td>
               <td>
                 <% if (row.employmentType === 'permanent') { %>
-                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
+                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Perm</span>
                 <% } else if (row.employmentType === 'casual') { %>
                   <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
                 <% } else { %>
@@ -68,8 +88,32 @@
               <% row.byDay.forEach(function(cell) { %>
                 <td>
                   <% if (cell) { %>
-                    <%= cell.startLabel %>–<%= cell.endLabel %>
-                    <div style="font-size: 0.75em; color: var(--muted);"><%= cell.location %></div>
+                    <% if (editMode) { %>
+                      <div style="font-size: 0.8em;"><%= cell.startLabel %>–<%= cell.endLabel %></div>
+                      <% if (cell.actual_clock_in) { %>
+                        <div style="font-size: 0.7em; color: var(--green);">In: <%= cell.actual_clock_in %></div>
+                      <% } %>
+                      <% if (cell.actual_clock_out) { %>
+                        <div style="font-size: 0.7em; color: var(--green);">Out: <%= cell.actual_clock_out %></div>
+                      <% } %>
+                      <form method="POST" action="/manager/roster/clock-in" style="margin-top: 0.2rem;">
+                        <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                        <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                        <input type="time" name="clockIn" style="width: 5rem; font-size: 0.7rem; padding: 0.1rem; border: 1px solid var(--line); border-radius: 3px;" placeholder="In">
+                        <button type="submit" class="btn-sm" style="background: var(--mustard); color: var(--bun-dark);">⏱</button>
+                      </form>
+                      <form method="POST" action="/manager/roster/unassign" style="margin-top: 0.2rem;">
+                        <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                        <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                        <button type="submit" class="btn-sm" style="background: var(--tomato); color: #fff;">✗</button>
+                      </form>
+                    <% } else { %>
+                      <%= cell.startLabel %>–<%= cell.endLabel %>
+                      <% if (cell.actual_clock_in) { %>
+                        <div style="font-size: 0.7em; color: var(--green);">In: <%= cell.actual_clock_in %></div>
+                      <% } %>
+                      <div style="font-size: 0.75em; color: var(--muted);"><%= cell.location %></div>
+                    <% } %>
                   <% } else { %>
                     <span style="color: var(--muted);">—</span>
                   <% } %>
@@ -82,6 +126,29 @@
           <% }) %>
         </tbody>
       </table>
+
+      <% if (editMode && employees && employees.length > 0 && shifts && shifts.length > 0) { %>
+        <!-- Assign employee to shift -->
+        <div class="card" style="margin-top: 1.5rem; padding: 1rem;">
+          <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem;">Assign Employee to Shift</h3>
+          <form method="POST" action="/manager/roster/assign" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+            <select name="employeeId" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
+              <% employees.forEach(function(emp) { %>
+                <option value="<%= emp.id %>"><%= emp.last_name %>, <%= emp.first_name %> (★ <%= emp.priority_score.toFixed(0) %>)</option>
+              <% }) %>
+            </select>
+            <select name="shiftId" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
+              <% shifts.forEach(function(s) { %>
+                <% var sStart = new Date(s.start_time); var sEnd = new Date(s.end_time); %>
+                <option value="<%= s.id %>"><%= sStart.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' }) %> <%= sStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %>–<%= sEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) %></option>
+              <% }) %>
+            </select>
+            <button type="submit" class="btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;">+ Assign</button>
+          </form>
+        </div>
+      <% } %>
+
       <div class="info" style="margin-top: 1rem;"><%= rosterRows.length %> employee(s) with confirmed shifts this week.</div>
     <% } %>
   <% } %>

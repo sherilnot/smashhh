@@ -122,7 +122,7 @@ async function getRoster(managerId, weekStart, weekEnd) {
   );
 
   if (storeRes.rows.length === 0) {
-    return { hasManagedStore: false, roster: [] };
+    return { hasManagedStore: false, roster: [], shifts: [] };
   }
 
   const storeIds = storeRes.rows.map(r => r.store_id);
@@ -131,8 +131,9 @@ async function getRoster(managerId, weekStart, weekEnd) {
   const bookingsRes = await pool.query(
     `SELECT
        u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
-       s.start_time, s.end_time, s.store_location,
-       sb.booking_status, s.store_id
+       s.id AS shift_id, s.start_time, s.end_time, s.store_location,
+       sb.id AS booking_id, sb.booking_status, sb.actual_clock_in, sb.actual_clock_out,
+       s.store_id
      FROM shift_bookings sb
      JOIN shifts s ON s.id = sb.shift_id
      JOIN users u ON u.id = sb.employee_id
@@ -142,6 +143,17 @@ async function getRoster(managerId, weekStart, weekEnd) {
        AND s.start_time <= $3
        AND s.store_id IS NOT NULL
      ORDER BY u.last_name, u.first_name, s.start_time`,
+    [storeIds, weekStart, weekEnd]
+  );
+
+  // Also fetch all shifts for the week (even unassigned ones)
+  const shiftsRes = await pool.query(
+    `SELECT s.id, s.start_time, s.end_time, s.store_location, s.capacity, s.store_id
+     FROM shifts s
+     WHERE s.store_id = ANY($1)
+       AND s.start_time >= $2
+       AND s.start_time <= $3
+     ORDER BY s.start_time`,
     [storeIds, weekStart, weekEnd]
   );
 
@@ -161,14 +173,18 @@ async function getRoster(managerId, weekStart, weekEnd) {
       });
     }
     employeeMap.get(key).shifts.push({
+      shift_id: row.shift_id,
+      booking_id: row.booking_id,
       start_time: row.start_time,
       end_time: row.end_time,
-      store_location: row.store_location
+      store_location: row.store_location,
+      actual_clock_in: row.actual_clock_in,
+      actual_clock_out: row.actual_clock_out
     });
   }
 
   const roster = sortRosterEntries(Array.from(employeeMap.values()));
-  return { hasManagedStore: true, roster };
+  return { hasManagedStore: true, roster, shifts: shiftsRes.rows };
 }
 
 module.exports = {

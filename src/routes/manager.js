@@ -194,6 +194,7 @@ router.get('/roster', async (req, res) => {
       return res.render('manager/roster', {
         user: req.user, error: validation.error,
         hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
+        shifts: [], employees: [], query: req.query,
         weekStartFormatted: '', weekEndFormatted: '',
         prevWeekDate: '', nextWeekDate: '',
         canGoPrev: false, canGoNext: false
@@ -244,15 +245,22 @@ router.get('/roster', async (req, res) => {
 
         if (dayIdx !== -1) {
           byDay[dayIdx] = {
+            shift_id: shift.shift_id,
+            booking_id: shift.booking_id,
             startLabel: start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
             endLabel: end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
-            location: shift.store_location
+            startISO: start.toISOString().slice(0, 16),
+            endISO: end.toISOString().slice(0, 16),
+            location: shift.store_location,
+            actual_clock_in: shift.actual_clock_in ? new Date(shift.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null,
+            actual_clock_out: shift.actual_clock_out ? new Date(shift.actual_clock_out).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
           };
         }
       });
 
       return {
         name: `${entry.employee.last_name}, ${entry.employee.first_name}`,
+        employeeId: entry.employee.id,
         employmentType: entry.employee.employment_type,
         byDay,
         weekdayHours: Math.round(weekdayHours * 100) / 100,
@@ -260,6 +268,19 @@ router.get('/roster', async (req, res) => {
         totalHours: Math.round((weekdayHours + weekendHours) * 100) / 100
       };
     });
+
+    // Get available employees for edit mode
+    let employees = [];
+    if (req.query.edit === '1') {
+      const storeRes2 = await pool.query(
+        `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+        [req.user.userId]
+      );
+      if (storeRes2.rows.length > 0) {
+        const { getEmployeesByPriority } = require('../services/priorityService');
+        employees = await getEmployeesByPriority(storeRes2.rows[0].store_id);
+      }
+    }
 
     res.render('manager/roster', {
       user: req.user,
@@ -269,6 +290,9 @@ router.get('/roster', async (req, res) => {
       rosterRows,
       dayLabels,
       dayDates,
+      shifts: result.shifts || [],
+      employees,
+      query: req.query,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
       prevWeekDate: toLocalDateString(prevMonday),
@@ -281,10 +305,196 @@ router.get('/roster', async (req, res) => {
     res.render('manager/roster', {
       user: req.user, error: 'Failed to load roster',
       hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
+      shifts: [], employees: [], query: req.query,
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',
       canGoPrev: false, canGoNext: false
     });
+  }
+});
+
+// ─── Roster Editing ────────────────────────────────────────────────────────────
+
+const { recalculatePriority, getEmployeesByPriority, autoFillRoster } = require('../services/priorityService');
+
+// Get available employees for assignment (JSON endpoint for the edit UI)
+router.get('/roster/employees', async (req, res) => {
+  try {
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
+    );
+    if (storeRes.rows.length === 0) return res.json([]);
+    const storeId = storeRes.rows[0].store_id;
+    const employees = await getEmployeesByPriority(storeId);
+    res.json(employees);
+  } catch (e) {
+    console.error('[Manager] roster/employees error', e);
+    res.json([]);
+  }
+});
+
+// Assign an employee to a shift
+router.post('/roster/assign', async (req, res) => {
+  try {
+    const { shiftId, employeeId, weekStart } = req.body;
+
+    // Verify shift belongs to manager's store
+    const verifyRes = await pool.query(
+      `SELECT s.id FROM shifts s
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE s.id = $1 AND sma.manager_id = $2`,
+      [shiftId, req.user.userId]
+    );
+    if (verifyRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+
+    // Insert booking as confirmed (manager-assigned)
+    await pool.query(
+      `INSERT INTO shift_bookings (shift_id, employee_id, booking_status, assigned_by)
+       VALUES ($1, $2, 'confirmed', $3)
+       ON CONFLICT DO NOTHING`,
+      [shiftId, employeeId, req.user.userId]
+    );
+
+    res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+  } catch (e) {
+    console.error('[Manager] roster/assign error', e);
+    res.redirect('/manager/roster?edit=1');
+  }
+});
+
+// Unassign an employee from a shift
+router.post('/roster/unassign', async (req, res) => {
+  try {
+    const { bookingId, weekStart } = req.body;
+
+    // Verify booking belongs to manager's store
+    const verifyRes = await pool.query(
+      `SELECT sb.id FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE sb.id = $1 AND sma.manager_id = $2`,
+      [bookingId, req.user.userId]
+    );
+    if (verifyRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+
+    await pool.query(`DELETE FROM shift_bookings WHERE id = $1`, [bookingId]);
+    res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+  } catch (e) {
+    console.error('[Manager] roster/unassign error', e);
+    res.redirect('/manager/roster?edit=1');
+  }
+});
+
+// Edit shift times
+router.post('/roster/edit-shift', async (req, res) => {
+  try {
+    const { shiftId, startTime, endTime, weekStart } = req.body;
+
+    // Verify shift belongs to manager's store
+    const verifyRes = await pool.query(
+      `SELECT s.id FROM shifts s
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE s.id = $1 AND sma.manager_id = $2`,
+      [shiftId, req.user.userId]
+    );
+    if (verifyRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+
+    await pool.query(
+      `UPDATE shifts SET start_time = $1, end_time = $2, updated_at = NOW() WHERE id = $3`,
+      [startTime, endTime, shiftId]
+    );
+
+    res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+  } catch (e) {
+    console.error('[Manager] roster/edit-shift error', e);
+    res.redirect('/manager/roster?edit=1');
+  }
+});
+
+// Record actual clock-in time for an employee
+router.post('/roster/clock-in', async (req, res) => {
+  try {
+    const { bookingId, clockIn, clockOut, weekStart } = req.body;
+
+    // Verify booking belongs to manager's store
+    const verifyRes = await pool.query(
+      `SELECT sb.id FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE sb.id = $1 AND sma.manager_id = $2`,
+      [bookingId, req.user.userId]
+    );
+    if (verifyRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (clockIn) {
+      updates.push(`actual_clock_in = $${idx++}`);
+      values.push(clockIn);
+    }
+    if (clockOut) {
+      updates.push(`actual_clock_out = $${idx++}`);
+      values.push(clockOut);
+    }
+
+    if (updates.length > 0) {
+      values.push(bookingId);
+      await pool.query(
+        `UPDATE shift_bookings SET ${updates.join(', ')} WHERE id = $${idx}`,
+        values
+      );
+    }
+
+    res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+  } catch (e) {
+    console.error('[Manager] roster/clock-in error', e);
+    res.redirect('/manager/roster?edit=1');
+  }
+});
+
+// Auto-fill roster with priority employees
+router.post('/roster/auto-fill', async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
+    );
+    if (storeRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}`);
+    }
+
+    const storeId = storeRes.rows[0].store_id;
+
+    // Recalculate priorities first
+    await recalculatePriority(storeId);
+
+    // Parse week bounds
+    const parseLocalDate = (str) => {
+      const [y, m, d] = String(str).split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1);
+    };
+    const wsDate = parseLocalDate(weekStart);
+    const weDate = new Date(wsDate);
+    weDate.setDate(weDate.getDate() + 6);
+    weDate.setHours(23, 59, 59, 999);
+
+    await autoFillRoster(req.user.userId, storeId, wsDate, weDate);
+    res.redirect(`/manager/roster?date=${weekStart || ''}`);
+  } catch (e) {
+    console.error('[Manager] roster/auto-fill error', e);
+    res.redirect('/manager/roster');
   }
 });
 

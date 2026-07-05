@@ -259,6 +259,10 @@ async function bookShift(employeeId, shiftId) {
     return { success: true, routedManagerIds };
   } catch (error) {
     await client.query('ROLLBACK');
+    // Handle unique constraint violation (double booking attempt)
+    if (error.code === '23505' && error.constraint === 'unique_employee_shift') {
+      return { success: false, error: 'You have already booked this shift' };
+    }
     console.error('[ShiftService] bookShift error', { error: error.message, stack: error.stack });
     return { success: false, error: 'Booking failed due to system error' };
   } finally {

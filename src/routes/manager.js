@@ -190,9 +190,9 @@ router.get('/roster', async (req, res) => {
 
     // Fixed shift types
     const SHIFT_TYPES = [
-      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#E8F5E9' },  // light green
-      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF9C4' },   // light yellow
-      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#E1F5FE' }    // light blue
+      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#C8E6C9' },  // soft green
+      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF59D' },   // soft yellow
+      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#B3E5FC' }    // soft blue
     ];
 
     // Build day labels & dates
@@ -240,57 +240,62 @@ router.get('/roster', async (req, res) => {
       [storeId, weekStart, weekEnd]
     );
 
-    // Build a grid: shift_type × day → list of employees
-    const rosterGrid = SHIFT_TYPES.map(st => {
+    // Build roster data: employees × days with shift info
+    const employeesRes = await pool.query(
+      `SELECT DISTINCT u.id, u.user_id, u.first_name, u.last_name, u.employment_type, u.priority_score
+       FROM users u
+       JOIN store_employee_assignments sea ON sea.employee_id = u.id
+       WHERE sea.store_id = $1 AND u.is_active = true AND u.role = 'employee'
+       ORDER BY u.last_name, u.first_name`,
+      [storeId]
+    );
+
+    const rosterRows = employeesRes.rows.map(emp => {
       const byDay = dayDates.map(dateStr => {
-        // Find bookings matching this shift type on this day
-        const matches = bookingsRes.rows.filter(b => {
+        // Find all bookings for this employee on this day
+        const bookings = bookingsRes.rows.filter(b => {
+          const bStart = new Date(b.start_time);
+          const bDate = toLocalDateString(bStart);
+          return bDate === dateStr && b.employee_id === emp.id;
+        });
+
+        return bookings.map(b => {
           const bStart = new Date(b.start_time);
           const bEnd = new Date(b.end_time);
-          const bDate = toLocalDateString(bStart);
-          if (bDate !== dateStr) return false;
-          // Match if times align with this shift type
-          return bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
-                 bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM;
-        });
-        return matches.map(m => ({
-          booking_id: m.booking_id,
-          name: m.first_name + ' ' + m.last_name.charAt(0) + '.',
-          full_name: m.last_name + ', ' + m.first_name,
-          actual_clock_in: m.actual_clock_in ? new Date(m.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
-        }));
-      });
-      return { label: st.label, byDay, color: st.color };
-    });
+          
+          // Determine shift type and color
+          let shiftType = 'custom';
+          let color = '#F8BBD0'; // soft pink for custom
+          let label = bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) + 
+                     '–' + bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+          
+          SHIFT_TYPES.forEach(st => {
+            if (bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
+                bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM) {
+              shiftType = st.label;
+              color = st.color;
+              label = st.label;
+            }
+          });
 
-    // Add custom shifts row (any bookings that don't match the 3 fixed types)
-    const customByDay = dayDates.map(dateStr => {
-      const matches = bookingsRes.rows.filter(b => {
-        const bStart = new Date(b.start_time);
-        const bEnd = new Date(b.end_time);
-        const bDate = toLocalDateString(bStart);
-        if (bDate !== dateStr) return false;
-        // Is custom if doesn't match any fixed type
-        return !SHIFT_TYPES.some(st => 
-          bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
-          bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM
-        );
+          return {
+            booking_id: b.booking_id,
+            label,
+            color,
+            shiftType,
+            actual_clock_in: b.actual_clock_in ? new Date(b.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
+          };
+        });
       });
-      return matches.map(m => {
-        const bStart = new Date(m.start_time);
-        const bEnd = new Date(m.end_time);
-        const timeStr = bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) + 
-                       '–' + bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
-        return {
-          booking_id: m.booking_id,
-          name: m.first_name + ' ' + m.last_name.charAt(0) + '.',
-          full_name: m.last_name + ', ' + m.first_name,
-          actual_clock_in: m.actual_clock_in ? new Date(m.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null,
-          timeStr
-        };
-      });
+
+      return {
+        employee_id: emp.id,
+        name: emp.last_name + ', ' + emp.first_name,
+        employmentType: emp.employment_type,
+        priority_score: emp.priority_score || 0,
+        byDay
+      };
     });
-    rosterGrid.push({ label: 'Custom', byDay: customByDay, color: '#FCE4EC' }); // light pink
 
     // Get employees for edit mode
     let employees = [];
@@ -301,7 +306,7 @@ router.get('/roster', async (req, res) => {
 
     res.render('manager/roster', {
       user: req.user, error: null, hasManagedStore: true,
-      shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterGrid,
+      shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterRows,
       query: req.query, employees,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
@@ -313,7 +318,7 @@ router.get('/roster', async (req, res) => {
     console.error('[Manager] roster error', e);
     res.render('manager/roster', {
       user: req.user, error: 'Failed to load roster',
-      hasManagedStore: true, shiftTypes: [], dayLabels: [], dayDates: [], rosterGrid: [],
+      hasManagedStore: true, shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [],
       query: req.query, employees: [],
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',

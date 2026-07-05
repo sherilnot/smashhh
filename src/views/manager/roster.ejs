@@ -43,37 +43,44 @@
       </form>
     </div>
 
-    <!-- Roster Grid: shift types as rows, days as columns -->
+    <!-- Roster Grid: employees as rows, days as columns -->
     <table style="width: 100%;">
       <thead>
         <tr>
-          <th style="width: 12%;">Shift</th>
+          <th style="width: 14%;">Employee</th>
+          <th style="width: 7%;">Type</th>
           <% dayLabels.forEach(function(label, i) { %>
             <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
           <% }) %>
         </tr>
       </thead>
       <tbody>
-        <% rosterGrid.forEach(function(row) { %>
+        <% rosterRows.forEach(function(row) { %>
           <tr>
-            <td style="background: <%= row.color %>; font-weight: 600;"><strong><%= row.label %></strong></td>
-            <% row.byDay.forEach(function(employees_in_slot, dayIdx) { %>
-              <td style="vertical-align: top; padding: 0.5rem; background: <%= row.color %>;">
-                <% if (employees_in_slot.length > 0) { %>
-                  <% employees_in_slot.forEach(function(emp) { %>
-                    <div style="margin-bottom: 0.3rem; font-size: 0.85em;">
-                      <span><%= emp.name %></span>
-                      <% if (emp.timeStr) { %>
-                        <span style="font-size: 0.75em; color: var(--muted); display: block;">(<%= emp.timeStr %>)</span>
-                      <% } %>
-                      <% if (emp.actual_clock_in) { %>
-                        <span style="font-size: 0.75em; color: var(--green);">(in: <%= emp.actual_clock_in %>)</span>
+            <td><strong><%= row.name %></strong></td>
+            <td>
+              <% if (row.employmentType === 'permanent') { %>
+                <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Perm</span>
+              <% } else if (row.employmentType === 'casual') { %>
+                <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
+              <% } else { %>
+                <span style="color: var(--muted);">—</span>
+              <% } %>
+            </td>
+            <% row.byDay.forEach(function(shifts_in_day, dayIdx) { %>
+              <td style="vertical-align: top; padding: 0.35rem;">
+                <% if (shifts_in_day.length > 0) { %>
+                  <% shifts_in_day.forEach(function(shift) { %>
+                    <div style="margin-bottom: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= shift.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
+                      <div style="font-weight: 600; color: #333;"><%= shift.label %></div>
+                      <% if (shift.actual_clock_in) { %>
+                        <div style="font-size: 0.85em; color: var(--green); margin-top: 0.15rem;">✓ <%= shift.actual_clock_in %></div>
                       <% } %>
                       <% if (editMode) { %>
-                        <form method="POST" action="/manager/roster/unassign" style="display: inline;">
-                          <input type="hidden" name="bookingId" value="<%= emp.booking_id %>">
+                        <form method="POST" action="/manager/roster/unassign" style="margin-top: 0.25rem;">
+                          <input type="hidden" name="bookingId" value="<%= shift.booking_id %>">
                           <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-                          <button type="submit" class="btn-sm" style="background: var(--tomato); color: #fff; margin-left: 0.2rem;">✗</button>
+                          <button type="submit" class="btn-sm" style="background: var(--tomato); color: #fff; font-size: 0.7em; padding: 0.15rem 0.4rem;">Remove</button>
                         </form>
                       <% } %>
                     </div>

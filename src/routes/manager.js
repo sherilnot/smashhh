@@ -202,7 +202,7 @@ router.get('/roster', async (req, res) => {
     if (storeRes.rows.length === 0) {
       return res.render('manager/roster', {
         user: req.user, error: null, hasManagedStore: false,
-        shiftTypes: [], dayLabels: [], dayDates: [], rosterGrid: [],
+        shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [],
         query: req.query, employees: [],
         weekStartFormatted: toLocalDateString(weekStart),
         weekEndFormatted: toLocalDateString(weekEnd),
@@ -696,11 +696,11 @@ router.get('/timesheet', async (req, res) => {
 
 router.post('/timesheet/edit', async (req, res) => {
   try {
-    const { bookingId, action, adjustedHours, weekStart } = req.body;
+    const { bookingId, action, adjustedHours, startTime, endTime, weekStart } = req.body;
 
     // Verify the booking belongs to a shift in the manager's store
     const verifyRes = await pool.query(
-      `SELECT sb.id, sb.booking_status, s.start_time, s.end_time
+      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
@@ -714,7 +714,45 @@ router.post('/timesheet/edit', async (req, res) => {
 
     const booking = verifyRes.rows[0];
 
-    if (action === 'no_show') {
+    if (action === 'adjust_times') {
+      // Parse the new times
+      if (!startTime || !endTime) {
+        return res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1&error=Invalid time values`);
+      }
+      
+      // Get the original shift date
+      const originalStart = new Date(booking.start_time);
+      const shiftDate = new Date(originalStart.getFullYear(), originalStart.getMonth(), originalStart.getDate());
+      
+      // Parse time strings (HH:MM format)
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      
+      const newStart = new Date(shiftDate);
+      newStart.setHours(startH, startM, 0, 0);
+      
+      const newEnd = new Date(shiftDate);
+      newEnd.setHours(endH, endM, 0, 0);
+      
+      // Calculate hours
+      const diffMs = newEnd - newStart;
+      const hours = diffMs / (1000 * 60 * 60);
+      
+      if (hours <= 0 || hours > 24) {
+        return res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1&error=Invalid time range`);
+      }
+      
+      // Update the shift times and set adjusted_hours
+      await pool.query(
+        `UPDATE shifts SET start_time = $1, end_time = $2 WHERE id = $3`,
+        [newStart, newEnd, booking.shift_id]
+      );
+      
+      await pool.query(
+        `UPDATE shift_bookings SET adjusted_hours = $1, no_show = false WHERE id = $2`,
+        [hours, bookingId]
+      );
+    } else if (action === 'no_show') {
       await pool.query(
         `UPDATE shift_bookings SET no_show = true, adjusted_hours = 0 WHERE id = $1`,
         [bookingId]

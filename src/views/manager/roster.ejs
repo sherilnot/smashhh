@@ -37,10 +37,6 @@
       <% } else { %>
         <a href="/manager/roster?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">✓ Done Editing</a>
       <% } %>
-      <form method="POST" action="/manager/roster/auto-fill" style="display: inline;">
-        <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-        <button type="submit" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--lettuce); color: var(--bun-dark);">⚡ Auto-fill</button>
-      </form>
     </div>
 
     <!-- Roster Grid: employees as rows, days as columns -->

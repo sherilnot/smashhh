@@ -1,19 +1,73 @@
-<%- include('../partials/header', { title: 'Available Shifts - Burger Store', role: 'employee', active: 'shifts' }) %>
+<%- include('../partials/header', { title: 'Book a Shift', role: 'employee', active: 'shifts' }) %>
 
-  <h1><span class="emoji">🗓️</span>Available Shifts</h1>
+  <h1>Book a Shift</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (typeof success !== 'undefined' && success) { %><div class="msg"><%= success %></div><% } %>
 
-  <% if (shifts.length === 0) { %>
-    <p class="empty">No available shifts in this period.</p>
-  <% } else { %>
+  <div class="card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+    <h3 style="margin: 0 0 1rem 0;">Select Day & Shift</h3>
+    <form method="POST" action="/employee/book-shift">
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <!-- Day selection -->
+        <div>
+          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Day</label>
+          <select name="day" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; font-size: 1rem;" required>
+            <% if (typeof nextWeekDays !== 'undefined') { %>
+              <% nextWeekDays.forEach(function(d) { %>
+                <option value="<%= d.date %>"><%= d.label %> — <%= d.date %></option>
+              <% }) %>
+            <% } %>
+          </select>
+        </div>
+
+        <!-- Shift type selection -->
+        <div>
+          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Shift</label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
+              <input type="radio" name="shiftType" value="11-1730" required>
+              <span><strong>11:00 AM – 5:30 PM</strong> <span style="color: var(--muted);">(6.5 hrs)</span></span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
+              <input type="radio" name="shiftType" value="1730-2100">
+              <span><strong>5:30 PM – 9:00 PM</strong> <span style="color: var(--muted);">(3.5 hrs)</span></span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
+              <input type="radio" name="shiftType" value="11-2100">
+              <span><strong>11:00 AM – 9:00 PM</strong> <span style="color: var(--muted);">(10 hrs)</span></span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
+              <input type="radio" name="shiftType" value="custom">
+              <span><strong>Custom</strong></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom time (only used if custom selected) -->
+        <div id="customTimeFields" style="display: flex; gap: 0.75rem;">
+          <div>
+            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">Start</label>
+            <input type="time" name="customStart" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
+          </div>
+          <div>
+            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">End</label>
+            <input type="time" name="customEnd" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
+          </div>
+        </div>
+
+        <button type="submit" class="btn" style="padding: 0.75rem; font-size: 1rem; margin-top: 0.5rem;">📅 Book Shift</button>
+      </div>
+    </form>
+  </div>
+
+  <% if (typeof shifts !== 'undefined' && shifts.length > 0) { %>
+    <h3>Other Available Shifts</h3>
     <table>
       <thead>
         <tr>
           <th>Date</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Location</th>
+          <th>Time</th>
           <th>Spots Left</th>
           <th>Action</th>
         </tr>
@@ -21,15 +75,13 @@
       <tbody>
         <% shifts.forEach(shift => { %>
           <tr>
-            <td><%= new Date(shift.startTime).toLocaleDateString() %></td>
-            <td><%= new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= shift.storeLocation %></td>
+            <td><%= new Date(shift.startTime).toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' }) %></td>
+            <td><%= new Date(shift.startTime).toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(shift.endTime).toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}) %></td>
             <td><%= shift.capacity - shift.currentBookings %></td>
             <td>
               <form method="POST" action="/employee/book">
                 <input type="hidden" name="shiftId" value="<%= shift.id %>" />
-                <button type="submit">Book</button>
+                <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark);">Book</button>
               </form>
             </td>
           </tr>

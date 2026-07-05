@@ -188,33 +188,49 @@ router.get('/employees', async (req, res) => {
 
 router.get('/roster', async (req, res) => {
   try {
-    const validation = validateRosterRequest({ date: req.query.date || null });
-
-    if (!validation.valid) {
-      return res.render('manager/roster', {
-        user: req.user, error: validation.error,
-        hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
-        shifts: [], employees: [], query: req.query,
-        weekStartFormatted: '', weekEndFormatted: '',
-        prevWeekDate: '', nextWeekDate: '',
-        canGoPrev: false, canGoNext: false
-      });
-    }
-
-    const { start: weekStart, end: weekEnd } = validation.week;
-    const result = await getRoster(req.user.userId, weekStart, weekEnd);
-    const bounds = isWithinNavigationBounds(weekStart, new Date());
-
-    // Compute prev/next week dates
-    const prevMonday = new Date(weekStart);
-    prevMonday.setDate(prevMonday.getDate() - 7);
-    const nextMonday = new Date(weekStart);
-    nextMonday.setDate(nextMonday.getDate() + 7);
-
+    // Roster always defaults to NEXT week
     const toLocalDateString = (d) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    // Build Monday..Sunday day labels + date keys for this week's grid columns
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 1 : 8 - day; // next Monday
+    const nextMonday = new Date(now);
+    nextMonday.setDate(now.getDate() + diffToMonday);
+    nextMonday.setHours(0, 0, 0, 0);
+
+    // Allow navigation via ?date= param
+    let weekStart;
+    if (req.query.date) {
+      const [y, m, d2] = req.query.date.split('-').map(Number);
+      const parsed = new Date(y, m - 1, d2);
+      const pDay = parsed.getDay();
+      const diff = pDay === 0 ? -6 : 1 - pDay;
+      weekStart = new Date(parsed);
+      weekStart.setDate(parsed.getDate() + diff);
+      weekStart.setHours(0, 0, 0, 0);
+    } else {
+      weekStart = nextMonday;
+    }
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const bounds = isWithinNavigationBounds(weekStart, now);
+    const prevMonday = new Date(weekStart);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const nextMon = new Date(weekStart);
+    nextMon.setDate(nextMon.getDate() + 7);
+
+    // Fixed shift types
+    const SHIFT_TYPES = [
+      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30 },
+      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0 },
+      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0 }
+    ];
+
+    // Build day labels & dates
     const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const dayDates = [];
     for (let i = 0; i < 7; i++) {
@@ -223,89 +239,88 @@ router.get('/roster', async (req, res) => {
       dayDates.push(toLocalDateString(d));
     }
 
-    // Index each employee's shifts by day-of-week (0=Mon..6=Sun) and split
-    // worked hours into weekday (Mon-Fri) vs weekend (Sat-Sun) totals.
-    const rosterRows = result.roster.map(entry => {
-      const byDay = Array(7).fill(null);
-      let weekdayHours = 0;
-      let weekendHours = 0;
-
-      entry.shifts.forEach(shift => {
-        const start = new Date(shift.start_time);
-        const end = new Date(shift.end_time);
-        const dateKey = toLocalDateString(start);
-        const dayIdx = dayDates.indexOf(dateKey);
-        const hours = (end - start) / 3600000;
-
-        if (dayIdx === 5 || dayIdx === 6) {
-          weekendHours += hours;
-        } else {
-          weekdayHours += hours;
-        }
-
-        if (dayIdx !== -1) {
-          byDay[dayIdx] = {
-            shift_id: shift.shift_id,
-            booking_id: shift.booking_id,
-            startLabel: start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
-            endLabel: end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }),
-            startISO: start.toISOString().slice(0, 16),
-            endISO: end.toISOString().slice(0, 16),
-            location: shift.store_location,
-            actual_clock_in: shift.actual_clock_in ? new Date(shift.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null,
-            actual_clock_out: shift.actual_clock_out ? new Date(shift.actual_clock_out).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
-          };
-        }
+    // Get manager's store
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
+    );
+    if (storeRes.rows.length === 0) {
+      return res.render('manager/roster', {
+        user: req.user, error: null, hasManagedStore: false,
+        shiftTypes: [], dayLabels: [], dayDates: [], rosterGrid: [],
+        query: req.query, employees: [],
+        weekStartFormatted: toLocalDateString(weekStart),
+        weekEndFormatted: toLocalDateString(weekEnd),
+        prevWeekDate: toLocalDateString(prevMonday),
+        nextWeekDate: toLocalDateString(nextMon),
+        canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
       });
+    }
+    const storeId = storeRes.rows[0].store_id;
 
-      return {
-        name: `${entry.employee.last_name}, ${entry.employee.first_name}`,
-        employeeId: entry.employee.id,
-        employmentType: entry.employee.employment_type,
-        byDay,
-        weekdayHours: Math.round(weekdayHours * 100) / 100,
-        weekendHours: Math.round(weekendHours * 100) / 100,
-        totalHours: Math.round((weekdayHours + weekendHours) * 100) / 100
-      };
+    // Get all confirmed bookings for the week
+    const bookingsRes = await pool.query(
+      `SELECT
+         sb.id AS booking_id, sb.employee_id, sb.actual_clock_in,
+         u.first_name, u.last_name,
+         s.id AS shift_id, s.start_time, s.end_time
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN users u ON u.id = sb.employee_id
+       WHERE s.store_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time >= $2
+         AND s.start_time <= $3
+       ORDER BY u.last_name, u.first_name`,
+      [storeId, weekStart, weekEnd]
+    );
+
+    // Build a grid: shift_type × day → list of employees
+    const rosterGrid = SHIFT_TYPES.map(st => {
+      const byDay = dayDates.map(dateStr => {
+        // Find bookings matching this shift type on this day
+        const matches = bookingsRes.rows.filter(b => {
+          const bStart = new Date(b.start_time);
+          const bEnd = new Date(b.end_time);
+          const bDate = toLocalDateString(bStart);
+          if (bDate !== dateStr) return false;
+          // Match if times align with this shift type
+          return bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
+                 bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM;
+        });
+        return matches.map(m => ({
+          booking_id: m.booking_id,
+          name: m.first_name + ' ' + m.last_name.charAt(0) + '.',
+          full_name: m.last_name + ', ' + m.first_name,
+          actual_clock_in: m.actual_clock_in ? new Date(m.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
+        }));
+      });
+      return { label: st.label, byDay };
     });
 
-    // Get available employees for edit mode
+    // Get employees for edit mode
     let employees = [];
     if (req.query.edit === '1') {
-      const storeRes2 = await pool.query(
-        `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
-        [req.user.userId]
-      );
-      if (storeRes2.rows.length > 0) {
-        const { getEmployeesByPriority } = require('../services/priorityService');
-        employees = await getEmployeesByPriority(storeRes2.rows[0].store_id);
-      }
+      const { getEmployeesByPriority } = require('../services/priorityService');
+      employees = await getEmployeesByPriority(storeId);
     }
 
     res.render('manager/roster', {
-      user: req.user,
-      error: null,
-      hasManagedStore: result.hasManagedStore,
-      roster: result.roster,
-      rosterRows,
-      dayLabels,
-      dayDates,
-      shifts: result.shifts || [],
-      employees,
-      query: req.query,
+      user: req.user, error: null, hasManagedStore: true,
+      shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterGrid,
+      query: req.query, employees,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
       prevWeekDate: toLocalDateString(prevMonday),
-      nextWeekDate: toLocalDateString(nextMonday),
-      canGoPrev: bounds.canGoPrev,
-      canGoNext: bounds.canGoNext
+      nextWeekDate: toLocalDateString(nextMon),
+      canGoPrev: bounds.canGoPrev, canGoNext: bounds.canGoNext
     });
   } catch (e) {
     console.error('[Manager] roster error', e);
     res.render('manager/roster', {
       user: req.user, error: 'Failed to load roster',
-      hasManagedStore: true, roster: [], rosterRows: [], dayLabels: [], dayDates: [],
-      shifts: [], employees: [], query: req.query,
+      hasManagedStore: true, shiftTypes: [], dayLabels: [], dayDates: [], rosterGrid: [],
+      query: req.query, employees: [],
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',
       canGoPrev: false, canGoNext: false
@@ -337,16 +352,55 @@ router.get('/roster/employees', async (req, res) => {
 // Assign an employee to a shift
 router.post('/roster/assign', async (req, res) => {
   try {
-    const { shiftId, employeeId, weekStart } = req.body;
+    const { shiftId, employeeId, weekStart, shiftType, day } = req.body;
 
-    // Verify shift belongs to manager's store
-    const verifyRes = await pool.query(
-      `SELECT s.id FROM shifts s
-       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
-       WHERE s.id = $1 AND sma.manager_id = $2`,
-      [shiftId, req.user.userId]
+    // Get manager's store
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
     );
-    if (verifyRes.rows.length === 0) {
+    if (storeRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+    const storeId = storeRes.rows[0].store_id;
+
+    let targetShiftId = shiftId;
+
+    // If shiftType + day provided (new format), find or create the shift
+    if (!targetShiftId && shiftType && day) {
+      const SHIFT_MAP = {
+        '11-1730': { startH: 11, startM: 0, endH: 17, endM: 30 },
+        '1730-2100': { startH: 17, startM: 30, endH: 21, endM: 0 },
+        '11-2100': { startH: 11, startM: 0, endH: 21, endM: 0 }
+      };
+      const st = SHIFT_MAP[shiftType];
+      if (!st) return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+
+      const [y, m, d2] = day.split('-').map(Number);
+      const startTime = new Date(y, m - 1, d2, st.startH, st.startM, 0);
+      const endTime = new Date(y, m - 1, d2, st.endH, st.endM, 0);
+
+      // Find existing shift or create one
+      const existingShift = await pool.query(
+        `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+        [storeId, startTime, endTime]
+      );
+
+      if (existingShift.rows.length > 0) {
+        targetShiftId = existingShift.rows[0].id;
+      } else {
+        // Get store name for location
+        const storeNameRes = await pool.query(`SELECT name FROM stores WHERE id = $1`, [storeId]);
+        const location = storeNameRes.rows[0]?.name || 'Store';
+        const newShift = await pool.query(
+          `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id) VALUES ($1, $2, $3, 5, $4) RETURNING id`,
+          [startTime, endTime, location, storeId]
+        );
+        targetShiftId = newShift.rows[0].id;
+      }
+    }
+
+    if (!targetShiftId) {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
@@ -355,7 +409,7 @@ router.post('/roster/assign', async (req, res) => {
       `INSERT INTO shift_bookings (shift_id, employee_id, booking_status, assigned_by)
        VALUES ($1, $2, 'confirmed', $3)
        ON CONFLICT DO NOTHING`,
-      [shiftId, employeeId, req.user.userId]
+      [targetShiftId, employeeId, req.user.userId]
     );
 
     res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
@@ -502,7 +556,17 @@ router.post('/roster/auto-fill', async (req, res) => {
 
 router.get('/timesheet', async (req, res) => {
   try {
-    const validation = validateRosterRequest({ date: req.query.date || null });
+    // Default to LAST week if no date provided
+    let dateParam = req.query.date || null;
+    if (!dateParam) {
+      const now = new Date();
+      const day = now.getDay();
+      const diffToLastMonday = day === 0 ? -13 : -6 - day; // last week's Monday
+      const lastMonday = new Date(now);
+      lastMonday.setDate(now.getDate() + diffToLastMonday);
+      dateParam = `${lastMonday.getFullYear()}-${String(lastMonday.getMonth() + 1).padStart(2, '0')}-${String(lastMonday.getDate()).padStart(2, '0')}`;
+    }
+    const validation = validateRosterRequest({ date: dateParam });
 
     if (!validation.valid) {
       return res.render('manager/timesheet', {

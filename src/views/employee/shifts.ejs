@@ -44,15 +44,17 @@
           </div>
         </div>
 
-        <!-- Custom time (only used if custom selected) -->
-        <div id="customTimeFields" style="display: flex; gap: 0.75rem;">
-          <div>
-            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">Start</label>
-            <input type="time" name="customStart" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
-          </div>
-          <div>
-            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">End</label>
-            <input type="time" name="customEnd" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
+        <!-- Custom time (only shown when custom selected) -->
+        <div id="customTimeFields" style="display: none; padding: 0.75rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-soft);">
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">Start Time</label>
+              <input type="time" name="customStart" id="customStart" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px; font-size: 1rem;">
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">End Time</label>
+              <input type="time" name="customEnd" id="customEnd" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px; font-size: 1rem;">
+            </div>
           </div>
         </div>
 
@@ -60,6 +62,27 @@
       </div>
     </form>
   </div>
+
+  <script>
+    // Show/hide custom time fields based on shift type selection
+    document.querySelectorAll('input[name="shiftType"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        const customFields = document.getElementById('customTimeFields');
+        const customStart = document.getElementById('customStart');
+        const customEnd = document.getElementById('customEnd');
+        
+        if (this.value === 'custom') {
+          customFields.style.display = 'block';
+          customStart.required = true;
+          customEnd.required = true;
+        } else {
+          customFields.style.display = 'none';
+          customStart.required = false;
+          customEnd.required = false;
+        }
+      });
+    });
+  </script>
 
   <% if (typeof shifts !== 'undefined' && shifts.length > 0) { %>
     <h3>Other Available Shifts</h3>

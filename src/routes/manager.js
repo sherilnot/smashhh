@@ -1,6 +1,5 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
-const { getManagerWageEntries, totalWage } = require('../services/wageService');
 const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
 const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
@@ -11,12 +10,16 @@ const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = req
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
 
-// Manager dashboard: active (confirmed, started) bookings + wage entries (Req 7.1, 9.1, 9.3).
+// Fixed shift types - used by both roster and timesheet
+const SHIFT_TYPES = [
+  { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#C8E6C9' },  // soft green
+  { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF59D' },   // soft yellow
+  { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#B3E5FC' }    // soft blue
+];
+
+// Manager dashboard: active (confirmed, started) bookings
 router.get('/dashboard', async (req, res) => {
   try {
-    const { entries, errors } = await getManagerWageEntries(req.user.userId);
-    const total = totalWage(entries);
-
     // Fetch confirmed bookings on shifts that have already started (eligible to end).
     const activeRes = await pool.query(
       `SELECT sb.id AS booking_id, u.first_name, u.last_name,
@@ -34,18 +37,12 @@ router.get('/dashboard', async (req, res) => {
 
     res.render('manager/dashboard', {
       user: req.user,
-      wageEntries: entries,
-      wageTotal: total,
-      wageErrors: errors,
       activeBookings: activeRes.rows
     });
   } catch (e) {
     console.error('[Manager] dashboard error', e);
     res.render('manager/dashboard', {
       user: req.user,
-      wageEntries: [],
-      wageTotal: 0,
-      wageErrors: [],
       activeBookings: []
     });
   }
@@ -187,13 +184,6 @@ router.get('/roster', async (req, res) => {
     prevMonday.setDate(prevMonday.getDate() - 7);
     const nextMon = new Date(weekStart);
     nextMon.setDate(nextMon.getDate() + 7);
-
-    // Fixed shift types
-    const SHIFT_TYPES = [
-      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#C8E6C9' },  // soft green
-      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF59D' },   // soft yellow
-      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#B3E5FC' }    // soft blue
-    ];
 
     // Build day labels & dates
     const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];

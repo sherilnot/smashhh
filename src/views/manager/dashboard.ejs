@@ -3,7 +3,7 @@
   <h1>Dashboard</h1>
 
   <div class="card">
-    <p>Review pending booking requests, end active shifts, track wages, and manage your crew.</p>
+    <p>Review pending booking requests, end active shifts, and manage your crew.</p>
   </div>
 
   <h2>Active Shifts</h2>
@@ -37,51 +37,6 @@
         </tr>
         <% }) %>
       </tbody>
-    </table>
-  <% } %>
-
-  <h2>Earned Wages</h2>
-
-  <% if (typeof wageErrors !== 'undefined' && wageErrors && wageErrors.length > 0) { %>
-    <div class="notice">
-      Some employees were excluded due to invalid wage configuration:
-      <ul>
-        <% wageErrors.forEach(err => { %>
-          <li><%= err %></li>
-        <% }) %>
-      </ul>
-    </div>
-  <% } %>
-
-  <% var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : []; %>
-  <% if (entries.length === 0) { %>
-    <p class="empty">No wage entries are available.</p>
-  <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Shift Date</th>
-          <th>Worked Hours</th>
-          <th class="amount">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% entries.forEach(entry => { %>
-        <tr>
-          <td><%= entry.employeeName %></td>
-          <td><%= new Date(entry.date).toLocaleDateString() %></td>
-          <td><%= entry.hoursWorked %></td>
-          <td class="amount">$<%= Number(entry.wageEarned).toFixed(2) %></td>
-        </tr>
-        <% }) %>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3">Total</td>
-          <td class="amount">$<%= Number(typeof wageTotal !== 'undefined' ? wageTotal : 0).toFixed(2) %></td>
-        </tr>
-      </tfoot>
     </table>
   <% } %>
 

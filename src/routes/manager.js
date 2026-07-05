@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
-const { calculateAllWages, updateHourlyRate, getManagerWageEntries, totalWage } = require('../services/wageService');
+const { getManagerWageEntries, totalWage } = require('../services/wageService');
 const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
 const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
@@ -128,41 +128,6 @@ router.post('/end-shift', async (req, res) => {
       wageErrors: [result.error]
     });
   }
-});
-
-router.get('/wages', async (req, res) => {
-  const now = new Date();
-  const start = req.query.start ? new Date(req.query.start) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = req.query.end ? new Date(req.query.end) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  try {
-    const reports = await calculateAllWages(start, end);
-    const totalWages = reports.reduce((s, r) => s + r.totalWages, 0);
-    const totalHours = reports.reduce((s, r) => s + r.totalHours, 0);
-    res.render('manager/wages', {
-      reports, error: null,
-      summary: {
-        totalEmployees: reports.length,
-        totalWages: totalWages.toFixed(2),
-        totalHours: totalHours.toFixed(2),
-        periodStart: start.toISOString().split('T')[0],
-        periodEnd: end.toISOString().split('T')[0]
-      },
-      filters: {
-        start: start.toISOString().split('T')[0],
-        end: end.toISOString().split('T')[0]
-      }
-    });
-  } catch (e) {
-    console.error('[Manager] wages error', e);
-    res.render('manager/wages', { reports: [], error: 'Failed to load wages', summary: null, filters: {} });
-  }
-});
-
-router.post('/update-rate', async (req, res) => {
-  const { employeeId, newRate } = req.body;
-  const result = await updateHourlyRate(employeeId, parseFloat(newRate));
-  if (!result.success) return res.status(400).json({ error: result.error });
-  res.json({ success: true });
 });
 
 // Get all employees for rate management

@@ -630,10 +630,26 @@ router.get('/timesheet', async (req, res) => {
           const startLabel = start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
           const endLabel = end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
 
+          // Determine shift type and color (same as roster)
+          let shiftType = 'custom';
+          let color = '#F8BBD0'; // soft pink for custom
+          let label = startLabel + '–' + endLabel;
+          
+          SHIFT_TYPES.forEach(st => {
+            if (start.getHours() === st.startH && start.getMinutes() === st.startM &&
+                end.getHours() === st.endH && end.getMinutes() === st.endM) {
+              shiftType = st.label;
+              color = st.color;
+              label = st.label;
+            }
+          });
+
           byDay[dayIdx] = {
             booking_id: shift.booking_id,
             startLabel,
             endLabel,
+            label,
+            color,
             hours_worked: shift.hours_worked,
             no_show: shift.no_show,
             adjusted: shift.adjusted

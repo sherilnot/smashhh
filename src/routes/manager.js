@@ -280,7 +280,7 @@ router.get('/roster', async (req, res) => {
 
       return {
         employee_id: emp.id,
-        name: emp.last_name ? (emp.last_name + ', ' + emp.first_name) : emp.first_name,
+        name: emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name,
         employmentType: emp.employment_type,
         priority_score: emp.priority_score || 0,
         byDay
@@ -654,7 +654,7 @@ router.get('/timesheet', async (req, res) => {
       });
 
       return {
-        name: emp.last_name ? (emp.last_name + ', ' + emp.first_name) : emp.first_name,
+        name: emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name,
         employmentType: emp.employment_type || null,
         totalHours: emp.totalHours,
         weekdayHours: Math.round(weekdayHours * 100) / 100,

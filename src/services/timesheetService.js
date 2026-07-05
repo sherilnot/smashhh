@@ -34,7 +34,16 @@ function validateTimesheetSubmission(facts) {
   if (facts.alreadySubmitted) {
     return { valid: false, error: 'Timesheet already submitted for this week' };
   }
-  if (new Date(facts.weekEnd).getTime() > new Date(facts.now).getTime()) {
+  
+  // Allow submission on Sunday for current week
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const isSunday = now.getDay() === 0;
+  const weekEndDate = new Date(facts.weekEnd);
+  weekEndDate.setHours(0, 0, 0, 0);
+  const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+  
+  if (isFutureWeek) {
     return { valid: false, error: 'Cannot submit timesheet for future weeks' };
   }
   if (!facts.hasCompletedBookings) {

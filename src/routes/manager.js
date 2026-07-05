@@ -838,7 +838,8 @@ router.post('/timesheet/submit', async (req, res) => {
 
       return res.render('manager/timesheet', {
         user: req.user, error: result.error, success: false,
-        hasStore: true, timesheet: tsResult.success ? tsResult.timesheet : null, isFutureWeek,
+        hasStore: true, timesheet: tsResult.success ? tsResult.timesheet : null, 
+        timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek, query: req.query,
         weekStartFormatted: weekStart,
         weekEndFormatted: weekEnd,
         prevWeekDate: toLocalDateString(prevMonday),

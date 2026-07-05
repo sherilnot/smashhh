@@ -571,7 +571,13 @@ router.get('/timesheet', async (req, res) => {
     const { start: weekStart, end: weekEnd } = validation.week;
     const result = await generateTimesheet(req.user.userId, weekStart, weekEnd);
     const bounds = isWithinNavigationBounds(weekStart, new Date());
-    const isFutureWeek = weekEnd.getTime() > Date.now();
+    
+    // Allow submission on Sunday for current week, or any completed past week
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const isSunday = now.getDay() === 0;
+    const weekEndDate = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
+    const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
 
     const prevMonday = new Date(weekStart);
     prevMonday.setDate(prevMonday.getDate() - 7);
@@ -777,7 +783,14 @@ router.post('/timesheet/submit', async (req, res) => {
 
     if (!result.success) {
       const bounds = isWithinNavigationBounds(wsDate, new Date());
-      const isFutureWeek = weDate.getTime() > Date.now();
+      
+      // Allow submission on Sunday for current week
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const isSunday = now.getDay() === 0;
+      const weekEndDate = new Date(weDate.getFullYear(), weDate.getMonth(), weDate.getDate());
+      const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+      
       const tsResult = await generateTimesheet(req.user.userId, wsDate, weDate);
 
       const prevMonday = new Date(wsDate);

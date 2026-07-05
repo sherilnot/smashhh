@@ -56,13 +56,16 @@
       <tbody>
         <% rosterGrid.forEach(function(row) { %>
           <tr>
-            <td><strong><%= row.label %></strong></td>
+            <td style="background: <%= row.color %>; font-weight: 600;"><strong><%= row.label %></strong></td>
             <% row.byDay.forEach(function(employees_in_slot, dayIdx) { %>
-              <td style="vertical-align: top; padding: 0.5rem;">
+              <td style="vertical-align: top; padding: 0.5rem; background: <%= row.color %>;">
                 <% if (employees_in_slot.length > 0) { %>
                   <% employees_in_slot.forEach(function(emp) { %>
                     <div style="margin-bottom: 0.3rem; font-size: 0.85em;">
                       <span><%= emp.name %></span>
+                      <% if (emp.timeStr) { %>
+                        <span style="font-size: 0.75em; color: var(--muted); display: block;">(<%= emp.timeStr %>)</span>
+                      <% } %>
                       <% if (emp.actual_clock_in) { %>
                         <span style="font-size: 0.75em; color: var(--green);">(in: <%= emp.actual_clock_in %>)</span>
                       <% } %>

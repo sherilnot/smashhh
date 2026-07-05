@@ -190,9 +190,9 @@ router.get('/roster', async (req, res) => {
 
     // Fixed shift types
     const SHIFT_TYPES = [
-      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30 },
-      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0 },
-      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0 }
+      { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#E8F5E9' },  // light green
+      { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF9C4' },   // light yellow
+      { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#E1F5FE' }    // light blue
     ];
 
     // Build day labels & dates
@@ -260,8 +260,37 @@ router.get('/roster', async (req, res) => {
           actual_clock_in: m.actual_clock_in ? new Date(m.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
         }));
       });
-      return { label: st.label, byDay };
+      return { label: st.label, byDay, color: st.color };
     });
+
+    // Add custom shifts row (any bookings that don't match the 3 fixed types)
+    const customByDay = dayDates.map(dateStr => {
+      const matches = bookingsRes.rows.filter(b => {
+        const bStart = new Date(b.start_time);
+        const bEnd = new Date(b.end_time);
+        const bDate = toLocalDateString(bStart);
+        if (bDate !== dateStr) return false;
+        // Is custom if doesn't match any fixed type
+        return !SHIFT_TYPES.some(st => 
+          bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
+          bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM
+        );
+      });
+      return matches.map(m => {
+        const bStart = new Date(m.start_time);
+        const bEnd = new Date(m.end_time);
+        const timeStr = bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) + 
+                       '–' + bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+        return {
+          booking_id: m.booking_id,
+          name: m.first_name + ' ' + m.last_name.charAt(0) + '.',
+          full_name: m.last_name + ', ' + m.first_name,
+          actual_clock_in: m.actual_clock_in ? new Date(m.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null,
+          timeStr
+        };
+      });
+    });
+    rosterGrid.push({ label: 'Custom', byDay: customByDay, color: '#FCE4EC' }); // light pink
 
     // Get employees for edit mode
     let employees = [];

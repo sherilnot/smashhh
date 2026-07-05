@@ -1,0 +1,123 @@
+<%- include('../partials/header', { title: 'Employee Wages', role: 'receiving_manager', active: 'wages' }) %>
+
+  <h1>Employee Wages</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+  <div id="msg"></div>
+
+  <% if (employees.length === 0) { %>
+    <div class="empty">No employees found.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>User ID</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Hourly Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% employees.forEach(emp => { %>
+        <tr>
+          <td><%= emp.user_id %></td>
+          <td><%= emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name %></td>
+          <td>
+            <% if (emp.employment_type === 'permanent') { %>
+              <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
+            <% } else if (emp.employment_type === 'casual') { %>
+              <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
+            <% } else { %>
+              <span style="color: var(--muted);">—</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (emp.is_active) { %>
+              <span style="color: var(--green);">Active</span>
+            <% } else { %>
+              <span style="color: var(--muted);">Inactive</span>
+            <% } %>
+          </td>
+          <td>
+            <span class="wage-display" id="display-<%= emp.id %>">
+              $<span class="wage-value"><%= parseFloat(emp.hourly_wage || 0).toFixed(2) %></span>
+              <button type="button" class="edit-icon-btn" onclick="startEdit('<%= emp.id %>')" title="Edit rate" aria-label="Edit hourly rate">
+                ✎
+              </button>
+            </span>
+            <form class="wage-edit-form" id="edit-<%= emp.id %>" onsubmit="updateRate(event, '<%= emp.id %>', this)" style="display:none;">
+              <input type="number" name="rate" step="0.01" min="0.01" value="<%= parseFloat(emp.hourly_wage || 0).toFixed(2) %>" required />
+              <button type="submit" class="save-icon-btn" title="Save" aria-label="Save">✓</button>
+              <button type="button" class="cancel-icon-btn" title="Cancel" aria-label="Cancel" onclick="cancelEdit('<%= emp.id %>')">✕</button>
+            </form>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+
+  <style>
+    .wage-display { display: inline-flex; align-items: center; gap: 0.5rem; }
+    .edit-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; padding: 0;
+      border: 1px solid var(--line, #ddd); border-radius: 6px;
+      background: #fff; color: #555; cursor: pointer; font-size: 0.85rem;
+      line-height: 1;
+    }
+    .edit-icon-btn:hover { background: #f5f5f5; border-color: #bbb; }
+    .wage-edit-form { display: flex; align-items: center; gap: 0.4rem; }
+    .wage-edit-form input[type=number] {
+      width: 80px; padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem;
+    }
+    .save-icon-btn, .cancel-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; padding: 0; border-radius: 6px; border: 1px solid transparent;
+      cursor: pointer; font-size: 0.85rem; line-height: 1;
+    }
+    .save-icon-btn { background: #ecfdf3; color: #15803d; border-color: #b8e6c9; }
+    .save-icon-btn:hover { background: #d8f6e3; }
+    .cancel-icon-btn { background: #fef2f2; color: #b91c1c; border-color: #f3c6c6; }
+    .cancel-icon-btn:hover { background: #fde3e3; }
+  </style>
+
+  <script>
+    function startEdit(employeeId) {
+      document.getElementById('display-' + employeeId).style.display = 'none';
+      document.getElementById('edit-' + employeeId).style.display = 'flex';
+      document.querySelector('#edit-' + employeeId + ' input[name=rate]').focus();
+    }
+
+    function cancelEdit(employeeId) {
+      document.getElementById('edit-' + employeeId).style.display = 'none';
+      document.getElementById('display-' + employeeId).style.display = 'inline-flex';
+    }
+
+    async function updateRate(e, employeeId, form) {
+      e.preventDefault();
+      const rate = form.querySelector('input[name=rate]').value;
+      const res = await fetch('/receiving-manager/update-wage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, newRate: parseFloat(rate) })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('msg');
+      if (data.success) {
+        const display = document.getElementById('display-' + employeeId);
+        display.querySelector('.wage-value').textContent = parseFloat(rate).toFixed(2);
+        cancelEdit(employeeId);
+        msg.className = 'msg';
+        msg.textContent = 'Rate updated successfully.';
+      } else {
+        msg.className = 'error';
+        msg.textContent = data.error || 'Update failed.';
+      }
+    }
+  </script>
+
+<%- include('../partials/footer') %>

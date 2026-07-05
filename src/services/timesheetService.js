@@ -319,7 +319,7 @@ async function getTimesheetDetail(timesheetId) {
   }
 
   const entriesRes = await pool.query(
-    `SELECT te.*, u.first_name, u.last_name
+    `SELECT te.*, u.first_name, u.last_name, u.hourly_wage
      FROM timesheet_entries te
      JOIN users u ON u.id = te.employee_id
      WHERE te.timesheet_id = $1
@@ -333,8 +333,10 @@ async function getTimesheetDetail(timesheetId) {
     const key = row.employee_id;
     if (!employeeMap.has(key)) {
       employeeMap.set(key, {
+        employee_id: key,
         first_name: row.first_name,
         last_name: row.last_name,
+        hourly_wage: row.hourly_wage,
         shifts: [],
         totalHours: 0
       });

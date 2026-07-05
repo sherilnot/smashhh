@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
+const { pool } = require('../config/database');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('receiving_manager'));
@@ -64,6 +65,55 @@ router.get('/timesheets/:id', async (req, res) => {
       timesheet: null,
       error: 'Failed to load timesheet details'
     });
+  }
+});
+
+// List all employees with wages
+router.get('/wages', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.user_id, u.first_name, u.last_name, u.hourly_wage, u.employment_type, u.is_active
+       FROM users u
+       WHERE u.role = 'employee'
+       ORDER BY u.last_name, u.first_name`
+    );
+
+    const employees = result.rows;
+
+    res.render('receiving-manager/wages', {
+      user: req.user,
+      employees,
+      error: null
+    });
+  } catch (e) {
+    console.error('[ReceivingManager] wages error', e);
+    res.render('receiving-manager/wages', {
+      user: req.user,
+      employees: [],
+      error: 'Failed to load employee wages'
+    });
+  }
+});
+
+// Update employee hourly rate
+router.post('/update-wage', async (req, res) => {
+  try {
+    const { employeeId, newRate } = req.body;
+    const rate = parseFloat(newRate);
+
+    if (isNaN(rate) || rate < 0) {
+      return res.status(400).json({ success: false, error: 'Invalid wage rate' });
+    }
+
+    await pool.query(
+      `UPDATE users SET hourly_wage = $1 WHERE id = $2 AND role = 'employee'`,
+      [rate, employeeId]
+    );
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[ReceivingManager] update wage error', e);
+    res.status(500).json({ success: false, error: 'Failed to update wage' });
   }
 });
 

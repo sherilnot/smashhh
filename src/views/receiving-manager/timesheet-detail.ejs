@@ -28,6 +28,7 @@
             <th>Employee</th>
             <th>Shift Date</th>
             <th class="amount">Hours</th>
+            <th class="amount">Hourly Rate</th>
             <th class="amount">Employee Total</th>
           </tr>
         </thead>
@@ -35,9 +36,18 @@
           <% timesheet.employees.forEach(emp => { %>
             <% emp.shifts.forEach((shift, idx) => { %>
               <tr style="<%= idx === 0 ? 'border-top: 2px solid var(--line);' : '' %>">
-                <td><% if (idx === 0) { %><strong><%= emp.last_name %>, <%= emp.first_name %></strong><% } %></td>
+                <td>
+                  <% if (idx === 0) { %>
+                    <strong><%= emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name %></strong>
+                  <% } %>
+                </td>
                 <td><%= shift.shift_date instanceof Date ? shift.shift_date.toISOString().split('T')[0] : new Date(shift.shift_date).toISOString().split('T')[0] %></td>
                 <td class="amount"><%= shift.hours_worked.toFixed(2) %></td>
+                <td class="amount">
+                  <% if (idx === 0) { %>
+                    $<%= parseFloat(emp.hourly_wage || 0).toFixed(2) %>
+                  <% } %>
+                </td>
                 <td class="amount"><% if (idx === emp.shifts.length - 1) { %><strong><%= emp.totalHours.toFixed(2) %></strong><% } %></td>
               </tr>
             <% }) %>
@@ -45,7 +55,7 @@
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="2">Grand Total</td>
+            <td colspan="3">Grand Total</td>
             <td></td>
             <td class="amount"><%= parseFloat(timesheet.total_hours).toFixed(2) %> hrs</td>
           </tr>

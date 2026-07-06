@@ -318,14 +318,37 @@ async function getTimesheetDetail(timesheetId) {
     return { success: false, error: 'Timesheet not found' };
   }
 
+  const timesheet = tsRes.rows[0];
+  const weekStart = new Date(timesheet.week_start);
+  const weekEnd = new Date(timesheet.week_end);
+
   const entriesRes = await pool.query(
-    `SELECT te.*, u.first_name, u.last_name, u.hourly_wage
+    `SELECT te.*, u.first_name, u.last_name, u.hourly_wage, u.employment_type
      FROM timesheet_entries te
      JOIN users u ON u.id = te.employee_id
      WHERE te.timesheet_id = $1
      ORDER BY u.last_name, u.first_name, te.shift_date, te.shift_start`,
     [timesheetId]
   );
+
+  // Build day labels and dates
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayDates = [];
+  const toLocalDateString = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    dayDates.push(toLocalDateString(d));
+  }
+
+  // Shift type colors (same as roster/timesheet)
+  const SHIFT_TYPES = [
+    { label: '11:00 – 5:30', startH: 11, startM: 0, endH: 17, endM: 30, color: '#C8E6C9' },
+    { label: '5:30 – 9:00', startH: 17, startM: 30, endH: 21, endM: 0, color: '#FFF59D' },
+    { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#B3E5FC' }
+  ];
 
   // Group entries by employee
   const employeeMap = new Map();
@@ -337,6 +360,7 @@ async function getTimesheetDetail(timesheetId) {
         first_name: row.first_name,
         last_name: row.last_name,
         hourly_wage: row.hourly_wage,
+        employment_type: row.employment_type,
         shifts: [],
         totalHours: 0
       });
@@ -351,11 +375,76 @@ async function getTimesheetDetail(timesheetId) {
     emp.totalHours = Math.round((emp.totalHours + parseFloat(row.hours_worked)) * 100) / 100;
   }
 
+  // Build timesheet rows (employees × days)
+  const timesheetRows = Array.from(employeeMap.values()).map(emp => {
+    const byDay = Array(7).fill(null);
+    let weekdayHours = 0;
+    let weekendHours = 0;
+
+    emp.shifts.forEach(shift => {
+      const dateKey = shift.shift_date instanceof Date
+        ? toLocalDateString(shift.shift_date)
+        : toLocalDateString(new Date(shift.shift_date));
+      const dayIdx = dayDates.indexOf(dateKey);
+      if (dayIdx !== -1) {
+        const start = new Date(shift.shift_start);
+        const end = new Date(shift.shift_end);
+        const startLabel = start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+        const endLabel = end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+
+        // Determine shift type and color
+        let color = '#F8BBD0'; // soft pink for custom
+        let label = startLabel + '–' + endLabel;
+        
+        SHIFT_TYPES.forEach(st => {
+          if (start.getHours() === st.startH && start.getMinutes() === st.startM &&
+              end.getHours() === st.endH && end.getMinutes() === st.endM) {
+            color = st.color;
+            label = st.label;
+          }
+        });
+
+        byDay[dayIdx] = {
+          startLabel,
+          endLabel,
+          label,
+          color,
+          hours_worked: shift.hours_worked
+        };
+
+        if (dayIdx >= 5) {
+          weekendHours += shift.hours_worked;
+        } else {
+          weekdayHours += shift.hours_worked;
+        }
+      }
+    });
+
+    const totalEarned = emp.totalHours * parseFloat(emp.hourly_wage || 0);
+
+    return {
+      name: emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name,
+      employmentType: emp.employment_type || null,
+      hourly_wage: emp.hourly_wage,
+      totalHours: emp.totalHours,
+      weekdayHours: Math.round(weekdayHours * 100) / 100,
+      weekendHours: Math.round(weekendHours * 100) / 100,
+      totalEarned: Math.round(totalEarned * 100) / 100,
+      byDay
+    };
+  });
+
+  // Calculate total wages
+  const totalWages = timesheetRows.reduce((sum, row) => sum + row.totalEarned, 0);
+
   return {
     success: true,
     timesheet: {
-      ...tsRes.rows[0],
-      employees: Array.from(employeeMap.values())
+      ...timesheet,
+      total_wages: Math.round(totalWages * 100) / 100,
+      timesheetRows,
+      dayLabels,
+      dayDates
     }
   };
 }

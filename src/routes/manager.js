@@ -213,17 +213,17 @@ router.get('/roster', async (req, res) => {
     }
     const storeId = storeRes.rows[0].store_id;
 
-    // Get all confirmed bookings for the week
+    // Get all confirmed bookings for the week (or include cancelled if in edit mode)
     const bookingsRes = await pool.query(
       `SELECT
-         sb.id AS booking_id, sb.employee_id, sb.actual_clock_in,
+         sb.id AS booking_id, sb.employee_id, sb.actual_clock_in, sb.booking_status,
          u.first_name, u.last_name,
          s.id AS shift_id, s.start_time, s.end_time
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN users u ON u.id = sb.employee_id
        WHERE s.store_id = $1
-         AND sb.booking_status = 'confirmed'
+         AND sb.booking_status IN ('confirmed', 'cancelled')
          AND s.start_time >= $2
          AND s.start_time <= $3
        ORDER BY u.last_name, u.first_name`,
@@ -273,6 +273,7 @@ router.get('/roster', async (req, res) => {
             label,
             color,
             shiftType,
+            booking_status: b.booking_status,
             actual_clock_in: b.actual_clock_in ? new Date(b.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
           };
         });
@@ -415,7 +416,7 @@ router.post('/roster/unassign', async (req, res) => {
 
     // Verify booking belongs to manager's store
     const verifyRes = await pool.query(
-      `SELECT sb.id FROM shift_bookings sb
+      `SELECT sb.id, sb.booking_status FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
        WHERE sb.id = $1 AND sma.manager_id = $2`,
@@ -425,7 +426,21 @@ router.post('/roster/unassign', async (req, res) => {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
-    await pool.query(`DELETE FROM shift_bookings WHERE id = $1`, [bookingId]);
+    const currentStatus = verifyRes.rows[0].booking_status;
+    
+    // Toggle: if cancelled, restore to confirmed; otherwise cancel it
+    if (currentStatus === 'cancelled') {
+      await pool.query(
+        `UPDATE shift_bookings SET booking_status = 'confirmed', cancelled_at = NULL WHERE id = $1`,
+        [bookingId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE shift_bookings SET booking_status = 'cancelled', cancelled_at = NOW() WHERE id = $1`,
+        [bookingId]
+      );
+    }
+    
     res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
   } catch (e) {
     console.error('[Manager] roster/unassign error', e);

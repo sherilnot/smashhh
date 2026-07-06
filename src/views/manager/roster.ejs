@@ -99,7 +99,7 @@
           <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
           <select name="employeeId" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">
             <% employees.forEach(function(emp) { %>
-              <option value="<%= emp.id %>"><%= emp.first_name %> <%= emp.last_name || '' %> (★ <%= (emp.priority_score || 0).toFixed(0) %>)</option>
+              <option value="<%= emp.id %>"><%= emp.first_name %> <%= emp.last_name || '' %> (★ <%= parseFloat(emp.priority_score || 0).toFixed(0) %>)</option>
             <% }) %>
           </select>
           <select name="shiftType" style="padding: 0.4rem; border: 1px solid var(--line); border-radius: 4px;">

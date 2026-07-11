@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification System Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { margin-top: 0; }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+    }
+    button:hover { background: #5568d3; }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .status {
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .status.success { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+    .status.info { background: #d1ecf1; color: #0c5460; }
+    .log {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 1rem;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      max-height: 400px;
+      overflow-y: auto;
+      margin: 1rem 0;
+    }
+    .log-entry {
+      margin: 0.25rem 0;
+      padding: 0.25rem;
+    }
+    .log-entry.info { color: #50fa7b; }
+    .log-entry.warn { color: #f1fa8c; }
+    .log-entry.error { color: #ff5555; }
+    code {
+      background: #f4f4f4;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔔 Notification System Test</h1>
+  
+  <div class="card">
+    <h2>System Status</h2>
+    <div id="system-status" class="status info">Checking...</div>
+  </div>
+
+  <div class="card">
+    <h2>Quick Tests</h2>
+    <button onclick="testPermission()">1. Check Permission</button>
+    <button onclick="requestPermission()">2. Request Permission</button>
+    <button onclick="testNotification()">3. Show Test Notification</button>
+    <button onclick="checkReminder()">4. Check If Reminder Needed</button>
+    <button onclick="forceNotification()">5. Force Show Reminder</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+  </div>
+
+  <div class="card">
+    <h2>Console Log</h2>
+    <div id="log" class="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Debug Info</h2>
+    <div id="debug-info"></div>
+  </div>
+
+  <script>
+    let logs = [];
+
+    function log(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      logs.push({ timestamp, message, type });
+      updateLogDisplay();
+      console.log(`[${type}] ${message}`);
+    }
+
+    function updateLogDisplay() {
+      const logEl = document.getElementById('log');
+      logEl.innerHTML = logs.map(l => 
+        `<div class="log-entry ${l.type}">[${l.timestamp}] ${l.type.toUpperCase()}: ${l.message}</div>`
+      ).join('');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function clearLogs() {
+      logs = [];
+      updateLogDisplay();
+      log('Logs cleared');
+    }
+
+    function updateSystemStatus() {
+      const statusEl = document.getElementById('system-status');
+      const supported = 'Notification' in window;
+      const permission = supported ? Notification.permission : 'not-supported';
+      
+      let html = `
+        <strong>Browser Support:</strong> ${supported ? '✅ Yes' : '❌ No'}<br>
+        <strong>Permission:</strong> ${permission}<br>
+        <strong>Current Day:</strong> ${new Date().toLocaleDateString()} (Day ${new Date().getDay()})<br>
+        <strong>Booking Window:</strong> ${isBookingWindow() ? '✅ Active (Wed-Sat)' : '❌ Inactive'}
+      `;
+      
+      statusEl.innerHTML = html;
+      statusEl.className = 'status ' + (permission === 'granted' ? 'success' : 'info');
+      
+      updateDebugInfo();
+    }
+
+    function isBookingWindow() {
+      const day = new Date().getDay();
+      return day >= 3 && day <= 6;
+    }
+
+    function updateDebugInfo() {
+      const debugEl = document.getElementById('debug-info');
+      const now = new Date();
+      const day = now.getDay();
+      const diffToNextMonday = day === 0 ? 1 : 8 - day;
+      const nextMonday = new Date(now);
+      nextMonday.setDate(now.getDate() + diffToNextMonday);
+      nextMonday.setHours(0, 0, 0, 0);
+      
+      const nextSunday = new Date(nextMonday);
+      nextSunday.setDate(nextMonday.getDate() + 6);
+      
+      debugEl.innerHTML = `
+        <strong>Next Week Range (for booking check):</strong><br>
+        Monday: ${nextMonday.toLocaleDateString()}<br>
+        Sunday: ${nextSunday.toLocaleDateString()}<br>
+        <br>
+        <strong>LocalStorage:</strong><br>
+        <code>notificationsEnabled: ${localStorage.getItem('notificationsEnabled')}</code><br>
+        <code>notificationBannerDismissed: ${localStorage.getItem('notificationBannerDismissed')}</code>
+      `;
+    }
+
+    async function testPermission() {
+      log('Testing notification permission...');
+      
+      if (!('Notification' in window)) {
+        log('Browser does not support notifications', 'error');
+        alert('❌ Your browser does not support notifications');
+        return;
+      }
+      
+      const permission = Notification.permission;
+      log(`Current permission: ${permission}`, permission === 'granted' ? 'info' : 'warn');
+      
+      alert(`Permission status: ${permission}\n\n✅ granted = enabled\n❌ denied = blocked\n⚪ default = not asked yet`);
+      updateSystemStatus();
+    }
+
+    async function requestPermission() {
+      log('Requesting notification permission...');
+      
+      if (!('Notification' in window)) {
+        log('Browser does not support notifications', 'error');
+        return;
+      }
+      
+      try {
+        const permission = await Notification.requestPermission();
+        log(`Permission result: ${permission}`, permission === 'granted' ? 'info' : 'warn');
+        
+        if (permission === 'granted') {
+          alert('✅ Permission granted! You can now receive notifications.');
+        } else {
+          alert('❌ Permission denied. Please check browser settings.');
+        }
+        
+        updateSystemStatus();
+      } catch (error) {
+        log(`Error requesting permission: ${error.message}`, 'error');
+      }
+    }
+
+    async function testNotification() {
+      log('Showing test notification...');
+      
+      if (Notification.permission !== 'granted') {
+        log('Permission not granted. Request permission first.', 'warn');
+        alert('⚠️ Please grant permission first (click "Request Permission")');
+        return;
+      }
+      
+      try {
+        const notification = new Notification('🎉 Test Notification', {
+          body: 'This is a test notification. Click to close.',
+          icon: '/favicon.ico',
+          vibrate: [200, 100, 200]
+        });
+        
+        notification.onclick = function() {
+          log('Test notification clicked');
+          notification.close();
+        };
+        
+        setTimeout(() => notification.close(), 5000);
+        
+        log('Test notification shown successfully', 'info');
+      } catch (error) {
+        log(`Error showing notification: ${error.message}`, 'error');
+      }
+    }
+
+    async function checkReminder() {
+      log('Checking if reminder is needed...');
+      
+      try {
+        const response = await fetch('/employee/notifications/check');
+        const data = await response.json();
+        
+        log(`Server response: ${JSON.stringify(data)}`, 'info');
+        
+        if (data.needsReminder) {
+          log(`✅ Reminder needed: ${data.message}`, 'info');
+          alert(`✅ Reminder Needed\n\n${data.message}\n\nUrgency: ${data.urgency}`);
+        } else {
+          log(`❌ No reminder: ${data.message}`, 'warn');
+          alert(`❌ No Reminder Needed\n\n${data.message}`);
+        }
+        
+        updateDebugInfo();
+      } catch (error) {
+        log(`Error checking reminder: ${error.message}`, 'error');
+        alert(`❌ Error: ${error.message}`);
+      }
+    }
+
+    async function forceNotification() {
+      log('Force showing reminder notification...');
+      
+      if (Notification.permission !== 'granted') {
+        log('Permission not granted', 'warn');
+        alert('⚠️ Please grant permission first');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/employee/notifications/check');
+        const data = await response.json();
+        
+        log(`Got data from server: ${JSON.stringify(data)}`, 'info');
+        
+        const notification = new Notification(data.title || 'Book Your Shifts', {
+          body: data.message || 'Test reminder notification',
+          icon: '/favicon.ico',
+          tag: 'shift-booking-reminder',
+          vibrate: [200, 100, 200],
+          requireInteraction: false
+        });
+        
+        notification.onclick = function() {
+          log('Notification clicked - would navigate to /employee/shifts');
+          notification.close();
+        };
+        
+        setTimeout(() => notification.close(), 10000);
+        
+        log('Notification shown successfully', 'info');
+      } catch (error) {
+        log(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      log('Test page loaded');
+      updateSystemStatus();
+    });
+  </script>
+</body>
+</html>

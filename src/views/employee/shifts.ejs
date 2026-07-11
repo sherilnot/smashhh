@@ -1,116 +1,263 @@
-<%- include('../partials/header', { title: 'Book a Shift', role: 'employee', active: 'shifts' }) %>
+<%- include('../partials/header', { title: 'Book Shifts', role: 'employee', active: 'shifts', wide: true }) %>
 
-  <h1>Book a Shift</h1>
+  <h1>Weekly Shift Availability</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
   <% if (typeof success !== 'undefined' && success) { %><div class="msg"><%= success %></div><% } %>
 
-  <div class="card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
-    <h3 style="margin: 0 0 1rem 0;">Select Day & Shift</h3>
-    <form method="POST" action="/employee/book-shift">
-      <div style="display: flex; flex-direction: column; gap: 1rem;">
-        <!-- Day selection -->
-        <div>
-          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Day</label>
-          <select name="day" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; font-size: 1rem;" required>
-            <% if (typeof nextWeekDays !== 'undefined') { %>
-              <% nextWeekDays.forEach(function(d) { %>
-                <option value="<%= d.date %>"><%= d.label %> — <%= d.date %></option>
-              <% }) %>
-            <% } %>
-          </select>
-        </div>
+  <% 
+    // Get submission status from controller
+    var canSubmit = typeof submissionStatus !== 'undefined' ? submissionStatus.canSubmit : false;
+    var hasSubmitted = typeof submissionStatus !== 'undefined' ? submissionStatus.hasSubmitted : false;
+    var submissionMessage = typeof submissionStatus !== 'undefined' ? submissionStatus.message : '';
+    var inBookingWindow = typeof submissionStatus !== 'undefined' ? submissionStatus.inBookingWindow : false;
+  %>
 
-        <!-- Shift type selection -->
-        <div>
-          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Shift</label>
-          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
-              <input type="radio" name="shiftType" value="11-1730" required>
-              <span><strong>11:00 AM – 5:30 PM</strong> <span style="color: var(--muted);">(6.5 hrs)</span></span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
-              <input type="radio" name="shiftType" value="1730-2100">
-              <span><strong>5:30 PM – 9:00 PM</strong> <span style="color: var(--muted);">(3.5 hrs)</span></span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
-              <input type="radio" name="shiftType" value="11-2100">
-              <span><strong>11:00 AM – 9:00 PM</strong> <span style="color: var(--muted);">(10 hrs)</span></span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;">
-              <input type="radio" name="shiftType" value="custom">
-              <span><strong>Custom</strong></span>
-            </label>
+  <% if (hasSubmitted) { %>
+    <div style="padding: 1.5rem; background: linear-gradient(135deg, #d4edda, #c3e6cb); border-left: 4px solid #28a745; border-radius: 4px; margin-bottom: 1.5rem;">
+      <h3 style="margin: 0 0 0.5rem 0; color: #155724;">✅ Shifts Submitted Successfully!</h3>
+      <p style="margin: 0; font-size: 1rem; color: #155724;">
+        <%= submissionMessage %><br>
+        <strong>Next booking window opens: Wednesday</strong>
+      </p>
+    </div>
+  <% } else if (!inBookingWindow) { %>
+    <div style="padding: 1.25rem; background: linear-gradient(135deg, #fff3cd, #ffeaa7); border-left: 4px solid #f4a300; border-radius: 4px; margin-bottom: 1.5rem;">
+      <p style="margin: 0; font-size: 1rem; color: #856404;">
+        <strong>Booking Window Closed</strong><br>
+        <%= submissionMessage %>
+      </p>
+    </div>
+  <% } else { %>
+    <div style="padding: 1.25rem; background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 4px solid #2196F3; border-radius: 4px; margin-bottom: 1.5rem;">
+      <p style="margin: 0; font-size: 1rem; color: #0d47a1;">
+        <strong>📅 Booking Open!</strong><br>
+        <%= submissionMessage %><br>
+        <strong style="color: #f4a300;">Deadline: Saturday 11:59 PM</strong>
+      </p>
+    </div>
+  <% } %>
+
+  <p style="color: var(--muted); margin-bottom: 1.5rem;">
+    Select your shift preferences for next week (Monday to Sunday). Choose "No shift" if you're unavailable that day.
+  </p>
+
+  <% if (typeof nextWeekDays !== 'undefined' && nextWeekDays.length > 0 && canSubmit) { %>
+    <form method="POST" action="/employee/book-weekly-shifts" style="margin-bottom: 2rem;">
+      
+      <!-- Shift Reference Legend -->
+      <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-soft); border-radius: 8px;">
+        <h3 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">Shift Times Reference</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(135deg, #e0f2e9, #d3ecdf);"></div>
+            <span style="font-size: 0.9rem;"><strong>Morning:</strong> 11:00 AM – 5:30 PM (6.5h)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(135deg, #fef3e2, #fdefd8);"></div>
+            <span style="font-size: 0.9rem;"><strong>Evening:</strong> 5:30 PM – 9:00 PM (3.5h)</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(135deg, #e3f2fd, #bbdefb);"></div>
+            <span style="font-size: 0.9rem;"><strong>Full Day:</strong> 11:00 AM – 9:00 PM (10h)</span>
           </div>
         </div>
-
-        <!-- Custom time (only shown when custom selected) -->
-        <div id="customTimeFields" style="display: none; padding: 0.75rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-soft);">
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 120px;">
-              <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">Start Time</label>
-              <input type="time" name="customStart" id="customStart" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px; font-size: 1rem;">
-            </div>
-            <div style="flex: 1; min-width: 120px;">
-              <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; font-size: 0.85rem;">End Time</label>
-              <input type="time" name="customEnd" id="customEnd" style="width: 100%; padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px; font-size: 1rem;">
-            </div>
-          </div>
-        </div>
-
-        <button type="submit" class="btn" style="padding: 0.75rem; font-size: 1rem; margin-top: 0.5rem;">📅 Book Shift</button>
       </div>
+
+      <!-- Weekly Shift Selection Grid -->
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 0.75rem; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-bottom: 2px solid var(--line); font-weight: 600;">
+                Day
+              </th>
+              <th style="text-align: center; padding: 0.75rem; background: linear-gradient(135deg, #e0f2e9, #d3ecdf); border-bottom: 2px solid var(--line); font-weight: 600; min-width: 120px;">
+                Morning
+              </th>
+              <th style="text-align: center; padding: 0.75rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-bottom: 2px solid var(--line); font-weight: 600; min-width: 120px;">
+                Evening
+              </th>
+              <th style="text-align: center; padding: 0.75rem; background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-bottom: 2px solid var(--line); font-weight: 600; min-width: 120px;">
+                Full Day
+              </th>
+              <th style="text-align: center; padding: 0.75rem; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-bottom: 2px solid var(--line); font-weight: 600; min-width: 120px;">
+                Custom
+              </th>
+              <th style="text-align: center; padding: 0.75rem; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-bottom: 2px solid var(--line); font-weight: 600; min-width: 100px;">
+                No Shift
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <% nextWeekDays.forEach(function(d, index) { %>
+              <tr style="border-bottom: 1px solid var(--line);">
+                <td style="padding: 1rem; font-weight: 600;">
+                  <div><%= d.label %></div>
+                  <div style="font-size: 0.85rem; color: var(--muted); font-weight: 400;"><%= d.date.slice(5) %></div>
+                </td>
+                
+                <!-- Morning Shift -->
+                <td style="padding: 1rem; text-align: center; background: rgba(224, 242, 233, 0.2);">
+                  <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="shift_<%= d.date %>" value="11-1730" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--green);">
+                  </label>
+                </td>
+                
+                <!-- Evening Shift -->
+                <td style="padding: 1rem; text-align: center; background: rgba(254, 243, 226, 0.2);">
+                  <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="shift_<%= d.date %>" value="1730-2100" style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--mustard);">
+                  </label>
+                </td>
+                
+                <!-- Full Day Shift -->
+                <td style="padding: 1rem; text-align: center; background: rgba(227, 242, 253, 0.2);">
+                  <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="shift_<%= d.date %>" value="11-2100" style="width: 20px; height: 20px; cursor: pointer; accent-color: #2196F3;">
+                  </label>
+                </td>
+                
+                <!-- Custom Shift -->
+                <td style="padding: 1rem; text-align: center;">
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                    <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                      <input type="radio" name="shift_<%= d.date %>" value="custom" class="custom-radio" data-date="<%= d.date %>" style="width: 20px; height: 20px; cursor: pointer;">
+                    </label>
+                    <div class="custom-times" id="custom_<%= d.date %>" style="display: none; margin-top: 0.5rem;">
+                      <div style="display: flex; gap: 0.25rem; align-items: center;">
+                        <input type="time" name="custom_start_<%= d.date %>" style="padding: 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.8rem; width: 85px;">
+                        <span style="font-size: 0.8rem;">–</span>
+                        <input type="time" name="custom_end_<%= d.date %>" style="padding: 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.8rem; width: 85px;">
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                
+                <!-- No Shift -->
+                <td style="padding: 1rem; text-align: center;">
+                  <label style="display: inline-flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="shift_<%= d.date %>" value="none" checked style="width: 20px; height: 20px; cursor: pointer;">
+                  </label>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 4px solid #2196F3; border-radius: 4px;">
+        <p style="margin: 0; font-size: 0.9rem; color: #1565C0;">
+          <strong>Important:</strong> Your shift requests will be reviewed by your manager. You'll be notified once approved. Submit your availability between <strong>Wednesday and Saturday</strong> for the upcoming week.
+        </p>
+      </div>
+
+      <button type="submit" class="btn" style="margin-top: 1.5rem; padding: 0.75rem 2rem; font-size: 1rem; background: linear-gradient(135deg, #28a745, #1e7e34); color: white; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        Submit Shift Availability
+      </button>
+      
+      <p style="margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem;">
+        ℹ️ Select at least one shift before submitting. Choose "No shift" for days you're unavailable.
+      </p>
     </form>
-  </div>
+  <% } else if (typeof nextWeekDays !== 'undefined' && nextWeekDays.length > 0 && !canSubmit) { %>
+    <div style="padding: 1.5rem; background: var(--bg-soft); border-radius: 8px; text-align: center;">
+      <p style="color: var(--muted); font-size: 1.1rem; margin: 0;">
+        <% if (hasSubmitted) { %>
+          You have already submitted your shifts for this week.<br>
+          Check back on <strong>Wednesday</strong> to book shifts for the following week.
+        <% } else { %>
+          Shift booking is not available at this time.<br>
+          <%= submissionMessage %>
+        <% } %>
+      </p>
+    </div>
+  <% } %>
 
   <script>
-    // Show/hide custom time fields based on shift type selection
-    document.querySelectorAll('input[name="shiftType"]').forEach(radio => {
-      radio.addEventListener('change', function() {
-        const customFields = document.getElementById('customTimeFields');
-        const customStart = document.getElementById('customStart');
-        const customEnd = document.getElementById('customEnd');
-        
-        if (this.value === 'custom') {
-          customFields.style.display = 'block';
-          customStart.required = true;
-          customEnd.required = true;
-        } else {
-          customFields.style.display = 'none';
-          customStart.required = false;
-          customEnd.required = false;
+    // Form submission validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+      // Count how many shifts are selected (not "none")
+      let selectedCount = 0;
+      const allInputs = document.querySelectorAll('input[type="radio"]:checked');
+      
+      allInputs.forEach(input => {
+        if (input.value !== 'none') {
+          selectedCount++;
         }
+      });
+      
+      if (selectedCount === 0) {
+        e.preventDefault();
+        alert('⚠️ Please select at least one shift before submitting.\n\nIf you\'re unavailable for all days, you don\'t need to submit anything.');
+        return false;
+      }
+      
+      // Show confirmation
+      const confirm = window.confirm(
+        `You've selected ${selectedCount} shift${selectedCount > 1 ? 's' : ''}.\n\n` +
+        'After submitting, you cannot change your selection until next Wednesday.\n\n' +
+        'Continue with submission?'
+      );
+      
+      if (!confirm) {
+        e.preventDefault();
+        return false;
+      }
+    });
+  
+    // Show/hide custom time inputs when custom radio is selected
+    document.querySelectorAll('.custom-radio').forEach(radio => {
+      radio.addEventListener('change', function() {
+        if (this.checked) {
+          const date = this.dataset.date;
+          const customDiv = document.getElementById('custom_' + date);
+          customDiv.style.display = 'block';
+        }
+      });
+    });
+
+    // Hide custom inputs when other options are selected
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        if (!this.classList.contains('custom-radio')) {
+          const date = this.name.replace('shift_', '');
+          const customDiv = document.getElementById('custom_' + date);
+          if (customDiv) {
+            customDiv.style.display = 'none';
+          }
+        }
+      });
+    });
+    
+    // Highlight selected radio
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        // Remove highlight from all radios in this row
+        const row = this.closest('tr');
+        row.querySelectorAll('td').forEach(td => {
+          td.style.boxShadow = '';
+        });
+        
+        // Add highlight to selected cell
+        const cell = this.closest('td');
+        cell.style.boxShadow = 'inset 0 0 0 2px var(--lettuce-dark)';
       });
     });
   </script>
 
-  <% if (typeof shifts !== 'undefined' && shifts.length > 0) { %>
-    <h3>Other Available Shifts</h3>
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Time</th>
-          <th>Spots Left</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% shifts.forEach(shift => { %>
-          <tr>
-            <td><%= new Date(shift.startTime).toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' }) %></td>
-            <td><%= new Date(shift.startTime).toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(shift.endTime).toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= shift.capacity - shift.currentBookings %></td>
-            <td>
-              <form method="POST" action="/employee/book">
-                <input type="hidden" name="shiftId" value="<%= shift.id %>" />
-                <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark);">Book</button>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  <% } %>
+  <style>
+    input[type="radio"] {
+      transition: transform 0.15s;
+    }
+    
+    input[type="radio"]:hover {
+      transform: scale(1.15);
+    }
+    
+    td {
+      transition: box-shadow 0.2s;
+    }
+  </style>
 
 <%- include('../partials/footer') %>

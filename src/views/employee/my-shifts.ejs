@@ -1,8 +1,9 @@
 <%- include('../partials/header', { title: 'My Shifts - Burger Store', role: 'employee', active: 'my-shifts' }) %>
 
-  <h1><span class="emoji">🧾</span>My Shifts</h1>
+  <h1>My Shifts</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (typeof success !== 'undefined' && success) { %><div class="msg"><%= success %></div><% } %>
 
   <% if (shifts.length === 0) { %>
     <p class="empty">No shifts found in this period.</p>

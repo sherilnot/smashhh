@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
 const { pool } = require('../config/database');
+const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('receiving_manager'));
@@ -114,6 +115,58 @@ router.post('/update-wage', async (req, res) => {
   } catch (e) {
     console.error('[ReceivingManager] update wage error', e);
     res.status(500).json({ success: false, error: 'Failed to update wage' });
+  }
+});
+
+// ─── Received Invoices (View invoices from shop managers) ─────────────────────
+
+router.get('/received-invoices', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { invoices, total } = await getSubmittedInvoices(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('receiving-manager/received-invoices', {
+      user: req.user,
+      invoices,
+      page,
+      totalPages,
+      total
+    });
+  } catch (e) {
+    console.error('[ReceivingManager] received-invoices error', e);
+    res.render('receiving-manager/received-invoices', {
+      user: req.user,
+      invoices: [],
+      page: 1,
+      totalPages: 0,
+      total: 0
+    });
+  }
+});
+
+router.get('/received-invoices/:id', async (req, res) => {
+  try {
+    const result = await getInvoiceDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('receiving-manager/received-invoice-detail', {
+        user: req.user,
+        invoice: null,
+        error: result.error
+      });
+    }
+    res.render('receiving-manager/received-invoice-detail', {
+      user: req.user,
+      invoice: result.invoice,
+      error: null
+    });
+  } catch (e) {
+    console.error('[ReceivingManager] received-invoice detail error', e);
+    res.status(500).render('receiving-manager/received-invoice-detail', {
+      user: req.user,
+      invoice: null,
+      error: 'Failed to load invoice'
+    });
   }
 });
 

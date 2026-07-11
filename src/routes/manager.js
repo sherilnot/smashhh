@@ -4,8 +4,10 @@ const { getPendingRequests, confirmBooking, rejectBooking } = require('../servic
 const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
 const { getRosterWeek, validateRosterRequest, isWithinNavigationBounds, getRoster } = require('../services/rosterService');
-const { generateTimesheet, submitTimesheet } = require('../services/timesheetService');
+const { generateTimesheet, submitTimesheet, confirmTimesheet } = require('../services/timesheetService');
 const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = require('../services/storeChecklistService');
+const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotificationLogs, getDeliveryRate } = require('../services/notificationTrackerService');
+const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
@@ -587,12 +589,17 @@ router.get('/timesheet', async (req, res) => {
     const result = await generateTimesheet(req.user.userId, weekStart, weekEnd);
     const bounds = isWithinNavigationBounds(weekStart, new Date());
     
-    // Allow submission on Sunday for current week, or any completed past week
+    // Allow submission/editing until confirmed
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const isSunday = now.getDay() === 0;
     const weekEndDate = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
     const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+
+    const isConfirmed = result.timesheet && result.timesheet.alreadySubmitted && 
+                        result.timesheet.status === 'confirmed';
+    const isSubmitted = result.timesheet && result.timesheet.alreadySubmitted;
+    const canEdit = !isConfirmed && !isFutureWeek;
 
     const prevMonday = new Date(weekStart);
     prevMonday.setDate(prevMonday.getDate() - 7);
@@ -636,22 +643,23 @@ router.get('/timesheet', async (req, res) => {
           : toLocalDateString(new Date(shift.shift_date));
         const dayIdx = dayDates.indexOf(dateKey);
         if (dayIdx !== -1) {
-          const start = new Date(shift.shift_start);
-          const end = new Date(shift.shift_end);
+          // Use actual clock times if available, otherwise use scheduled times
+          const start = shift.actual_clock_in ? new Date(shift.actual_clock_in) : new Date(shift.shift_start);
+          const end = shift.actual_clock_out ? new Date(shift.actual_clock_out) : new Date(shift.shift_end);
           const startLabel = start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
           const endLabel = end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
 
-          // Determine shift type and color (same as roster)
+          // Determine shift type and color based on SCHEDULED times (for consistency)
+          const scheduledStart = new Date(shift.shift_start);
+          const scheduledEnd = new Date(shift.shift_end);
           let shiftType = 'custom';
           let color = '#F8BBD0'; // soft pink for custom
           let label = startLabel + '–' + endLabel;
           
           SHIFT_TYPES.forEach(st => {
-            if (start.getHours() === st.startH && start.getMinutes() === st.startM &&
-                end.getHours() === st.endH && end.getMinutes() === st.endM) {
-              shiftType = st.label;
+            if (scheduledStart.getHours() === st.startH && scheduledStart.getMinutes() === st.startM &&
+                scheduledEnd.getHours() === st.endH && scheduledEnd.getMinutes() === st.endM) {
               color = st.color;
-              label = st.label;
             }
           });
 
@@ -663,7 +671,8 @@ router.get('/timesheet', async (req, res) => {
             color,
             hours_worked: shift.hours_worked,
             no_show: shift.no_show,
-            adjusted: shift.adjusted
+            adjusted: shift.adjusted,
+            has_actual_times: !!(shift.actual_clock_in || shift.actual_clock_out)
           };
 
           if (dayIdx >= 5) {
@@ -686,7 +695,8 @@ router.get('/timesheet', async (req, res) => {
 
     res.render('manager/timesheet', {
       user: req.user, error: null, success: false,
-      hasStore: true, timesheet: result.timesheet, timesheetRows, dayLabels, dayDates, isFutureWeek,
+      hasStore: true, timesheet: result.timesheet, timesheetRows, dayLabels, dayDates, 
+      isFutureWeek, isSubmitted, isConfirmed, canEdit,
       query: req.query,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
@@ -743,29 +753,25 @@ router.post('/timesheet/edit', async (req, res) => {
       const [startH, startM] = startTime.split(':').map(Number);
       const [endH, endM] = endTime.split(':').map(Number);
       
-      const newStart = new Date(shiftDate);
-      newStart.setHours(startH, startM, 0, 0);
+      const actualClockIn = new Date(shiftDate);
+      actualClockIn.setHours(startH, startM, 0, 0);
       
-      const newEnd = new Date(shiftDate);
-      newEnd.setHours(endH, endM, 0, 0);
+      const actualClockOut = new Date(shiftDate);
+      actualClockOut.setHours(endH, endM, 0, 0);
       
       // Calculate hours
-      const diffMs = newEnd - newStart;
+      const diffMs = actualClockOut - actualClockIn;
       const hours = diffMs / (1000 * 60 * 60);
       
-      if (hours <= 0 || hours > 24) {
-        return res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1&error=Invalid time range`);
+      if (hours <= 0) {
+        return res.redirect(`/manager/timesheet?date=${weekStart || ''}&edit=1&error=End time must be after start time`);
       }
       
-      // Update the shift times and set adjusted_hours
+      // Record actual clock-in/out times on this specific booking
+      // This doesn't modify the shift itself, just records when THIS employee actually worked
       await pool.query(
-        `UPDATE shifts SET start_time = $1, end_time = $2 WHERE id = $3`,
-        [newStart, newEnd, booking.shift_id]
-      );
-      
-      await pool.query(
-        `UPDATE shift_bookings SET adjusted_hours = $1, no_show = false WHERE id = $2`,
-        [hours, bookingId]
+        `UPDATE shift_bookings SET actual_clock_in = $1, actual_clock_out = $2, no_show = false WHERE id = $3`,
+        [actualClockIn, actualClockOut, bookingId]
       );
     } else if (action === 'no_show') {
       await pool.query(
@@ -817,6 +823,74 @@ router.post('/timesheet/edit', async (req, res) => {
   }
 });
 
+// AJAX endpoint for smooth timesheet edits
+router.post('/timesheet/edit-ajax', async (req, res) => {
+  try {
+    const { bookingId, action, startTime, endTime } = req.body;
+
+    // Verify the booking belongs to a shift in the manager's store
+    const verifyRes = await pool.query(
+      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       WHERE sb.id = $1 AND sma.manager_id = $2`,
+      [bookingId, req.user.userId]
+    );
+
+    if (verifyRes.rows.length === 0) {
+      return res.json({ success: false, error: 'Booking not found or not in your store' });
+    }
+
+    const booking = verifyRes.rows[0];
+
+    if (action === 'adjust_times') {
+      if (!startTime || !endTime) {
+        return res.json({ success: false, error: 'Invalid time values' });
+      }
+      
+      const originalStart = new Date(booking.start_time);
+      const shiftDate = new Date(originalStart.getFullYear(), originalStart.getMonth(), originalStart.getDate());
+      
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      
+      const actualClockIn = new Date(shiftDate);
+      actualClockIn.setHours(startH, startM, 0, 0);
+      
+      const actualClockOut = new Date(shiftDate);
+      actualClockOut.setHours(endH, endM, 0, 0);
+      
+      const diffMs = actualClockOut - actualClockIn;
+      const hours = diffMs / (1000 * 60 * 60);
+      
+      if (hours <= 0) {
+        return res.json({ success: false, error: 'End time must be after start time' });
+      }
+      
+      await pool.query(
+        `UPDATE shift_bookings SET actual_clock_in = $1, actual_clock_out = $2, no_show = false WHERE id = $3`,
+        [actualClockIn, actualClockOut, bookingId]
+      );
+      
+      return res.json({ success: true, newHours: Math.round(hours * 100) / 100 });
+    } else if (action === 'delete_entry') {
+      const checkRes = await pool.query(`SELECT no_show FROM shift_bookings WHERE id = $1`, [bookingId]);
+      if (checkRes.rows.length > 0 && checkRes.rows[0].no_show) {
+        await pool.query(`UPDATE shift_bookings SET no_show = false, adjusted_hours = NULL WHERE id = $1`, [bookingId]);
+      } else {
+        await pool.query(`UPDATE shift_bookings SET no_show = true, adjusted_hours = 0 WHERE id = $1`, [bookingId]);
+      }
+      return res.json({ success: true });
+    }
+
+    res.json({ success: false, error: 'Unknown action' });
+  } catch (e) {
+    console.error('[Manager] timesheet edit-ajax error', e);
+    res.json({ success: false, error: 'Server error' });
+  }
+});
+
 router.post('/timesheet/submit', async (req, res) => {
   try {
     const { weekStart, weekEnd } = req.body;
@@ -863,11 +937,29 @@ router.post('/timesheet/submit', async (req, res) => {
       });
     }
 
-    // Success — redirect back to timesheet view
-    res.redirect(`/manager/timesheet?date=${weekStart}`);
+    // Success — redirect back to timesheet view with success message
+    res.redirect(`/manager/timesheet?date=${weekStart}&success=submitted`);
   } catch (e) {
     console.error('[Manager] timesheet submit error', e);
     res.redirect('/manager/timesheet');
+  }
+});
+
+// Confirm and lock timesheet (final submission to receiving manager)
+router.post('/timesheet/confirm', async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+    const [y, m, d] = weekStart.split('-').map(Number);
+    const ws = new Date(y, m - 1, d);
+    
+    const result = await confirmTimesheet(req.user.userId, ws);
+    if (result.success) {
+      return res.redirect(`/manager/timesheet?date=${weekStart}&success=confirmed`);
+    }
+    return res.redirect(`/manager/timesheet?date=${weekStart}&error=${encodeURIComponent(result.error)}`);
+  } catch (e) {
+    console.error('[Manager] timesheet confirm error', e);
+    return res.redirect(`/manager/timesheet?date=${req.body.weekStart || ''}&error=Failed to confirm timesheet`);
   }
 });
 
@@ -937,4 +1029,99 @@ router.post('/store-checklist/submit', async (req, res) => {
 
 // ─── (Legacy checklist upload removed — replaced by store-checklist) ────────────
 
+// ─── Notification Monitor ──────────────────────────────────────────────────────
+
+router.get('/notification-monitor', async (req, res) => {
+  try {
+    const stats = await getNotificationStats();
+    const needingReminder = await getEmployeesNeedingReminder();
+    const recentLogs = await getRecentNotificationLogs(50);
+    const deliveryRate = await getDeliveryRate();
+
+    res.render('manager/notification-monitor', {
+      user: req.user,
+      stats,
+      needingReminder,
+      recentLogs,
+      deliveryRate
+    });
+  } catch (error) {
+    console.error('[Manager] notification-monitor error:', error);
+    res.render('manager/notification-monitor', {
+      user: req.user,
+      stats: [],
+      needingReminder: [],
+      recentLogs: [],
+      deliveryRate: { total_sent: 0, total_viewed: 0, total_clicked: 0, view_rate: 0, click_rate: 0 }
+    });
+  }
+});
+
+// ─── Received Invoice (Shop Manager reports actual quantities received) ─────────
+
+router.get('/received-invoice', async (req, res) => {
+  try {
+    const result = await getOrCreateTodayInvoice(req.user.userId);
+    if (!result.success) {
+      return res.render('manager/received-invoice', {
+        user: req.user,
+        error: result.error,
+        invoice: null
+      });
+    }
+    res.render('manager/received-invoice', {
+      user: req.user,
+      error: null,
+      invoice: result.invoice
+    });
+  } catch (e) {
+    console.error('[Manager] received-invoice error', e);
+    res.render('manager/received-invoice', {
+      user: req.user,
+      error: 'Failed to load invoice',
+      invoice: null
+    });
+  }
+});
+
+router.post('/received-invoice/add-item', async (req, res) => {
+  try {
+    const { invoiceId, productName } = req.body;
+    await addInvoiceItem(req.user.userId, invoiceId, productName);
+    res.redirect('/manager/received-invoice');
+  } catch (e) {
+    console.error('[Manager] add invoice item error', e);
+    res.redirect('/manager/received-invoice');
+  }
+});
+
+router.post('/received-invoice/submit', async (req, res) => {
+  try {
+    const { invoiceId, generalNotes } = req.body;
+    
+    // Build items array from form data
+    const items = [];
+    for (const key in req.body) {
+      if (key.startsWith('quantity_')) {
+        const itemId = key.replace('quantity_', '');
+        items.push({
+          itemId,
+          quantityReceived: req.body[`quantity_${itemId}`] || '',
+          itemNotes: req.body[`notes_${itemId}`] || ''
+        });
+      }
+    }
+
+    const result = await submitReceivedInvoice(req.user.userId, invoiceId, items, generalNotes);
+    if (!result.success) {
+      return res.redirect('/manager/received-invoice?error=' + encodeURIComponent(result.error));
+    }
+    res.redirect('/manager/received-invoice?success=1');
+  } catch (e) {
+    console.error('[Manager] submit invoice error', e);
+    res.redirect('/manager/received-invoice');
+  }
+});
+
 module.exports = router;
+

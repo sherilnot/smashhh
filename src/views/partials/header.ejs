@@ -10,6 +10,7 @@
     store_manager: [
       { key: 'dashboard', href: '/manager/dashboard',        icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'checklist', href: '/manager/store-checklist',  icon: 'clipboard-list',   label: 'Daily Checklist' },
+      { key: 'invoice',   href: '/manager/received-invoice', icon: 'package-check',    label: 'Received Invoice' },
       { key: 'roster',    href: '/manager/roster',           icon: 'users',            label: 'Weekly Roster' },
       { key: 'timesheet', href: '/manager/timesheet',        icon: 'clock',            label: 'Timesheet' },
       { key: 'pending',   href: '/manager/pending',          icon: 'bell-dot',         label: 'Pending' },
@@ -22,7 +23,8 @@
     receiving_manager: [
       { key: 'dashboard',  href: '/receiving-manager/timesheets', icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
-      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' }
+      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' },
+      { key: 'invoices',   href: '/receiving-manager/received-invoices', icon: 'package-check', label: 'Received Invoices' }
     ]
   };
   var items = menus[navRole] || [];
@@ -36,6 +38,9 @@
   <title><%= typeof title !== 'undefined' ? title : 'Rizins' %></title>
   <link rel="stylesheet" href="/css/theme.css" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <% if (navRole === 'employee') { %>
+  <script src="/js/webpush-notifications.js"></script>
+  <% } %>
 </head>
 <body>
   <header class="topbar">

@@ -1,6 +1,6 @@
 <%- include('../partials/header', { title: 'Pending Requests - Burger Store', role: 'store_manager', active: 'pending' }) %>
 
-  <h1><span class="emoji">⏳</span>Pending Requests</h1>
+  <h1>Pending Requests</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
@@ -13,6 +13,7 @@
       <thead>
         <tr>
           <th>Employee</th>
+          <th>Day</th>
           <th>Shift Start</th>
           <th>Shift End</th>
           <th>Store</th>
@@ -20,12 +21,18 @@
         </tr>
       </thead>
       <tbody>
-        <% requests.forEach(request => { %>
+        <% requests.forEach(request => { 
+          const startDate = new Date(request.shiftStartTime);
+          const endDate = new Date(request.shiftEndTime);
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dayName = dayNames[startDate.getDay()];
+        %>
           <tr>
             <td><%= request.employeeName %></td>
-            <td><%= new Date(request.shiftStartTime).toLocaleDateString() %> <%= new Date(request.shiftStartTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= new Date(request.shiftEndTime).toLocaleDateString() %> <%= new Date(request.shiftEndTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= request.storeId %></td>
+            <td><%= dayName %></td>
+            <td><%= startDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+            <td><%= endDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+            <td><%= request.storeName || 'Store ' + request.storeId.substring(0, 8) %></td>
             <td>
               <div class="actions">
                 <form method="POST" action="/manager/confirm">

@@ -1,0 +1,104 @@
+<%- include('../partials/header', { title: 'Invoice Detail', role: 'receiving_manager', active: 'invoices' }) %>
+
+  <div style="margin-bottom: 1.25rem;">
+    <a href="/receiving-manager/received-invoices" class="btn" style="font-size: 0.85rem;">← Back to Invoices</a>
+  </div>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (invoice) { %>
+    <h1><%= invoice.store_name %> — Received Invoice</h1>
+
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <div>
+          <small style="color: var(--text-muted);">Invoice Date</small><br>
+          <strong><%= new Date(invoice.invoice_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %></strong>
+        </div>
+        <div>
+          <small style="color: var(--text-muted);">Submitted By</small><br>
+          <strong><%= invoice.first_name %> <%= invoice.last_name %></strong>
+        </div>
+        <div>
+          <small style="color: var(--text-muted);">Submitted At</small><br>
+          <strong><%= new Date(invoice.submitted_at).toLocaleString('en-AU') %></strong>
+        </div>
+        <% if (invoice.location) { %>
+        <div>
+          <small style="color: var(--text-muted);">Location</small><br>
+          <strong><%= invoice.location %></strong>
+        </div>
+        <% } %>
+      </div>
+    </div>
+
+    <h2>Items Received</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">#</th>
+          <th style="width: 25%;">Product</th>
+          <th style="width: 12%;">Ordered</th>
+          <th style="width: 12%;">Received</th>
+          <th style="width: 10%;">Diff</th>
+          <th style="width: 36%;">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (invoice.items && invoice.items.length > 0) { %>
+          <% invoice.items.forEach(function(item, idx) { 
+            var ordered = item.quantity_ordered ? parseFloat(item.quantity_ordered) : null;
+            var received = item.quantity_received ? parseFloat(item.quantity_received) : null;
+            var difference = null;
+            var hasDiscrepancy = false;
+            
+            if (ordered !== null && received !== null && !isNaN(ordered) && !isNaN(received)) {
+              difference = received - ordered;
+              hasDiscrepancy = difference !== 0;
+            }
+          %>
+            <tr style="<%= hasDiscrepancy ? 'background: #fff8e1;' : '' %>">
+              <td><%= idx + 1 %></td>
+              <td>
+                <strong><%= item.product_name %></strong>
+                <% if (hasDiscrepancy) { %>
+                  <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.65rem; margin-left: 5px;">DISCREPANCY</span>
+                <% } %>
+              </td>
+              <td style="text-align: center; color: var(--text-muted);">
+                <%= item.quantity_ordered || '-' %>
+              </td>
+              <td style="text-align: center; font-weight: 600; color: <%= hasDiscrepancy ? '#ff9800' : 'var(--green)' %>;">
+                <%= item.quantity_received || '-' %>
+              </td>
+              <td style="text-align: center; font-weight: 600; color: <%= difference > 0 ? 'var(--green)' : (difference < 0 ? '#f44336' : 'var(--text-muted)') %>;">
+                <% if (difference !== null) { %>
+                  <%= difference > 0 ? '+' : '' %><%= difference %>
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
+              <td style="color: var(--text-muted); font-size: 0.85rem;">
+                <%= item.item_notes || '-' %>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr>
+            <td colspan="6" class="empty">No items in this invoice.</td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+
+    <% if (invoice.notes) { %>
+      <div class="card" style="margin-top: 1.25rem;">
+        <h3 style="margin-top: 0;">General Notes from Manager</h3>
+        <p style="margin-bottom: 0;"><%= invoice.notes %></p>
+      </div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

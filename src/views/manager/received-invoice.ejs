@@ -1,0 +1,153 @@
+<%- include('../partials/header', { title: 'Received Invoice', role: 'store_manager', active: 'invoice' }) %>
+
+  <h1>Received Invoice</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% var successParam = (typeof locals.query !== 'undefined' && locals.query && locals.query.success) ? locals.query.success : null; %>
+  <% if (successParam === '1') { %>
+    <div class="msg">✅ Invoice submitted successfully to RM001!</div>
+  <% } %>
+
+  <% if (!invoice) { %>
+    <div class="empty">Unable to load invoice. Make sure you're assigned to a store.</div>
+  <% } else { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <strong><%= invoice.storeName %></strong> &nbsp;—&nbsp; 
+      <%= new Date(invoice.invoiceDate).toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+      <% if (invoice.checklistId) { %>
+        &nbsp;<span style="color: var(--text-muted); font-size: 0.8rem;">✓ Linked to today's checklist</span>
+      <% } %>
+      <% if (invoice.status === 'submitted') { %>
+        &nbsp;<span class="badge" style="background: var(--green); color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem;">SUBMITTED</span>
+      <% } %>
+    </div>
+
+    <% if (invoice.status === 'draft') { %>
+      <form method="POST" action="/manager/received-invoice/submit">
+        <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+        
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">#</th>
+              <th style="width: 25%;">Product</th>
+              <th style="width: 15%;">Ordered Qty</th>
+              <th style="width: 15%;">Received Qty</th>
+              <th style="width: 40%;">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (invoice.items && invoice.items.length > 0) { %>
+              <% invoice.items.forEach(function(item, idx) { %>
+                <tr>
+                  <td><%= idx + 1 %></td>
+                  <td><strong><%= item.product_name %></strong></td>
+                  <td style="text-align: center; color: var(--text-muted);">
+                    <%= item.quantity_ordered || '-' %>
+                  </td>
+                  <td>
+                    <input type="text" 
+                           name="quantity_<%= item.id %>" 
+                           value="<%= item.quantity_received || '' %>"
+                           placeholder="Qty received"
+                           style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                  </td>
+                  <td>
+                    <input type="text" 
+                           name="notes_<%= item.id %>" 
+                           value="<%= item.item_notes || '' %>"
+                           placeholder="Any notes or discrepancies..."
+                           style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                  </td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="5" class="empty">
+                  No items yet. Add items below or submit a checklist first to auto-populate.
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 1.25rem;">
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">General Notes for RM001:</label>
+          <textarea name="generalNotes" 
+                    placeholder="Additional comments about this delivery..."
+                    style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; min-height: 80px; resize: vertical;"></textarea>
+        </div>
+
+        <div style="margin-top: 1.25rem; display: flex; gap: 10px;">
+          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--green), #388E3C); color: white;">
+            Submit Invoice to RM001
+          </button>
+          <button type="button" class="btn" onclick="toggleAddItem()" style="background: var(--surface-alt);">
+            + Add Item
+          </button>
+        </div>
+      </form>
+
+      <div id="addItemForm" style="display: none; margin-top: 1.25rem; padding: 15px; background: var(--surface-alt); border-radius: 8px;">
+        <h3 style="margin-top: 0;">Add Custom Item</h3>
+        <form method="POST" action="/manager/received-invoice/add-item" style="display: flex; gap: 10px; align-items: center;">
+          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+          <input type="text" name="productName" placeholder="Product name" required
+                 style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--accent), var(--accent-dark)); color: white;">Add</button>
+          <button type="button" class="btn" onclick="toggleAddItem()" style="background: var(--surface);">Cancel</button>
+        </form>
+      </div>
+
+    <% } else { %>
+      <!-- Submitted view (read-only) -->
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">#</th>
+            <th style="width: 25%;">Product</th>
+            <th style="width: 15%;">Ordered Qty</th>
+            <th style="width: 15%;">Received Qty</th>
+            <th style="width: 40%;">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (invoice.items && invoice.items.length > 0) { %>
+            <% invoice.items.forEach(function(item, idx) { %>
+              <tr>
+                <td><%= idx + 1 %></td>
+                <td><strong><%= item.product_name %></strong></td>
+                <td style="text-align: center; color: var(--text-muted);">
+                  <%= item.quantity_ordered || '-' %>
+                </td>
+                <td style="text-align: center; font-weight: 600;">
+                  <%= item.quantity_received || '-' %>
+                </td>
+                <td style="color: var(--text-muted);">
+                  <%= item.item_notes || '-' %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } %>
+        </tbody>
+      </table>
+
+      <% if (invoice.notes) { %>
+        <div class="card" style="margin-top: 1.25rem;">
+          <strong>Notes:</strong> <%= invoice.notes %>
+        </div>
+      <% } %>
+    <% } %>
+  <% } %>
+
+  <script>
+    function toggleAddItem() {
+      var form = document.getElementById('addItemForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+  </script>
+
+<%- include('../partials/footer') %>

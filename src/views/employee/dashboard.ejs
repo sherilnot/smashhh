@@ -5,6 +5,99 @@
     <p>Welcome! Grab open shifts, track your bookings, and watch your earnings stack up.</p>
   </div>
 
+  <!-- Notification Settings Card -->
+  <div class="card" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-left: 4px solid #667eea;">
+    <h3 style="margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 1.5rem;">🔔</span>
+      Shift Booking Reminders
+    </h3>
+    <p style="margin-bottom: 1rem;">
+      Get browser notifications to remind you to book your shifts during the Wednesday-Saturday booking window.
+    </p>
+    <div id="notification-status" style="margin-bottom: 1rem;">
+      <strong>Status:</strong> <span id="status-text">Checking...</span>
+    </div>
+    <button 
+      id="toggle-notifications" 
+      class="btn btn-primary" 
+      style="background: #667eea; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; color: white; font-weight: 600;">
+      Enable Notifications
+    </button>
+  </div>
+
+  <script>
+    // Update notification status display
+    async function updateNotificationStatus() {
+      const statusText = document.getElementById('status-text');
+      const toggleBtn = document.getElementById('toggle-notifications');
+      
+      if (!window.webPushManager) {
+        statusText.textContent = '⏳ Loading...';
+        setTimeout(updateNotificationStatus, 500);
+        return;
+      }
+
+      const status = await window.webPushManager.getStatus();
+
+      if (!status.supported) {
+        statusText.textContent = '❌ Not supported by this browser';
+        statusText.style.color = '#dc3545';
+        toggleBtn.disabled = true;
+        toggleBtn.style.opacity = '0.5';
+        toggleBtn.style.cursor = 'not-allowed';
+        return;
+      }
+
+      if (status.subscribed) {
+        statusText.textContent = '✅ Enabled - You\'ll receive reminders even when browser is closed';
+        statusText.style.color = '#28a745';
+        toggleBtn.textContent = 'Disable Notifications';
+        toggleBtn.style.background = '#dc3545';
+        toggleBtn.disabled = false;
+      } else if (status.permission === 'denied') {
+        statusText.textContent = '❌ Blocked - Enable in browser settings';
+        statusText.style.color = '#dc3545';
+        toggleBtn.disabled = true;
+        toggleBtn.style.opacity = '0.5';
+        toggleBtn.style.cursor = 'not-allowed';
+      } else {
+        statusText.textContent = '⚪ Not enabled - Click below to enable';
+        statusText.style.color = '#6c757d';
+        toggleBtn.textContent = 'Enable Notifications';
+        toggleBtn.style.background = '#667eea';
+        toggleBtn.disabled = false;
+      }
+    }
+
+    // Toggle notifications
+    document.getElementById('toggle-notifications').addEventListener('click', async function() {
+      if (!window.webPushManager) return;
+
+      const status = await window.webPushManager.getStatus();
+
+      if (status.subscribed) {
+        // Disable
+        const result = await window.webPushManager.unsubscribe();
+        if (result.success) {
+          alert('✅ Notifications disabled');
+        }
+      } else {
+        // Enable
+        const result = await window.webPushManager.subscribe();
+        if (!result.success) {
+          alert('❌ Failed to enable notifications. Please check browser settings.');
+        }
+      }
+
+      updateNotificationStatus();
+    });
+
+    // Update status on load
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(updateNotificationStatus, 1000);
+    });
+  </script>
+
   <h2>My Wages</h2>
   <% var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : []; %>
   <% if (entries.length === 0) { %>

@@ -6,17 +6,21 @@
     <div class="error"><%= error %></div>
   <% } %>
 
-  <% if (success) { %>
-    <div class="msg">Timesheet submitted successfully!</div>
+  <% if (query && query.success === 'submitted') { %>
+    <div class="msg">✓ Timesheet submitted as draft. You can still edit and resubmit.</div>
+  <% } else if (query && query.success === 'confirmed') { %>
+    <div class="msg">✓ Timesheet confirmed and sent to receiving manager! This timesheet is now locked.</div>
   <% } %>
 
   <% if (!hasStore) { %>
     <div class="empty">You are not assigned to any store. Contact an administrator.</div>
   <% } else { %>
+    <% var editMode = canEdit && ((typeof query !== 'undefined' && query.edit === '1') || false); %>
+
     <!-- Week Navigation -->
     <div class="summary" style="justify-content: space-between; gap: 1rem;">
       <% if (canGoPrev) { %>
-        <a href="/manager/timesheet?date=<%= prevWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
+        <a href="/manager/timesheet?date=<%= prevWeekDate %><%= editMode ? '&edit=1' : '' %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">← Previous</a>
       <% } else { %>
         <span style="color: var(--muted);">← Previous</span>
       <% } %>
@@ -26,7 +30,7 @@
       </div>
 
       <% if (canGoNext) { %>
-        <a href="/manager/timesheet?date=<%= nextWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
+        <a href="/manager/timesheet?date=<%= nextWeekDate %><%= editMode ? '&edit=1' : '' %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">Next →</a>
       <% } else { %>
         <span style="color: var(--muted);">Next →</span>
       <% } %>
@@ -34,36 +38,32 @@
 
     <% if (timesheetRows && timesheetRows.length > 0) { %>
 
-      <% var editMode = (typeof query !== 'undefined' && query.edit === '1') || false; %>
-
-      <% if (!timesheet.alreadySubmitted && !isFutureWeek) { %>
-        <div style="margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: center;">
+      <!-- Controls -->
+      <div style="margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <% if (canEdit) { %>
           <% if (!editMode) { %>
-            <a href="/manager/timesheet?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">✎ Edit Timesheet</a>
+            <a href="/manager/timesheet?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">Edit Timesheet</a>
           <% } else { %>
-            <a href="/manager/timesheet?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">✓ Done Editing</a>
+            <a href="/manager/timesheet?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">Done Editing</a>
           <% } %>
-        </div>
-      <% } %>
+        <% } %>
+        
+        <% if (isConfirmed) { %>
+          <span class="badge" style="background: linear-gradient(135deg, #d4edda, #c3e6cb); color: #155724; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(40, 167, 69, 0.3);">CONFIRMED &amp; LOCKED</span>
+        <% } else if (isSubmitted) { %>
+          <span class="badge" style="background: linear-gradient(135deg, #fff3cd, #ffeaa7); color: #856404; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(255, 193, 7, 0.3);">DRAFT</span>
+        <% } %>
+      </div>
 
-      <table style="table-layout: fixed; width: 100%;">
-        <colgroup>
-          <col style="width: 14%;">
-          <col style="width: 7%;">
-          <% dayLabels.forEach(function() { %><col style="width: 9%;"><% }) %>
-          <col style="width: 7%;">
-          <col style="width: 7%;">
-          <col style="width: 7%;">
-        </colgroup>
+      <!-- Timesheet Grid: employees as rows, days as columns (same as roster) -->
+      <table style="width: 100%;">
         <thead>
           <tr>
-            <th>Employee</th>
-            <th>Type</th>
+            <th style="width: 14%;">Employee</th>
+            <th style="width: 7%;">Type</th>
             <% dayLabels.forEach(function(label, i) { %>
               <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
             <% }) %>
-            <th class="amount">Weekday</th>
-            <th class="amount">Weekend</th>
             <th class="amount">Total</th>
           </tr>
         </thead>
@@ -73,59 +73,70 @@
               <td><strong><%= row.name %></strong></td>
               <td>
                 <% if (row.employmentType === 'permanent') { %>
-                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
+                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Perm</span>
                 <% } else if (row.employmentType === 'casual') { %>
                   <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
                 <% } else { %>
                   <span style="color: var(--muted);">—</span>
                 <% } %>
               </td>
-              <% row.byDay.forEach(function(cell) { %>
+              <% row.byDay.forEach(function(cell, dayIdx) { %>
                 <td style="vertical-align: top; padding: 0.35rem;">
                   <% if (cell) { %>
                     <% if (editMode) { %>
                       <% if (cell.no_show) { %>
-                        <div style="padding: 0.3rem 0.4rem; border-radius: 4px; background: #EEEEEE; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08); text-decoration: line-through; opacity: 0.6;">
-                          <div style="color: var(--muted);"><%= cell.label %></div>
-                        </div>
-                        <form method="POST" action="/manager/timesheet/edit" style="margin-top: 0.25rem;">
-                          <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
-                          <input type="hidden" name="action" value="delete_entry">
-                          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-                          <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.4rem;">↩ Undo</button>
-                        </form>
-                      <% } else { %>
-                        <div style="padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
-                          <div style="font-weight: 600; color: #333; margin-bottom: 0.25rem;"><%= cell.startLabel %>–<%= cell.endLabel %></div>
-                          <form method="POST" action="/manager/timesheet/edit" style="display:flex; flex-direction: column; gap: 0.2rem;">
-                            <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
-                            <input type="hidden" name="action" value="adjust_times">
-                            <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-                            <div style="display: flex; gap: 0.2rem; align-items: center;">
-                              <input type="time" name="startTime" value="<%= cell.startLabel %>" required
-                                     style="width: 4.5rem; padding: 0.15rem 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.7em;">
-                              <span style="font-size: 0.7em;">–</span>
-                              <input type="time" name="endTime" value="<%= cell.endLabel %>" required
-                                     style="width: 4.5rem; padding: 0.15rem 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.7em;">
-                              <button type="submit" class="btn-sm" style="background: var(--mustard); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.3rem;">✓</button>
-                            </div>
-                          </form>
-                          <form method="POST" action="/manager/timesheet/edit" style="margin-top: 0.2rem;">
+                        <!-- No-show shift (crossed out) -->
+                        <div style="margin-bottom: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 4px; background: #f5f5f5; font-size: 0.8em; border: 1px solid #ddd; opacity: 0.6; text-decoration: line-through;">
+                          <div style="font-weight: 600; color: #666;"><%= cell.label %></div>
+                          <form method="POST" action="/manager/timesheet/edit" style="margin-top: 0.25rem;">
                             <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
                             <input type="hidden" name="action" value="delete_entry">
                             <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-                            <button type="submit" class="btn-sm" style="background: var(--tomato); color: #fff; font-size: 0.7em; padding: 0.15rem 0.4rem;">🗑 Del</button>
+                            <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.4rem;">Restore</button>
+                          </form>
+                        </div>
+                      <% } else { %>
+                        <!-- Editable shift -->
+                        <div style="margin-bottom: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
+                          <form method="POST" action="/manager/timesheet/edit" class="timesheet-edit-form" data-booking-id="<%= cell.booking_id %>" style="margin: 0;">
+                            <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                            <input type="hidden" name="action" value="adjust_times">
+                            <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                            
+                            <div style="display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.3rem;">
+                              <input type="time" name="startTime" value="<%= cell.startLabel %>" required
+                                     class="time-input time-start" data-booking-id="<%= cell.booking_id %>"
+                                     style="width: 4.2rem; padding: 0.15rem 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.7em; font-family: inherit;">
+                              <span style="font-size: 0.7em; color: #666;">–</span>
+                              <input type="time" name="endTime" value="<%= cell.endLabel %>" required
+                                     class="time-input time-end" data-booking-id="<%= cell.booking_id %>"
+                                     style="width: 4.2rem; padding: 0.15rem 0.25rem; border: 1px solid var(--line); border-radius: 3px; font-size: 0.7em; font-family: inherit;">
+                            </div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                              <span class="hours-preview" data-booking-id="<%= cell.booking_id %>" style="font-size: 0.75em; font-weight: 700; color: var(--green);"><%= cell.hours_worked.toFixed(2) %>h</span>
+                              <button type="submit" class="btn-sm save-time-btn" style="background: var(--mustard); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.3rem; border: none; border-radius: 3px; cursor: pointer;">Save</button>
+                            </div>
+                          </form>
+                          
+                          <form method="POST" action="/manager/timesheet/edit" class="timesheet-delete-form" data-booking-id="<%= cell.booking_id %>" style="margin: 0; margin-top: 0.25rem;">
+                            <input type="hidden" name="bookingId" value="<%= cell.booking_id %>">
+                            <input type="hidden" name="action" value="delete_entry">
+                            <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                            <button type="submit" class="btn-sm delete-btn" style="background: #fff; color: #333; border: 1px solid #ddd; font-size: 0.7em; padding: 0.15rem 0.4rem;">No-show</button>
                           </form>
                         </div>
                       <% } %>
                     <% } else { %>
-                      <div style="padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
-                        <div style="font-weight: 600; color: #333;"><%= cell.label %></div>
-                        <% if (cell.adjusted) { %>
-                          <div style="font-size: 0.85em; color: var(--mustard); margin-top: 0.15rem;">✎ <%= cell.hours_worked.toFixed(2) %>h</div>
-                        <% } else { %>
-                          <div style="font-size: 0.85em; color: #666; margin-top: 0.15rem;"><%= cell.hours_worked.toFixed(2) %>h</div>
-                        <% } %>
+                      <!-- Read-only shift (non-edit mode) -->
+                      <div style="margin-bottom: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
+                        <div style="font-weight: 600; color: #333;">
+                          <%= cell.label %>
+                          <% if (cell.has_actual_times) { %>
+                            <span style="color: #f4a300; font-size: 0.8em;" title="Actual times (edited)">*</span>
+                          <% } %>
+                        </div>
+                        <div style="font-size: 0.85em; color: #666; margin-top: 0.15rem;"><%= cell.hours_worked.toFixed(2) %>h</div>
                       </div>
                     <% } %>
                   <% } else { %>
@@ -133,8 +144,6 @@
                   <% } %>
                 </td>
               <% }) %>
-              <td class="amount"><%= row.weekdayHours.toFixed(2) %></td>
-              <td class="amount"><%= row.weekendHours.toFixed(2) %></td>
               <td class="amount"><strong><%= row.totalHours.toFixed(2) %></strong></td>
             </tr>
           <% }) %>
@@ -143,27 +152,241 @@
           <tr>
             <td colspan="2"><strong>Total (<%= timesheet.employeeCount %> employees)</strong></td>
             <% dayLabels.forEach(function() { %><td></td><% }) %>
-            <td></td>
-            <td></td>
             <td class="amount"><strong><%= timesheet.totalHours.toFixed(2) %></strong></td>
           </tr>
         </tfoot>
       </table>
 
-      <% if (!timesheet.alreadySubmitted && !isFutureWeek) { %>
-        <form method="POST" action="/manager/timesheet/submit" style="margin-top: 1.25rem;">
-          <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-          <input type="hidden" name="weekEnd" value="<%= weekEndFormatted %>">
-          <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem;">📤 Submit Timesheet</button>
-        </form>
-      <% } else if (timesheet.alreadySubmitted) { %>
-        <div class="msg" style="margin-top: 1rem;">✓ This timesheet has already been submitted.</div>
-      <% } else { %>
-        <div class="info" style="margin-top: 1rem;">Cannot submit timesheet for a future week.</div>
+      <% if (canEdit && !isConfirmed) { %>
+        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+          <form method="POST" action="/manager/timesheet/submit">
+            <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+            <input type="hidden" name="weekEnd" value="<%= weekEndFormatted %>">
+            <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem; background: linear-gradient(135deg, #ffc107, #f4a300); color: #212529; font-weight: 600; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <% if (isSubmitted) { %>
+                Update Draft
+              <% } else { %>
+                Submit as Draft
+              <% } %>
+            </button>
+          </form>
+          
+          <% if (isSubmitted) { %>
+            <form method="POST" action="/manager/timesheet/confirm" onsubmit="return confirm('Confirm and lock this timesheet? You will NOT be able to edit it after confirmation.');">
+              <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+              <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem; background: linear-gradient(135deg, #28a745, #1e7e34); color: white; font-weight: 600; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                Confirm &amp; Send Final
+              </button>
+            </form>
+          <% } %>
+        </div>
+        
+        <% if (!isSubmitted) { %>
+          <p style="margin-top: 0.75rem; color: #6c757d; font-size: 0.9rem; font-style: italic;">
+            Submit as draft first. You can edit and resubmit multiple times before final confirmation.
+          </p>
+        <% } else { %>
+          <p style="margin-top: 0.75rem; color: #6c757d; font-size: 0.9rem; font-style: italic;">
+            This is a draft. You can still edit times and update. Click "Confirm &amp; Send Final" when ready to lock it.
+          </p>
+        <% } %>
+      <% } else if (isConfirmed) { %>
+        <div style="margin-top: 1rem; padding: 1rem; background: linear-gradient(135deg, #d4edda, #c3e6cb); border-left: 4px solid #28a745; border-radius: 4px; color: #155724;">
+          <strong>Status:</strong> This timesheet has been confirmed and sent to receiving manager.
+        </div>
+      <% } else if (isFutureWeek) { %>
+        <div style="margin-top: 1rem; padding: 1rem; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-left: 4px solid #6c757d; border-radius: 4px; color: #495057;">
+          Cannot submit timesheet for a future week.
+        </div>
       <% } %>
     <% } else { %>
       <div class="empty">No completed shifts for this week.</div>
     <% } %>
   <% } %>
 
+<% if (timesheetRows && timesheetRows.length > 0 && editMode) { %>
+<script>
+// Real-time hour calculation as manager types - allow any time range
+document.querySelectorAll('.time-input').forEach(input => {
+  input.addEventListener('input', function() {
+    const bookingId = this.dataset.bookingId;
+    const form = this.closest('.timesheet-edit-form');
+    const startInput = form.querySelector('.time-start');
+    const endInput = form.querySelector('.time-end');
+    const preview = document.querySelector(`.hours-preview[data-booking-id="${bookingId}"]`);
+    
+    if (startInput.value && endInput.value) {
+      const start = startInput.value.split(':').map(Number);
+      const end = endInput.value.split(':').map(Number);
+      const startMins = start[0] * 60 + start[1];
+      const endMins = end[0] * 60 + end[1];
+      const diffMins = endMins - startMins;
+      const hours = diffMins / 60;
+      
+      if (hours > 0) {
+        preview.textContent = hours.toFixed(2) + 'h';
+        preview.style.color = '#28a745';
+        preview.style.fontWeight = '700';
+        startInput.style.borderColor = '#ced4da';
+        endInput.style.borderColor = '#ced4da';
+      } else {
+        preview.textContent = 'End must be after start';
+        preview.style.color = '#dc3545';
+        startInput.style.borderColor = '#dc3545';
+        endInput.style.borderColor = '#dc3545';
+      }
+    }
+  });
+});
+
+// AJAX form submission for time edits
+document.querySelectorAll('.timesheet-edit-form').forEach(form => {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const btn = this.querySelector('.save-time-btn');
+    const originalText = btn.textContent;
+    const cell = this.closest('.shift-cell');
+    
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    btn.style.background = '#6c757d';
+    
+    const formData = new FormData(this);
+    
+    try {
+      const response = await fetch('/manager/timesheet/edit-ajax', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(formData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Success animation
+        btn.textContent = 'Saved';
+        btn.style.background = '#28a745';
+        btn.style.color = 'white';
+        
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = 'var(--mustard)';
+          btn.style.color = 'var(--bun-dark)';
+          btn.disabled = false;
+          
+          // Update hours preview
+          if (result.newHours) {
+            const preview = form.querySelector('.hours-preview');
+            preview.textContent = result.newHours.toFixed(2) + 'h';
+          }
+        }, 1500);
+      } else {
+        btn.textContent = 'Error';
+        btn.style.background = '#dc3545';
+        btn.style.color = 'white';
+        alert(result.error || 'Failed to save. Please check the times.');
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = 'var(--mustard)';
+          btn.style.color = 'var(--bun-dark)';
+          btn.disabled = false;
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      btn.textContent = 'Error';
+      btn.style.background = '#dc3545';
+      btn.style.color = 'white';
+      alert('Network error. Please try again.');
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.style.background = 'var(--mustard)';
+        btn.style.color = 'var(--bun-dark)';
+        btn.disabled = false;
+      }, 2000);
+    }
+  });
+});
+
+// AJAX delete with confirmation
+document.querySelectorAll('.timesheet-delete-form').forEach(form => {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    if (!confirm('Mark this shift as no-show? Employee will receive 0 hours pay for this shift.')) {
+      return;
+    }
+    
+    const btn = this.querySelector('.delete-btn');
+    const originalText = btn.textContent;
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    btn.style.background = '#6c757d';
+    
+    const formData = new FormData(this);
+    
+    try {
+      const response = await fetch('/manager/timesheet/edit-ajax', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(formData)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Reload to show updated state
+        window.location.reload();
+      } else {
+        alert(result.error || 'Failed to mark no-show');
+        btn.textContent = originalText;
+        btn.disabled = false;
+        btn.style.background = '#fff';
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Network error. Please try again.');
+      btn.textContent = originalText;
+      btn.disabled = false;
+      btn.style.background = '#fff';
+    }
+  });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  // Ctrl/Cmd + S to save current focused time input
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    const focused = document.activeElement;
+    if (focused.classList.contains('time-input')) {
+      e.preventDefault();
+      const form = focused.closest('.timesheet-edit-form');
+      if (form) {
+        form.querySelector('.save-time-btn').click();
+      }
+    }
+  }
+  
+  // Tab navigation enhancement
+  if (e.key === 'Tab' && document.activeElement.classList.contains('time-input')) {
+    // Smooth tab navigation between time inputs
+    setTimeout(() => {
+      if (document.activeElement.classList.contains('time-input')) {
+        document.activeElement.select();
+      }
+    }, 10);
+  }
+});
+
+// Auto-select time inputs on focus for quick editing
+document.querySelectorAll('.time-input').forEach(input => {
+  input.addEventListener('focus', function() {
+    this.select();
+  });
+});
+</script>
+<% } %>
+
 <%- include('../partials/footer') %>
+

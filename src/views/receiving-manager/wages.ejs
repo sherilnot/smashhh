@@ -47,11 +47,15 @@
               <button type="button" class="edit-icon-btn" onclick="startEdit('<%= emp.id %>')" title="Edit rate" aria-label="Edit hourly rate">
                 ✎
               </button>
+              <button type="button" class="default-btn" onclick="setDefault('<%= emp.id %>')" title="Set to default ($23.00)" aria-label="Set default rate">
+                Default
+              </button>
             </span>
             <form class="wage-edit-form" id="edit-<%= emp.id %>" onsubmit="updateRate(event, '<%= emp.id %>', this)" style="display:none;">
               <input type="number" name="rate" step="0.01" min="0.01" value="<%= parseFloat(emp.hourly_wage || 0).toFixed(2) %>" required />
               <button type="submit" class="save-icon-btn" title="Save" aria-label="Save">✓</button>
               <button type="button" class="cancel-icon-btn" title="Cancel" aria-label="Cancel" onclick="cancelEdit('<%= emp.id %>')">✕</button>
+              <button type="button" class="default-btn" onclick="setDefault('<%= emp.id %>')" title="Set to default ($23.00)">Default</button>
             </form>
           </td>
         </tr>
@@ -83,9 +87,17 @@
     .save-icon-btn:hover { background: #d8f6e3; }
     .cancel-icon-btn { background: #fef2f2; color: #b91c1c; border-color: #f3c6c6; }
     .cancel-icon-btn:hover { background: #fde3e3; }
+    .default-btn {
+      padding: 3px 8px; font-size: 0.7rem; border-radius: 4px;
+      border: 1px solid #90caf9; background: #e3f2fd; color: #1565c0;
+      cursor: pointer; font-weight: 600;
+    }
+    .default-btn:hover { background: #bbdefb; }
   </style>
 
   <script>
+    var DEFAULT_RATE = 23.00;
+
     function startEdit(employeeId) {
       document.getElementById('display-' + employeeId).style.display = 'none';
       document.getElementById('edit-' + employeeId).style.display = 'flex';
@@ -95,6 +107,29 @@
     function cancelEdit(employeeId) {
       document.getElementById('edit-' + employeeId).style.display = 'none';
       document.getElementById('display-' + employeeId).style.display = 'inline-flex';
+    }
+
+    async function setDefault(employeeId) {
+      const res = await fetch('/receiving-manager/update-wage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, newRate: DEFAULT_RATE })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('msg');
+      if (data.success) {
+        const display = document.getElementById('display-' + employeeId);
+        display.querySelector('.wage-value').textContent = DEFAULT_RATE.toFixed(2);
+        // Also update the edit form input value
+        var editForm = document.getElementById('edit-' + employeeId);
+        if (editForm) editForm.querySelector('input[name=rate]').value = DEFAULT_RATE.toFixed(2);
+        cancelEdit(employeeId);
+        msg.className = 'msg';
+        msg.textContent = 'Rate set to default ($' + DEFAULT_RATE.toFixed(2) + ').';
+      } else {
+        msg.className = 'error';
+        msg.textContent = data.error || 'Update failed.';
+      }
     }
 
     async function updateRate(e, employeeId, form) {

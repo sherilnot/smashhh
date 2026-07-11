@@ -78,6 +78,8 @@ function aggregateTimesheet(entries) {
       shift_date: entry.shift_date,
       shift_start: entry.shift_start,
       shift_end: entry.shift_end,
+      actual_clock_in: entry.actual_clock_in || null,
+      actual_clock_out: entry.actual_clock_out || null,
       hours_worked: entry.hours_worked,
       no_show: entry.no_show || false,
       adjusted: entry.adjusted_hours !== null && entry.adjusted_hours !== undefined
@@ -119,18 +121,21 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
 
   // Check if already submitted
   const existingRes = await pool.query(
-    `SELECT id FROM timesheets WHERE store_id = $1 AND week_start = $2`,
+    `SELECT id, status FROM timesheets WHERE store_id = $1 AND week_start = $2`,
     [storeId, weekStart]
   );
   const alreadySubmitted = existingRes.rows.length > 0;
+  const status = alreadySubmitted ? existingRes.rows[0].status : null;
 
   // Fetch completed bookings for this store during the week
   const bookingsRes = await pool.query(
     `SELECT
        sb.id AS booking_id, sb.no_show, sb.adjusted_hours,
+       sb.actual_clock_in, sb.actual_clock_out,
        u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
        s.start_time AS shift_start, s.end_time AS shift_end,
-       s.start_time::date AS shift_date
+       s.start_time::date AS shift_date,
+       s.updated_at AS shift_updated_at
      FROM shift_bookings sb
      JOIN shifts s ON s.id = sb.shift_id
      JOIN users u ON u.id = sb.employee_id
@@ -142,14 +147,28 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
     [storeId, weekStart, weekEnd]
   );
 
-  // Compute hours for each entry (respecting no_show and adjusted_hours)
+  // Compute hours for each entry (respecting no_show, adjusted_hours, and actual clock times)
   const entries = bookingsRes.rows.map(row => {
     let hours;
     if (row.no_show) {
       hours = 0;
     } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
       hours = parseFloat(row.adjusted_hours);
+    } else if (row.actual_clock_in && row.actual_clock_out) {
+      // Check if shift was edited AFTER actual times were recorded
+      const shiftUpdated = new Date(row.shift_updated_at || 0);
+      const actualClockIn = new Date(row.actual_clock_in);
+      
+      // If shift was edited after clock times were set, use the new shift times
+      if (shiftUpdated > actualClockIn) {
+        console.log(`[Timesheet] Shift ${row.booking_id} was edited after clock-in, using new shift times`);
+        hours = computeHours(row.shift_start, row.shift_end);
+      } else {
+        // Use actual clock in/out times if they're more recent
+        hours = computeHours(row.actual_clock_in, row.actual_clock_out);
+      }
     } else {
+      // Fall back to scheduled shift times
       hours = computeHours(row.shift_start, row.shift_end);
     }
     return {
@@ -160,17 +179,19 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
 
   const timesheet = aggregateTimesheet(entries);
   timesheet.alreadySubmitted = alreadySubmitted;
+  timesheet.status = status;
   timesheet.storeId = storeId;
 
   return { success: true, timesheet };
 }
 
 /**
- * Submit a generated timesheet to the receiving manager.
+ * Submit a generated timesheet to the receiving manager (as draft).
+ * Manager can resubmit multiple times until they confirm.
  * @param {string} managerId
  * @param {Date} weekStart
  * @param {Date} weekEnd
- * @returns {Promise<{ success: boolean, error?: string }>}
+ * @returns {Promise<{ success: boolean, error?: string, timesheetId?: string }>}
  */
 async function submitTimesheet(managerId, weekStart, weekEnd) {
   const client = await pool.connect();
@@ -192,19 +213,25 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
     const hasReceivingManager = rmRes.rows.length > 0;
     const receivingManagerId = hasReceivingManager ? rmRes.rows[0].id : null;
 
-    // Check duplicate
-    const dupRes = await client.query(
-      `SELECT id FROM timesheets WHERE store_id = $1 AND week_start = $2 FOR UPDATE`,
+    // Check for existing timesheet
+    const existingRes = await client.query(
+      `SELECT id, status FROM timesheets WHERE store_id = $1 AND week_start = $2 FOR UPDATE`,
       [storeId, weekStart]
     );
-    const alreadySubmitted = dupRes.rows.length > 0;
+
+    if (existingRes.rows.length > 0 && existingRes.rows[0].status === 'confirmed') {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'Timesheet is already confirmed and cannot be edited' };
+    }
 
     // Fetch completed bookings
     const bookingsRes = await client.query(
       `SELECT
-         u.id AS employee_id, u.first_name, u.last_name,
+         sb.id AS booking_id, sb.no_show, sb.adjusted_hours, sb.actual_clock_in, sb.actual_clock_out,
+         u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
          s.start_time AS shift_start, s.end_time AS shift_end,
-         s.start_time::date AS shift_date
+         s.start_time::date AS shift_date,
+         s.updated_at AS shift_updated_at
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN users u ON u.id = sb.employee_id
@@ -221,7 +248,7 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
       weekEnd,
       now: new Date(),
       hasCompletedBookings,
-      alreadySubmitted,
+      alreadySubmitted: false, // Allow resubmission
       hasReceivingManager,
       hasStore
     });
@@ -232,19 +259,55 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
     }
 
     // Compute timesheet data
-    const entries = bookingsRes.rows.map(row => ({
-      ...row,
-      hours_worked: computeHours(row.shift_start, row.shift_end)
-    }));
+    const entries = bookingsRes.rows.map(row => {
+      let hours;
+      if (row.no_show) {
+        hours = 0;
+      } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
+        hours = parseFloat(row.adjusted_hours);
+      } else if (row.actual_clock_in && row.actual_clock_out) {
+        // Check if shift was edited AFTER actual times were recorded
+        const shiftUpdated = new Date(row.shift_updated_at || 0);
+        const actualClockIn = new Date(row.actual_clock_in);
+        
+        // If shift was edited after clock times were set, use the new shift times
+        if (shiftUpdated > actualClockIn) {
+          hours = computeHours(row.shift_start, row.shift_end);
+        } else {
+          hours = computeHours(row.actual_clock_in, row.actual_clock_out);
+        }
+      } else {
+        hours = computeHours(row.shift_start, row.shift_end);
+      }
+      return {
+        ...row,
+        hours_worked: hours
+      };
+    });
+    
     const aggregated = aggregateTimesheet(entries);
 
-    // Insert timesheet
-    const tsRes = await client.query(
-      `INSERT INTO timesheets (store_id, week_start, week_end, total_hours, employee_count, submitted_by, received_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [storeId, weekStart, weekEnd, aggregated.totalHours, aggregated.employeeCount, managerId, receivingManagerId]
-    );
-    const timesheetId = tsRes.rows[0].id;
+    let timesheetId;
+    if (existingRes.rows.length > 0) {
+      // Update existing draft
+      timesheetId = existingRes.rows[0].id;
+      await client.query(
+        `UPDATE timesheets SET total_hours = $1, employee_count = $2, submitted_at = NOW()
+         WHERE id = $3`,
+        [aggregated.totalHours, aggregated.employeeCount, timesheetId]
+      );
+      
+      // Delete old entries
+      await client.query(`DELETE FROM timesheet_entries WHERE timesheet_id = $1`, [timesheetId]);
+    } else {
+      // Insert new timesheet as submitted (draft)
+      const tsRes = await client.query(
+        `INSERT INTO timesheets (store_id, week_start, week_end, total_hours, employee_count, submitted_by, received_by, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted') RETURNING id`,
+        [storeId, weekStart, weekEnd, aggregated.totalHours, aggregated.employeeCount, managerId, receivingManagerId]
+      );
+      timesheetId = tsRes.rows[0].id;
+    }
 
     // Insert entries
     for (const emp of aggregated.employees) {
@@ -258,10 +321,67 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
     }
 
     await client.query('COMMIT');
-    return { success: true };
+    return { success: true, timesheetId };
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[TimesheetService] submitTimesheet error', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Confirm and lock a timesheet, sending it final to receiving manager.
+ * @param {string} managerId
+ * @param {Date} weekStart
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+async function confirmTimesheet(managerId, weekStart) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find manager's store
+    const storeRes = await client.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [managerId]
+    );
+    
+    if (storeRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'No store assignment exists' };
+    }
+
+    const storeId = storeRes.rows[0].store_id;
+
+    // Check timesheet exists and is submitted
+    const tsRes = await client.query(
+      `SELECT id, status FROM timesheets WHERE store_id = $1 AND week_start = $2 FOR UPDATE`,
+      [storeId, weekStart]
+    );
+
+    if (tsRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'Timesheet not found. Please submit first.' };
+    }
+
+    if (tsRes.rows[0].status === 'confirmed') {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'Timesheet is already confirmed' };
+    }
+
+    // Confirm the timesheet (lock it)
+    await client.query(
+      `UPDATE timesheets SET status = 'confirmed' WHERE id = $1`,
+      [tsRes.rows[0].id]
+    );
+
+    await client.query('COMMIT');
+    return { success: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[TimesheetService] confirmTimesheet error', error);
     throw error;
   } finally {
     client.release();
@@ -455,6 +575,7 @@ module.exports = {
   aggregateTimesheet,
   generateTimesheet,
   submitTimesheet,
+  confirmTimesheet,
   getSubmittedTimesheets,
   getTimesheetDetail
 };

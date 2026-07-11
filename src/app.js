@@ -12,6 +12,7 @@ const receivingManagerRoutes = require('./routes/receiving-manager');
 
 const { scheduleNightlyJob } = require('./services/schedulerService');
 const { generateNightlyChecklists } = require('./services/inventoryService');
+const { sendShiftBookingReminders } = require('./services/webPushService');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -65,6 +66,12 @@ app.use((err, req, res, next) => {
 
 // Start nightly scheduler at 10 PM (Req 9.1)
 scheduleNightlyJob('generate-inventory-checklists', '0 22 * * *', generateNightlyChecklists);
+
+// Send shift booking reminders during booking window (Wed-Sat)
+// Runs at 9 AM, 2 PM, and 6 PM on Wednesday through Saturday
+scheduleNightlyJob('send-shift-reminders-morning', '0 9 * * 3-6', sendShiftBookingReminders);
+scheduleNightlyJob('send-shift-reminders-afternoon', '0 14 * * 3-6', sendShiftBookingReminders);
+scheduleNightlyJob('send-shift-reminders-evening', '0 18 * * 3-6', sendShiftBookingReminders);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

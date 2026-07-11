@@ -1,0 +1,225 @@
+<%- include('../partials/header', { title: 'Notification Monitor', role: 'store_manager', active: 'notifications' }) %>
+
+<style>
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 0.5rem 0;
+  }
+  .metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .status-sent { background: #e3f2fd; color: #1976d2; }
+  .status-viewed { background: #e8f5e9; color: #388e3c; }
+  .status-clicked { background: #fff3e0; color: #f57c00; }
+  .log-table {
+    font-size: 0.9rem;
+  }
+  .log-table td {
+    padding: 0.75rem;
+  }
+  .refresh-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .refresh-btn:hover {
+    background: #5568d3;
+  }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <h1><span class="emoji">📊</span>Notification Monitor</h1>
+  <button class="refresh-btn" onclick="window.location.reload()">
+    <span style="font-size: 1rem;">🔄</span> Refresh
+  </button>
+</div>
+
+<div class="card">
+  <h2>📈 Overall Delivery Metrics (Last 7 Days)</h2>
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-label">Total Sent</div>
+      <div class="metric-value"><%= deliveryRate.total_sent || 0 %></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Viewed</div>
+      <div class="metric-value"><%= deliveryRate.total_viewed || 0 %></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Clicked</div>
+      <div class="metric-value"><%= deliveryRate.total_clicked || 0 %></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">View Rate</div>
+      <div class="metric-value"><%= deliveryRate.view_rate || 0 %>%</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Click Rate</div>
+      <div class="metric-value"><%= deliveryRate.click_rate || 0 %>%</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>👥 Employee Notification Status</h2>
+  <% if (stats.length === 0) { %>
+    <p class="empty">No notification data available yet.</p>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Email</th>
+          <th>Sent</th>
+          <th>Viewed</th>
+          <th>Clicked</th>
+          <th>Last Sent</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% stats.forEach(stat => { %>
+          <tr>
+            <td><%= stat.first_name %> <%= stat.last_name %></td>
+            <td><%= stat.email %></td>
+            <td>
+              <span class="status-badge status-sent"><%= stat.total_sent || 0 %></span>
+            </td>
+            <td>
+              <span class="status-badge status-viewed"><%= stat.total_viewed || 0 %></span>
+            </td>
+            <td>
+              <span class="status-badge status-clicked"><%= stat.total_clicked || 0 %></span>
+            </td>
+            <td>
+              <% if (stat.last_sent_at) { %>
+                <%= new Date(stat.last_sent_at).toLocaleString() %>
+              <% } else { %>
+                <span style="color: #999;">Never</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>🔔 Employees Needing Reminder Now</h2>
+  <% if (needingReminder.length === 0) { %>
+    <p class="empty">✅ No employees need reminders right now (either outside booking window or all have booked shifts).</p>
+  <% } else { %>
+    <p style="background: #fff3cd; padding: 1rem; border-radius: 4px; border-left: 4px solid #ffc107;">
+      <strong>⚠️ <%= needingReminder.length %> employee(s)</strong> have not booked shifts for next week and need reminders.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Email</th>
+          <th>Bookings Next Week</th>
+          <th>Last Reminded</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% needingReminder.forEach(emp => { %>
+          <tr>
+            <td><%= emp.first_name %> <%= emp.last_name %></td>
+            <td><%= emp.email %></td>
+            <td style="color: #dc3545; font-weight: 600;"><%= emp.bookings_next_week %></td>
+            <td>
+              <% if (emp.last_sent_at) { %>
+                <%= new Date(emp.last_sent_at).toLocaleString() %>
+              <% } else { %>
+                <span style="color: #999;">Not yet</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<div class="card">
+  <h2>📜 Recent Notification Log (Last 50)</h2>
+  <% if (recentLogs.length === 0) { %>
+    <p class="empty">No recent notifications.</p>
+  <% } else { %>
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Message</th>
+          <th>Channel</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% recentLogs.forEach(log => { %>
+          <tr>
+            <td style="white-space: nowrap; font-size: 0.85rem;">
+              <%= new Date(log.sent_at).toLocaleString() %>
+            </td>
+            <td><%= log.first_name %> <%= log.last_name %></td>
+            <td>
+              <code style="font-size: 0.8rem;"><%= log.notification_type %></code>
+            </td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <%= log.message %>
+            </td>
+            <td>
+              <span class="status-badge status-sent"><%= log.channel %></span>
+            </td>
+            <td>
+              <% if (log.clicked) { %>
+                <span style="color: #f57c00;">✓ Clicked</span>
+              <% } else if (log.viewed_at) { %>
+                <span style="color: #388e3c;">✓ Viewed</span>
+              <% } else { %>
+                <span style="color: #999;">Sent</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<script>
+  // Auto-refresh every 2 minutes
+  setTimeout(() => {
+    window.location.reload();
+  }, 120000);
+</script>
+
+<%- include('../partials/footer') %>

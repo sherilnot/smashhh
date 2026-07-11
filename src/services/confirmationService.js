@@ -124,10 +124,12 @@ async function getPendingRequests(managerId) {
               u.last_name,
               s.start_time,
               s.end_time,
-              s.store_id
+              s.store_id,
+              st.name AS store_name
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
+       JOIN stores st ON st.id = s.store_id
        JOIN users u ON u.id = sb.employee_id
        WHERE sma.manager_id = $1 AND sb.booking_status = 'pending'
        ORDER BY s.start_time ASC`,
@@ -139,7 +141,8 @@ async function getPendingRequests(managerId) {
       employeeName: `${r.first_name} ${r.last_name}`,
       shiftStartTime: r.start_time,
       shiftEndTime: r.end_time,
-      storeId: r.store_id
+      storeId: r.store_id,
+      storeName: r.store_name
     }));
 
     return { hasManagedStore: true, requests };

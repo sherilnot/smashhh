@@ -33,9 +33,31 @@
     <!-- Controls -->
     <div style="margin-bottom: 1rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
       <% if (!editMode) { %>
-        <a href="/manager/roster?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">✎ Edit Roster</a>
+        <a href="/manager/roster?date=<%= weekStartFormatted %>&edit=1" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;">Edit Roster</a>
       <% } else { %>
-        <a href="/manager/roster?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">✓ Done Editing</a>
+        <a href="/manager/roster?date=<%= weekStartFormatted %>" class="btn" style="padding: 0.5rem 1.25rem; font-size: 0.9rem; background: var(--muted);">Done Editing</a>
+      <% } %>
+      
+      <% 
+        // Check if this is next week and we're approaching Sunday deadline
+        var now = new Date();
+        var currentDay = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        var weekStartDate = new Date(weekStartFormatted);
+        var isNextWeek = weekStartDate > now;
+        var daysTillSunday = currentDay === 0 ? 0 : (7 - currentDay);
+        var showDeadlineWarning = isNextWeek && currentDay >= 5; // Friday, Saturday, or Sunday
+      %>
+      
+      <% if (showDeadlineWarning) { %>
+        <span class="badge" style="background: linear-gradient(135deg, #fff3cd, #ffeaa7); color: #856404; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(255, 193, 7, 0.3);">
+          <% if (currentDay === 0) { %>
+            DEADLINE TODAY - Confirm roster by end of Sunday
+          <% } else if (currentDay === 6) { %>
+            DEADLINE TOMORROW - Confirm by Sunday
+          <% } else { %>
+            DEADLINE: Confirm by Sunday
+          <% } %>
+        </span>
       <% } %>
     </div>
 
@@ -71,16 +93,16 @@
                     <div style="margin-bottom: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= isCancelled ? '#f5f5f5' : shift.color %>; font-size: 0.8em; border: 1px solid <%= isCancelled ? '#ddd' : 'rgba(0,0,0,0.08)' %>; <%= isCancelled ? 'opacity: 0.6; text-decoration: line-through;' : '' %>">
                       <div style="font-weight: 600; color: #333;"><%= shift.label %></div>
                       <% if (shift.actual_clock_in && !isCancelled) { %>
-                        <div style="font-size: 0.85em; color: var(--green); margin-top: 0.15rem;">✓ <%= shift.actual_clock_in %></div>
+                        <div style="font-size: 0.85em; color: var(--green); margin-top: 0.15rem;">Clocked: <%= shift.actual_clock_in %></div>
                       <% } %>
                       <% if (editMode) { %>
                         <form method="POST" action="/manager/roster/unassign" style="margin-top: 0.25rem;">
                           <input type="hidden" name="bookingId" value="<%= shift.booking_id %>">
                           <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
                           <% if (isCancelled) { %>
-                            <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.4rem;">↩ Restore</button>
+                            <button type="submit" class="btn-sm" style="background: var(--lettuce); color: var(--bun-dark); font-size: 0.7em; padding: 0.15rem 0.4rem;">Restore</button>
                           <% } else { %>
-                            <button type="submit" class="btn-sm" style="background: #fff; color: #333; border: 1px solid #ddd; font-size: 0.7em; padding: 0.15rem 0.4rem;">✗ Remove</button>
+                            <button type="submit" class="btn-sm" style="background: #fff; color: #333; border: 1px solid #ddd; font-size: 0.7em; padding: 0.15rem 0.4rem;">Remove</button>
                           <% } %>
                         </form>
                       <% } %>
@@ -117,7 +139,7 @@
               <option value="<%= dayDates[i] %>"><%= label %> (<%= dayDates[i].slice(5) %>)</option>
             <% }) %>
           </select>
-          <button type="submit" class="btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;">+ Assign</button>
+          <button type="submit" class="btn" style="padding: 0.4rem 1rem; font-size: 0.85rem;">Assign</button>
         </form>
       </div>
     <% } %>

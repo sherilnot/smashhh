@@ -1,0 +1,50 @@
+<%- include('../partials/header', { title: 'Received Invoices', role: 'receiving_manager', active: 'invoices' }) %>
+
+  <h1>Received Invoices</h1>
+
+  <% if (!invoices || invoices.length === 0) { %>
+    <div class="empty">No invoices have been submitted yet.</div>
+  <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Store</th>
+          <th>Invoice Date</th>
+          <th>Submitted By</th>
+          <th>Submitted At</th>
+          <th>Notes</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% invoices.forEach(function(inv) { %>
+          <tr>
+            <td><strong><%= inv.store_name %></strong></td>
+            <td><%= new Date(inv.invoice_date).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) %></td>
+            <td><%= inv.first_name %> <%= inv.last_name %></td>
+            <td><%= new Date(inv.submitted_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' }) %></td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <%= inv.notes || '-' %>
+            </td>
+            <td>
+              <a href="/receiving-manager/received-invoices/<%= inv.id %>" class="btn" style="font-size: 0.8rem;">View</a>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <% if (totalPages > 1) { %>
+      <div style="display: flex; justify-content: center; gap: 8px; margin-top: 1.5rem;">
+        <% if (page > 1) { %>
+          <a href="?page=<%= page - 1 %>" class="btn" style="font-size: 0.8rem;">← Prev</a>
+        <% } %>
+        <span style="padding: 8px 12px; color: var(--text-muted);">Page <%= page %> of <%= totalPages %></span>
+        <% if (page < totalPages) { %>
+          <a href="?page=<%= page + 1 %>" class="btn" style="font-size: 0.8rem;">Next →</a>
+        <% } %>
+      </div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

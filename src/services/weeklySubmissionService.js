@@ -46,7 +46,12 @@ async function hasSubmittedThisWeek(employeeId) {
     `);
 
     const { start: nextMonday } = getNextRosterWeek();
-    const weekStartDate = nextMonday.toISOString().split('T')[0]; // YYYY-MM-DD
+    // Bug 21 fix: nextMonday is already midnight in local time; converting
+    // via toISOString() shifts it to UTC first, which can land on the wrong
+    // calendar date (e.g. IST is UTC+5:30, so this was storing a date one
+    // day earlier than what the UI shows the employee). Format directly from
+    // the local getters instead.
+    const weekStartDate = `${nextMonday.getFullYear()}-${String(nextMonday.getMonth() + 1).padStart(2, '0')}-${String(nextMonday.getDate()).padStart(2, '0')}`;
 
     const result = await pool.query(
       `SELECT submitted_at FROM weekly_submissions 
@@ -76,7 +81,8 @@ async function hasSubmittedThisWeek(employeeId) {
 async function recordSubmission(employeeId) {
   try {
     const { start: nextMonday } = getNextRosterWeek();
-    const weekStartDate = nextMonday.toISOString().split('T')[0];
+    // Bug 21 fix: same local-date formatting fix as hasSubmittedThisWeek.
+    const weekStartDate = `${nextMonday.getFullYear()}-${String(nextMonday.getMonth() + 1).padStart(2, '0')}-${String(nextMonday.getDate()).padStart(2, '0')}`;
 
     await pool.query(
       `INSERT INTO weekly_submissions (employee_id, roster_week_start)

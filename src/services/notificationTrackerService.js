@@ -166,6 +166,7 @@ async function getEmployeesNeedingReminder() {
         FROM shift_bookings sb
         JOIN shifts s ON s.id = sb.shift_id
         WHERE s.start_time >= $1 AND s.start_time <= $2
+          AND sb.booking_status IN ('pending', 'confirmed')
         GROUP BY sb.employee_id
       ) booking_count ON booking_count.employee_id = u.id
       LEFT JOIN (

@@ -230,7 +230,8 @@ async function verifySession(sessionToken) {
          JOIN users u ON u.id = s.user_id
         WHERE s.session_token = $1
           AND s.is_active = true
-          AND s.expires_at > NOW()`,
+          AND s.expires_at > NOW()
+          AND u.is_active = true`,
       [sessionToken]
     );
 

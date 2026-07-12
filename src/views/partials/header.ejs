@@ -25,10 +25,13 @@
       { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
       { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' },
       { key: 'invoices',   href: '/receiving-manager/received-invoices', icon: 'package-check', label: 'Received Invoices' }
+    ],
+    operation_manager: [
+      { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' }
     ]
   };
   var items = menus[navRole] || [];
-  var roleLabel = { employee: 'Crew', store_manager: 'Manager', warehouse_manager: 'Warehouse', receiving_manager: 'Payroll' }[navRole] || '';
+  var roleLabel = { employee: 'Crew', store_manager: 'Manager', warehouse_manager: 'Warehouse', receiving_manager: 'Payroll', operation_manager: 'Operations' }[navRole] || '';
 %>
 <!DOCTYPE html>
 <html lang="en">

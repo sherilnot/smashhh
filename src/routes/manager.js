@@ -298,7 +298,7 @@ router.get('/roster', async (req, res) => {
     }
 
     res.render('manager/roster', {
-      user: req.user, error: null, hasManagedStore: true,
+      user: req.user, error: req.query.error || null, hasManagedStore: true,
       shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterRows,
       query: req.query, employees,
       weekStartFormatted: toLocalDateString(weekStart),
@@ -385,10 +385,21 @@ router.post('/roster/assign', async (req, res) => {
         const storeNameRes = await pool.query(`SELECT name FROM stores WHERE id = $1`, [storeId]);
         const location = storeNameRes.rows[0]?.name || 'Store';
         const newShift = await pool.query(
-          `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id) VALUES ($1, $2, $3, 5, $4) RETURNING id`,
+          `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id)
+           VALUES ($1, $2, $3, 5, $4)
+           ON CONFLICT (store_id, start_time, end_time) WHERE store_id IS NOT NULL DO NOTHING
+           RETURNING id`,
           [startTime, endTime, location, storeId]
         );
-        targetShiftId = newShift.rows[0].id;
+        if (newShift.rows.length > 0) {
+          targetShiftId = newShift.rows[0].id;
+        } else {
+          const winner = await pool.query(
+            `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+            [storeId, startTime, endTime]
+          );
+          targetShiftId = winner.rows[0].id;
+        }
       }
     }
 
@@ -396,13 +407,52 @@ router.post('/roster/assign', async (req, res) => {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
-    // Insert booking as confirmed (manager-assigned)
-    await pool.query(
-      `INSERT INTO shift_bookings (shift_id, employee_id, booking_status, assigned_by)
-       VALUES ($1, $2, 'confirmed', $3)
-       ON CONFLICT DO NOTHING`,
-      [targetShiftId, employeeId, req.user.userId]
-    );
+    // Bug 8 fix: manager-assign was inserting a 'confirmed' booking directly,
+    // bypassing the same capacity check bookShift() enforces for employee
+    // self-bookings. This wraps the insert in a transaction that locks the
+    // shift row and re-checks occupied capacity first, exactly like
+    // bookShift()/applyDecision() already do, so a manager can never assign
+    // more employees to a shift than its capacity allows.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT id FROM shifts WHERE id = $1 FOR UPDATE', [targetShiftId]);
+
+      const capRes = await client.query(
+        `SELECT capacity FROM shifts WHERE id = $1`,
+        [targetShiftId]
+      );
+      const capacity = capRes.rows[0]?.capacity ?? 0;
+
+      const dupRes = await client.query(
+        `SELECT id FROM shift_bookings
+         WHERE shift_id = $1 AND employee_id = $2 AND booking_status IN ('pending', 'confirmed')`,
+        [targetShiftId, employeeId]
+      );
+
+      const countRes = await client.query(
+        `SELECT COUNT(*) AS count FROM shift_bookings
+         WHERE shift_id = $1 AND booking_status IN ('pending', 'confirmed')`,
+        [targetShiftId]
+      );
+      const occupied = parseInt(countRes.rows[0].count);
+
+      if (dupRes.rows.length === 0 && occupied < capacity) {
+        await client.query(
+          `INSERT INTO shift_bookings (shift_id, employee_id, booking_status, assigned_by)
+           VALUES ($1, $2, 'confirmed', $3)
+           ON CONFLICT DO NOTHING`,
+          [targetShiftId, employeeId, req.user.userId]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
 
     res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
   } catch (e) {
@@ -466,6 +516,13 @@ router.post('/roster/edit-shift', async (req, res) => {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
+    // Bug 10 fix: validate end is after start before hitting the DB, so a bad
+    // edit gets a clear error instead of silently failing the check_shift_times
+    // constraint and leaving the manager thinking their change was saved.
+    if (new Date(endTime) <= new Date(startTime)) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1&error=${encodeURIComponent('End time must be after start time')}`);
+    }
+
     await pool.query(
       `UPDATE shifts SET start_time = $1, end_time = $2, updated_at = NOW() WHERE id = $3`,
       [startTime, endTime, shiftId]
@@ -474,7 +531,7 @@ router.post('/roster/edit-shift', async (req, res) => {
     res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
   } catch (e) {
     console.error('[Manager] roster/edit-shift error', e);
-    res.redirect('/manager/roster?edit=1');
+    res.redirect(`/manager/roster?date=${req.body.weekStart || ''}&edit=1&error=${encodeURIComponent('Failed to update shift times')}`);
   }
 });
 
@@ -483,9 +540,12 @@ router.post('/roster/clock-in', async (req, res) => {
   try {
     const { bookingId, clockIn, clockOut, weekStart } = req.body;
 
-    // Verify booking belongs to manager's store
+    // Verify booking belongs to manager's store, and fetch its current status
+    // and existing clock times (needed to validate clockOut > clockIn when
+    // only one of the two fields is being updated in this request).
     const verifyRes = await pool.query(
-      `SELECT sb.id FROM shift_bookings sb
+      `SELECT sb.id, sb.booking_status, sb.actual_clock_in, sb.actual_clock_out
+       FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
        WHERE sb.id = $1 AND sma.manager_id = $2`,
@@ -493,6 +553,25 @@ router.post('/roster/clock-in', async (req, res) => {
     );
     if (verifyRes.rows.length === 0) {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
+    }
+
+    const booking = verifyRes.rows[0];
+
+    // Bug 9 fix: clock times only make sense for bookings that were actually
+    // approved to work (confirmed) or have already been completed. Blocking
+    // pending/cancelled/rejected/no_show prevents recording hours for a shift
+    // that was never approved.
+    if (booking.booking_status !== 'confirmed' && booking.booking_status !== 'completed') {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1&error=${encodeURIComponent('Only confirmed or completed bookings can have clock times recorded')}`);
+    }
+
+    // Bug 2 fix: validate clock-out is after clock-in using whichever values
+    // will be in effect after this update (new value if provided, otherwise
+    // the existing stored value).
+    const effectiveClockIn = clockIn || booking.actual_clock_in;
+    const effectiveClockOut = clockOut || booking.actual_clock_out;
+    if (effectiveClockIn && effectiveClockOut && new Date(effectiveClockOut) <= new Date(effectiveClockIn)) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1&error=${encodeURIComponent('Clock-out time must be after clock-in time')}`);
     }
 
     const updates = [];
@@ -578,6 +657,7 @@ router.get('/timesheet', async (req, res) => {
       return res.render('manager/timesheet', {
         user: req.user, error: validation.error, success: false,
         hasStore: true, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek: false,
+        isConfirmed: false, isSubmitted: false, canEdit: false,
         query: req.query,
         weekStartFormatted: '', weekEndFormatted: '',
         prevWeekDate: '', nextWeekDate: '',
@@ -613,6 +693,7 @@ router.get('/timesheet', async (req, res) => {
       return res.render('manager/timesheet', {
         user: req.user, error: result.error, success: false,
         hasStore: false, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek,
+        isConfirmed, isSubmitted, canEdit,
         query: req.query,
         weekStartFormatted: toLocalDateString(weekStart),
         weekEndFormatted: toLocalDateString(weekEnd),
@@ -709,6 +790,7 @@ router.get('/timesheet', async (req, res) => {
     res.render('manager/timesheet', {
       user: req.user, error: 'Failed to load timesheet', success: false,
       hasStore: true, timesheet: null, timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek: false,
+      isConfirmed: false, isSubmitted: false, canEdit: false,
       query: req.query,
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',
@@ -725,7 +807,7 @@ router.post('/timesheet/edit', async (req, res) => {
 
     // Verify the booking belongs to a shift in the manager's store
     const verifyRes = await pool.query(
-      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time
+      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time, s.store_id
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
@@ -738,6 +820,24 @@ router.post('/timesheet/edit', async (req, res) => {
     }
 
     const booking = verifyRes.rows[0];
+
+    // Bug 19 fix: once a timesheet has been confirmed (locked, sent to the
+    // receiving manager), the bookings feeding it must not change underneath
+    // it — otherwise the confirmed totals and the underlying data silently
+    // diverge. Find the Monday of the week containing this booking's shift
+    // and check whether that week's timesheet is already confirmed.
+    const shiftStart = new Date(booking.start_time);
+    const shiftDay = shiftStart.getDay();
+    const diffToMonday = shiftDay === 0 ? -6 : 1 - shiftDay;
+    const weekMonday = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate() + diffToMonday);
+
+    const tsStatusRes = await pool.query(
+      `SELECT status FROM timesheets WHERE store_id = $1 AND week_start = $2`,
+      [booking.store_id, weekMonday]
+    );
+    if (tsStatusRes.rows.length > 0 && tsStatusRes.rows[0].status === 'confirmed') {
+      return res.redirect(`/manager/timesheet?date=${weekStart || ''}&error=${encodeURIComponent('This timesheet has been confirmed and can no longer be edited')}`);
+    }
 
     if (action === 'adjust_times') {
       // Parse the new times
@@ -830,7 +930,7 @@ router.post('/timesheet/edit-ajax', async (req, res) => {
 
     // Verify the booking belongs to a shift in the manager's store
     const verifyRes = await pool.query(
-      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time
+      `SELECT sb.id, sb.booking_status, s.id as shift_id, s.start_time, s.end_time, s.store_id
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
@@ -843,6 +943,21 @@ router.post('/timesheet/edit-ajax', async (req, res) => {
     }
 
     const booking = verifyRes.rows[0];
+
+    // Bug 19 fix: same guard as /timesheet/edit — block changes once the
+    // week's timesheet has been confirmed.
+    const shiftStart = new Date(booking.start_time);
+    const shiftDay = shiftStart.getDay();
+    const diffToMonday = shiftDay === 0 ? -6 : 1 - shiftDay;
+    const weekMonday = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate() + diffToMonday);
+
+    const tsStatusRes = await pool.query(
+      `SELECT status FROM timesheets WHERE store_id = $1 AND week_start = $2`,
+      [booking.store_id, weekMonday]
+    );
+    if (tsStatusRes.rows.length > 0 && tsStatusRes.rows[0].status === 'confirmed') {
+      return res.json({ success: false, error: 'This timesheet has been confirmed and can no longer be edited' });
+    }
 
     if (action === 'adjust_times') {
       if (!startTime || !endTime) {
@@ -920,6 +1035,15 @@ router.post('/timesheet/submit', async (req, res) => {
       
       const tsResult = await generateTimesheet(req.user.userId, wsDate, weDate);
 
+      // Bug 11 fix: this render path was missing canEdit/isConfirmed/isSubmitted,
+      // which timesheet.ejs references unconditionally — crashing with a 500
+      // ("canEdit is not defined") any time a submit attempt failed validation.
+      // Computed the same way the GET route does, from the regenerated timesheet.
+      const isConfirmedOnFailure = tsResult.timesheet && tsResult.timesheet.alreadySubmitted &&
+                                    tsResult.timesheet.status === 'confirmed';
+      const isSubmittedOnFailure = tsResult.timesheet && tsResult.timesheet.alreadySubmitted;
+      const canEditOnFailure = !isConfirmedOnFailure && !isFutureWeek;
+
       const prevMonday = new Date(wsDate);
       prevMonday.setDate(prevMonday.getDate() - 7);
       const nextMonday = new Date(wsDate);
@@ -929,6 +1053,7 @@ router.post('/timesheet/submit', async (req, res) => {
         user: req.user, error: result.error, success: false,
         hasStore: true, timesheet: tsResult.success ? tsResult.timesheet : null, 
         timesheetRows: [], dayLabels: [], dayDates: [], isFutureWeek, query: req.query,
+        isConfirmed: isConfirmedOnFailure, isSubmitted: isSubmittedOnFailure, canEdit: canEditOnFailure,
         weekStartFormatted: weekStart,
         weekEndFormatted: weekEnd,
         prevWeekDate: toLocalDateString(prevMonday),
@@ -1071,7 +1196,7 @@ router.get('/received-invoice', async (req, res) => {
     }
     res.render('manager/received-invoice', {
       user: req.user,
-      error: null,
+      error: req.query.error || null,
       invoice: result.invoice
     });
   } catch (e) {
@@ -1087,11 +1212,19 @@ router.get('/received-invoice', async (req, res) => {
 router.post('/received-invoice/add-item', async (req, res) => {
   try {
     const { invoiceId, productName } = req.body;
-    await addInvoiceItem(req.user.userId, invoiceId, productName);
+
+    if (!productName || !productName.trim()) {
+      return res.redirect(`/manager/received-invoice?error=${encodeURIComponent('Product name is required')}`);
+    }
+
+    const result = await addInvoiceItem(req.user.userId, invoiceId, productName.trim());
+    if (!result.success) {
+      return res.redirect(`/manager/received-invoice?error=${encodeURIComponent(result.error)}`);
+    }
     res.redirect('/manager/received-invoice');
   } catch (e) {
     console.error('[Manager] add invoice item error', e);
-    res.redirect('/manager/received-invoice');
+    res.redirect(`/manager/received-invoice?error=${encodeURIComponent('Failed to add item')}`);
   }
 });
 

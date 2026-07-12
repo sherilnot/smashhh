@@ -32,6 +32,7 @@ async function seed() {
       { user_id: 'mgr004', password: '123', role: 'store_manager', first: 'Henry', last: 'Patel', email: 'henry@example.com', wage: null },
       { user_id: 'wh001',  password: '123', role: 'warehouse_manager', first: 'Dave', last: 'Brown', email: 'dave@example.com', wage: null },
       { user_id: 'rm001',  password: '123', role: 'receiving_manager', first: 'Sarah', last: 'Wilson', email: 'sarah@example.com', wage: null },
+      { user_id: 'om001',  password: '123', role: 'operation_manager', first: 'Nora', last: 'Ahmed', email: 'nora@example.com', wage: null },
     ];
 
     const userIds = {};
@@ -62,7 +63,7 @@ async function seed() {
     for (const { name, manager } of storeConfig) {
       const res = await client.query(
         `INSERT INTO stores (name) VALUES ($1)
-         ON CONFLICT DO NOTHING RETURNING id`,
+         ON CONFLICT (name) DO NOTHING RETURNING id`,
         [name]
       );
       if (res.rows.length) {
@@ -234,6 +235,8 @@ async function seed() {
     console.log('    wh001  (Dave Brown)');
     console.log('  Receiving Manager:');
     console.log('    rm001  (Sarah Wilson)');
+    console.log('  Operation Manager:');
+    console.log('    om001  (Nora Ahmed)');
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[Seed] Failed:', error.message);

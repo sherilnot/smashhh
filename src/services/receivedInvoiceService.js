@@ -198,6 +198,11 @@ async function submitInvoice(managerId, invoiceId, items, generalNotes = '') {
       return { success: false, error: 'Invoice not found or access denied' };
     }
 
+    if (checkRes.rows[0].status !== 'draft') {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'Invoice has already been submitted' };
+    }
+
     // Update each item's received quantity and notes
     for (const item of items) {
       if (item.itemId) {

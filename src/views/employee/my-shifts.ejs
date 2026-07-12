@@ -29,7 +29,7 @@
             <td><%= shift.storeLocation %></td>
             <td class="status-<%= status === null ? 'unknown' : status %>"><%= status === null ? 'Unknown' : status %></td>
             <td>
-              <% if (status === 'confirmed') { %>
+              <% if (status === 'confirmed' || status === 'pending') { %>
                 <form method="POST" action="/employee/cancel">
                   <input type="hidden" name="shiftId" value="<%= shift.id %>" />
                   <button type="submit" class="cancel-btn">Cancel</button>

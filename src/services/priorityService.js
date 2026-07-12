@@ -103,9 +103,12 @@ async function autoFillRoster(managerId, storeId, weekStart, weekEnd) {
   let totalAssigned = 0;
 
   for (const shift of shiftsRes.rows) {
-    // Check existing confirmed bookings for this shift
+    // Bug 18 fix: occupied capacity must count both 'pending' and 'confirmed'
+    // bookings, matching the same rule bookShift()/applyDecision() already
+    // enforce elsewhere. Counting confirmed-only let auto-fill push a shift
+    // past capacity whenever pending requests already existed on it.
     const existingRes = await pool.query(
-      `SELECT employee_id FROM shift_bookings WHERE shift_id = $1 AND booking_status = 'confirmed'`,
+      `SELECT employee_id FROM shift_bookings WHERE shift_id = $1 AND booking_status IN ('pending', 'confirmed')`,
       [shift.id]
     );
     const existingEmployees = new Set(existingRes.rows.map(r => r.employee_id));
@@ -119,14 +122,21 @@ async function autoFillRoster(managerId, storeId, weekStart, weekEnd) {
       if (filled >= spotsLeft) break;
       if (existingEmployees.has(emp.id)) continue;
 
-      await pool.query(
+      // Bug 18 fix: only count this as a real assignment if the insert
+      // actually happened. RETURNING lets us tell a genuine insert apart
+      // from a no-op (e.g. blocked by the unique active-booking index),
+      // so the returned totalAssigned count reflects what really changed.
+      const insertRes = await pool.query(
         `INSERT INTO shift_bookings (shift_id, employee_id, booking_status, assigned_by)
          VALUES ($1, $2, 'confirmed', $3)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
         [shift.id, emp.id, managerId]
       );
       filled++;
-      totalAssigned++;
+      if (insertRes.rows.length > 0) {
+        totalAssigned++;
+      }
     }
   }
 

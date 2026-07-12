@@ -92,12 +92,27 @@ function totalWage(entries) {
 function buildWageEntry(row) {
   const hourlyWage = parseFloat(row.hourly_wage);
   const employeeName = `${row.first_name} ${row.last_name}`;
-  const result = earnedWage(row.start_time, row.end_time, hourlyWage);
 
-  if (!result.ok) {
+  // Respect no_show / adjusted_hours the same way timesheetService does: a
+  // no-show contributes zero hours regardless of the shift's scheduled
+  // length, and a manually adjusted hours value overrides the scheduled
+  // start/end difference. Without this, the wage dashboards were paying
+  // full shift wages for shifts the employee never worked.
+  let hours;
+  if (row.no_show) {
+    hours = 0;
+  } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
+    hours = parseFloat(row.adjusted_hours);
+  } else {
+    hours = workedHours(row.start_time, row.end_time);
+  }
+
+  if (typeof hourlyWage !== 'number' || !Number.isFinite(hourlyWage) || hourlyWage <= 0) {
     // 8.5: exclude the booking and identify the affected employee.
     return { error: `Employee ${employeeName} (${row.employee_id}) has a non-positive hourly wage; wage entry excluded` };
   }
+
+  const wage = Math.round(hours * hourlyWage * 100) / 100;
 
   return {
     entry: {
@@ -105,8 +120,8 @@ function buildWageEntry(row) {
       employeeId: row.employee_id,
       employeeName,
       date: row.start_time,
-      hoursWorked: Math.round(workedHours(row.start_time, row.end_time) * 100) / 100,
-      wageEarned: result.wage
+      hoursWorked: Math.round(hours * 100) / 100,
+      wageEarned: wage
     }
   };
 }
@@ -136,7 +151,8 @@ async function getManagerWageEntries(managerId) {
     const result = await pool.query(
       `SELECT sb.id AS booking_id, u.id AS employee_id, u.first_name, u.last_name,
               u.hourly_wage, s.start_time,
-              COALESCE(sb.completed_at, s.end_time) AS end_time
+              COALESCE(sb.completed_at, s.end_time) AS end_time,
+              sb.no_show, sb.adjusted_hours
        FROM shift_bookings sb
        JOIN users u ON u.id = sb.employee_id
        JOIN shifts s ON s.id = sb.shift_id
@@ -185,7 +201,8 @@ async function getEmployeeWageEntries(employeeId) {
     const result = await pool.query(
       `SELECT sb.id AS booking_id, u.id AS employee_id, u.first_name, u.last_name,
               u.hourly_wage, s.start_time,
-              COALESCE(sb.completed_at, s.end_time) AS end_time
+              COALESCE(sb.completed_at, s.end_time) AS end_time,
+              sb.no_show, sb.adjusted_hours
        FROM shift_bookings sb
        JOIN users u ON u.id = sb.employee_id
        JOIN shifts s ON s.id = sb.shift_id
@@ -222,7 +239,8 @@ async function getEmployeeWageEntries(employeeId) {
 async function calculateAllWages(startDate, endDate) {
   const result = await pool.query(
     `SELECT u.id AS employee_id, u.first_name, u.last_name, u.hourly_wage,
-            s.id AS shift_id, s.start_time, s.end_time
+            s.id AS shift_id, s.start_time, s.end_time,
+            sb.no_show, sb.adjusted_hours
      FROM shift_bookings sb
      JOIN users u ON u.id = sb.employee_id
      JOIN shifts s ON s.id = sb.shift_id
@@ -249,7 +267,19 @@ async function calculateAllWages(startDate, endDate) {
       });
     }
     const report = map.get(empId);
-    const hours = (new Date(row.end_time) - new Date(row.start_time)) / 3600000;
+
+    // Respect no_show / adjusted_hours, matching timesheetService's logic —
+    // a no-show contributes zero hours, and a manually adjusted hours value
+    // overrides the scheduled start/end difference.
+    let hours;
+    if (row.no_show) {
+      hours = 0;
+    } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
+      hours = parseFloat(row.adjusted_hours);
+    } else {
+      hours = (new Date(row.end_time) - new Date(row.start_time)) / 3600000;
+    }
+
     const wage = hours * report.hourlyRate;
     report.totalHours += hours;
     report.totalWages += wage;

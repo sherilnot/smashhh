@@ -16,7 +16,10 @@ const { getRosterWeek } = require('./rosterService');
  */
 function computeHours(startTime, endTime) {
   const ms = new Date(endTime).getTime() - new Date(startTime).getTime();
-  return Math.round((ms / 3600000) * 100) / 100;
+  // Defensive floor: hours worked can never be negative. This guards the
+  // timesheet/wage calculation even if bad clock-in/out data somehow reaches
+  // this function (e.g. from data created before validation was added).
+  return Math.max(0, Math.round((ms / 3600000) * 100) / 100);
 }
 
 /**

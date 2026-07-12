@@ -160,15 +160,32 @@ router.post('/book-weekly-shifts', async (req, res) => {
           `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
           [storeId, startTime, endTime]
         );
-        
+
         if (existingShift.rows.length > 0) {
           shiftId = existingShift.rows[0].id;
         } else {
+          // Bug 7 fix: INSERT ... ON CONFLICT DO NOTHING relies on the unique
+          // index on (store_id, start_time, end_time) to atomically avoid
+          // creating a duplicate shift row when two requests race for the
+          // same new time slot. If this insert loses the race, RETURNING
+          // comes back empty and we fall back to selecting the row the
+          // winning request just created.
           const newShift = await pool.query(
-            `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id) VALUES ($1, $2, $3, 5, $4) RETURNING id`,
+            `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id)
+             VALUES ($1, $2, $3, 5, $4)
+             ON CONFLICT (store_id, start_time, end_time) WHERE store_id IS NOT NULL DO NOTHING
+             RETURNING id`,
             [startTime, endTime, storeName, storeId]
           );
-          shiftId = newShift.rows[0].id;
+          if (newShift.rows.length > 0) {
+            shiftId = newShift.rows[0].id;
+          } else {
+            const winner = await pool.query(
+              `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+              [storeId, startTime, endTime]
+            );
+            shiftId = winner.rows[0].id;
+          }
         }
 
         // Check if already booked
@@ -263,10 +280,21 @@ router.post('/book-shift', async (req, res) => {
       shiftId = existingShift.rows[0].id;
     } else {
       const newShift = await pool.query(
-        `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id) VALUES ($1, $2, $3, 5, $4) RETURNING id`,
+        `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id)
+         VALUES ($1, $2, $3, 5, $4)
+         ON CONFLICT (store_id, start_time, end_time) WHERE store_id IS NOT NULL DO NOTHING
+         RETURNING id`,
         [startTime, endTime, storeName, storeId]
       );
-      shiftId = newShift.rows[0].id;
+      if (newShift.rows.length > 0) {
+        shiftId = newShift.rows[0].id;
+      } else {
+        const winner = await pool.query(
+          `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+          [storeId, startTime, endTime]
+        );
+        shiftId = winner.rows[0].id;
+      }
     }
 
     // Book the shift

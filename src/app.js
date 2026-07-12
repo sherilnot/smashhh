@@ -9,10 +9,12 @@ const employeeRoutes = require('./routes/employee');
 const managerRoutes = require('./routes/manager');
 const warehouseRoutes = require('./routes/warehouse');
 const receivingManagerRoutes = require('./routes/receiving-manager');
+const operationManagerRoutes = require('./routes/operation-manager');
 
 const { scheduleNightlyJob } = require('./services/schedulerService');
 const { generateNightlyChecklists } = require('./services/inventoryService');
 const { sendShiftBookingReminders } = require('./services/webPushService');
+const { autoCompleteShifts } = require('./services/shiftService');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -42,6 +44,7 @@ app.use('/employee', employeeRoutes);
 app.use('/manager', managerRoutes);
 app.use('/warehouse', warehouseRoutes);
 app.use('/receiving-manager', receivingManagerRoutes);
+app.use('/operation-manager', operationManagerRoutes);
 
 // Root redirect based on session role
 app.get('/', requireAuth, (req, res) => {
@@ -50,6 +53,7 @@ app.get('/', requireAuth, (req, res) => {
   if (role === 'store_manager') return res.redirect('/manager/dashboard');
   if (role === 'warehouse_manager') return res.redirect('/warehouse/dashboard');
   if (role === 'receiving_manager') return res.redirect('/receiving-manager/dashboard');
+  if (role === 'operation_manager') return res.redirect('/operation-manager/dashboard');
   res.redirect('/login');
 });
 
@@ -72,6 +76,18 @@ scheduleNightlyJob('generate-inventory-checklists', '0 22 * * *', generateNightl
 scheduleNightlyJob('send-shift-reminders-morning', '0 9 * * 3-6', sendShiftBookingReminders);
 scheduleNightlyJob('send-shift-reminders-afternoon', '0 14 * * 3-6', sendShiftBookingReminders);
 scheduleNightlyJob('send-shift-reminders-evening', '0 18 * * 3-6', sendShiftBookingReminders);
+
+// Auto-complete shifts whose end time has passed, every 15 minutes. This is
+// purely a safety net — managers can still manually end a shift early via
+// the End Shift button at any time; this job only catches whatever hasn't
+// already been ended by the time it runs, so a forgotten shift still counts
+// toward wages/timesheets instead of sitting as 'confirmed' forever.
+scheduleNightlyJob('auto-complete-shifts', '*/15 * * * *', async () => {
+  const { completed } = await autoCompleteShifts();
+  if (completed > 0) {
+    console.log(`[Scheduler] auto-complete-shifts: completed ${completed} booking(s)`);
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

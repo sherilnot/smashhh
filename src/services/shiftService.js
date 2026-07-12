@@ -275,17 +275,22 @@ async function bookShift(employeeId, shiftId) {
  * Requirements: 6.1–6.4
  */
 async function cancelShift(employeeId, shiftId) {
-  const result = await pool.query(
-    `UPDATE shift_bookings
-     SET booking_status = 'cancelled', cancelled_at = NOW()
-     WHERE shift_id = $1 AND employee_id = $2 AND booking_status = 'confirmed'
-     RETURNING id`,
-    [shiftId, employeeId]
-  );
-  if (!result.rows.length) {
-    return { success: false, error: 'No confirmed booking found for this shift' };
+  try {
+    const result = await pool.query(
+      `UPDATE shift_bookings
+       SET booking_status = 'cancelled', cancelled_at = NOW()
+       WHERE shift_id = $1 AND employee_id = $2 AND booking_status IN ('confirmed', 'pending')
+       RETURNING id`,
+      [shiftId, employeeId]
+    );
+    if (!result.rows.length) {
+      return { success: false, error: 'No active booking found for this shift' };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[ShiftService] cancelShift error', { error: error.message, stack: error.stack });
+    return { success: false, error: 'Cancel failed due to system error' };
   }
-  return { success: true };
 }
 
 /**
@@ -405,6 +410,54 @@ async function endShift(managerId, bookingId) {
   }
 }
 
+/**
+ * Automatically complete all confirmed bookings whose shift has already
+ * ended. Runs on a schedule so managers don't have to remember to manually
+ * end every shift — without this, a forgotten shift stays 'confirmed'
+ * forever and never counts toward wages/timesheets (which only include
+ * 'completed' bookings).
+ *
+ * Manual end-shift (via the manager's End Shift button) is unaffected and
+ * still works exactly as before — this only catches whatever a manager
+ * hasn't already ended by the time this job runs.
+ *
+ * @returns {Promise<{ completed: number }>}
+ */
+async function autoCompleteShifts() {
+  try {
+    // Skip any booking whose shift falls inside a week that already has a
+    // confirmed (locked) timesheet for that store. Auto-completing those
+    // would silently change hours behind an already-locked timesheet's
+    // back, creating a permanent mismatch between what was confirmed/sent
+    // to payroll and what the underlying data now shows. Those get left as
+    // 'confirmed' for the manager to reconcile manually instead.
+    const result = await pool.query(
+      `UPDATE shift_bookings sb
+       SET booking_status = 'completed',
+           completed_at = NOW()
+       FROM shifts s
+       WHERE sb.shift_id = s.id
+         AND sb.booking_status = 'confirmed'
+         AND s.end_time <= NOW()
+         AND NOT EXISTS (
+           SELECT 1 FROM timesheets t
+           WHERE t.store_id = s.store_id
+             AND t.status = 'confirmed'
+             AND s.start_time::date >= t.week_start
+             AND s.start_time::date <= t.week_start + INTERVAL '6 days'
+         )
+       RETURNING sb.id`
+    );
+    return { completed: result.rows.length };
+  } catch (error) {
+    console.error('[ShiftService] autoCompleteShifts error', {
+      error: error.message,
+      stack: error.stack
+    });
+    return { completed: 0 };
+  }
+}
+
 module.exports = {
   occupiedCount,
   validateBookingRequest,
@@ -413,5 +466,6 @@ module.exports = {
   bookShift,
   cancelShift,
   getEmployeeShifts,
+  autoCompleteShifts,
   endShift
 };

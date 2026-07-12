@@ -1,4 +1,6 @@
 const express = require('express');
+const path = require('path');
+const multer = require('multer');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
 const { endShift } = require('../services/shiftService');
@@ -8,6 +10,28 @@ const { generateTimesheet, submitTimesheet, confirmTimesheet } = require('../ser
 const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = require('../services/storeChecklistService');
 const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotificationLogs, getDeliveryRate } = require('../services/notificationTrackerService');
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
+const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
+
+// Multer config for cash photo uploads
+const cashStorage = multer.diskStorage({
+  destination: path.join(__dirname, '../../public/uploads/cash'),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'cash-' + uniqueSuffix + ext);
+  }
+});
+const cashUpload = multer({
+  storage: cashStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
@@ -1113,12 +1137,25 @@ router.post('/store-checklist/submit', async (req, res) => {
   try {
     const { checklistId, ...body } = req.body;
 
-    // Extract quantities from form (fields named qty_<itemId>)
+    // Determine which items were selected (checkbox fields named selected_<itemId>)
+    const selectedItems = new Set();
+    for (const [key, value] of Object.entries(body)) {
+      if (key.startsWith('selected_') && value === '1') {
+        selectedItems.add(key.replace('selected_', ''));
+      }
+    }
+
+    // Extract quantities only for selected items (fields named qty_<itemId>)
     const quantities = {};
     for (const [key, value] of Object.entries(body)) {
       if (key.startsWith('qty_')) {
         const itemId = key.replace('qty_', '');
-        quantities[itemId] = value;
+        if (selectedItems.has(itemId)) {
+          quantities[itemId] = value;
+        } else {
+          // Unselected items get cleared (empty quantity)
+          quantities[itemId] = '';
+        }
       }
     }
 
@@ -1191,20 +1228,23 @@ router.get('/received-invoice', async (req, res) => {
       return res.render('manager/received-invoice', {
         user: req.user,
         error: result.error,
-        invoice: null
+        invoice: null,
+        checklistPending: result.checklistPending || false
       });
     }
     res.render('manager/received-invoice', {
       user: req.user,
       error: req.query.error || null,
-      invoice: result.invoice
+      invoice: result.invoice,
+      checklistPending: false
     });
   } catch (e) {
     console.error('[Manager] received-invoice error', e);
     res.render('manager/received-invoice', {
       user: req.user,
       error: 'Failed to load invoice',
-      invoice: null
+      invoice: null,
+      checklistPending: false
     });
   }
 });
@@ -1232,16 +1272,33 @@ router.post('/received-invoice/submit', async (req, res) => {
   try {
     const { invoiceId, generalNotes } = req.body;
     
-    // Build items array from form data
+    // Determine which items were selected via checkboxes
+    const selectedItems = new Set();
+    for (const key in req.body) {
+      if (key.startsWith('selected_') && req.body[key] === '1') {
+        selectedItems.add(key.replace('selected_', ''));
+      }
+    }
+
+    // Build items array only for selected items
     const items = [];
     for (const key in req.body) {
       if (key.startsWith('quantity_')) {
         const itemId = key.replace('quantity_', '');
-        items.push({
-          itemId,
-          quantityReceived: req.body[`quantity_${itemId}`] || '',
-          itemNotes: req.body[`notes_${itemId}`] || ''
-        });
+        if (selectedItems.has(itemId)) {
+          items.push({
+            itemId,
+            quantityReceived: req.body[`quantity_${itemId}`] || '',
+            itemNotes: req.body[`notes_${itemId}`] || ''
+          });
+        } else {
+          // Unselected items get quantity cleared (won't appear in invoice)
+          items.push({
+            itemId,
+            quantityReceived: '0',
+            itemNotes: 'NOT SELECTED'
+          });
+        }
       }
     }
 
@@ -1253,6 +1310,84 @@ router.post('/received-invoice/submit', async (req, res) => {
   } catch (e) {
     console.error('[Manager] submit invoice error', e);
     res.redirect('/manager/received-invoice');
+  }
+});
+
+// Reopen a submitted invoice (reverts to draft and re-syncs from checklist)
+router.post('/received-invoice/reopen', async (req, res) => {
+  try {
+    const { invoiceId } = req.body;
+
+    // Verify invoice belongs to manager's store
+    const checkRes = await pool.query(
+      `SELECT ri.id, ri.status
+       FROM received_invoices ri
+       JOIN store_manager_assignments sma ON sma.store_id = ri.store_id
+       WHERE ri.id = $1 AND sma.manager_id = $2`,
+      [invoiceId, req.user.userId]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.redirect('/manager/received-invoice?error=' + encodeURIComponent('Invoice not found'));
+    }
+
+    // Revert status back to draft — the getOrCreateTodayInvoice will re-sync items from checklist
+    await pool.query(
+      `UPDATE received_invoices SET status = 'draft', submitted_at = NULL WHERE id = $1`,
+      [invoiceId]
+    );
+
+    res.redirect('/manager/received-invoice');
+  } catch (e) {
+    console.error('[Manager] reopen invoice error', e);
+    res.redirect('/manager/received-invoice?error=' + encodeURIComponent('Failed to reopen invoice'));
+  }
+});
+
+// ─── Cash Submissions (Send cash photos to OM001) ───────────────────────────────
+
+router.get('/cash', async (req, res) => {
+  try {
+    const result = await getManagerCashSubmissions(req.user.userId);
+    res.render('manager/cash', {
+      user: req.user,
+      submissions: result.success ? result.submissions : [],
+      error: result.success ? (req.query.error || null) : result.error,
+      success: req.query.success === '1'
+    });
+  } catch (e) {
+    console.error('[Manager] cash page error', e);
+    res.render('manager/cash', {
+      user: req.user,
+      submissions: [],
+      error: 'Failed to load page',
+      success: false
+    });
+  }
+});
+
+router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
+  try {
+    const { amount, notes } = req.body;
+    const parsedAmount = parseFloat(amount);
+
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      return res.redirect('/manager/cash?error=' + encodeURIComponent('Please enter a valid amount'));
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.redirect('/manager/cash?error=' + encodeURIComponent('Please upload at least one photo'));
+    }
+
+    const result = await createCashSubmission(req.user.userId, parsedAmount, notes, req.files);
+    if (!result.success) {
+      return res.redirect('/manager/cash?error=' + encodeURIComponent(result.error));
+    }
+
+    res.redirect('/manager/cash?success=1');
+  } catch (e) {
+    console.error('[Manager] cash submit error', e);
+    res.redirect('/manager/cash?error=' + encodeURIComponent('Failed to submit'));
   }
 });
 

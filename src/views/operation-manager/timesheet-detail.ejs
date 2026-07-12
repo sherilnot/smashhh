@@ -1,0 +1,97 @@
+<%- include('../partials/header', { title: 'Timesheet Detail', role: 'operation_manager', active: 'timesheets', wide: true }) %>
+
+  <h1>Timesheet Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (timesheet) { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <div><strong>Store:</strong> <%= timesheet.store_name %></div>
+        <div><strong>Week:</strong> <%= new Date(timesheet.week_start).toISOString().split('T')[0] %> — <%= new Date(timesheet.week_end).toISOString().split('T')[0] %></div>
+        <div><strong>By:</strong> <%= timesheet.submitted_first %> <%= timesheet.submitted_last %></div>
+        <div><strong>Submitted:</strong> <%= new Date(timesheet.submitted_at).toLocaleString('en-AU') %></div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div><strong><%= timesheet.employee_count %></strong><span>Employees</span></div>
+      <div><strong><%= parseFloat(timesheet.total_hours).toFixed(2) %></strong><span>Total Hours</span></div>
+      <div><strong>$<%= parseFloat(timesheet.total_wages || 0).toFixed(2) %></strong><span>Total Wages</span></div>
+    </div>
+
+    <% if (timesheet.timesheetRows && timesheet.timesheetRows.length > 0) { %>
+      <table style="table-layout: fixed; width: 100%;">
+        <colgroup>
+          <col style="width: 12%;">
+          <col style="width: 6%;">
+          <col style="width: 6%;">
+          <% timesheet.dayLabels.forEach(function() { %><col style="width: 9%;"><% }) %>
+          <col style="width: 7%;">
+          <col style="width: 7%;">
+          <col style="width: 7%;">
+          <col style="width: 8%;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Type</th>
+            <th>Rate</th>
+            <% timesheet.dayLabels.forEach(function(label, i) { %>
+              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= timesheet.dayDates[i].slice(5) %></span></th>
+            <% }) %>
+            <th class="amount">Weekday</th>
+            <th class="amount">Weekend</th>
+            <th class="amount">Total Hrs</th>
+            <th class="amount">Earned</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% timesheet.timesheetRows.forEach(function(row) { %>
+            <tr>
+              <td><strong><%= row.name %></strong></td>
+              <td>
+                <% if (row.employmentType === 'permanent') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); font-size: 0.7em;">Perm</span>
+                <% } else if (row.employmentType === 'casual') { %>
+                  <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); font-size: 0.7em;">Casual</span>
+                <% } else { %>
+                  <span style="color: var(--muted);">—</span>
+                <% } %>
+              </td>
+              <td class="amount"><span style="font-size: 0.85em;">$<%= parseFloat(row.hourly_wage || 0).toFixed(2) %></span></td>
+              <% row.byDay.forEach(function(cell) { %>
+                <td style="vertical-align: top; padding: 0.35rem;">
+                  <% if (cell) { %>
+                    <div style="padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
+                      <div style="font-weight: 600; color: #333;"><%= cell.label %></div>
+                      <div style="font-size: 0.85em; color: #666; margin-top: 0.15rem;"><%= cell.hours_worked.toFixed(2) %>h</div>
+                    </div>
+                  <% } else { %>
+                    <span style="color: var(--muted); font-size: 0.8em;">—</span>
+                  <% } %>
+                </td>
+              <% }) %>
+              <td class="amount"><%= row.weekdayHours.toFixed(2) %></td>
+              <td class="amount"><%= row.weekendHours.toFixed(2) %></td>
+              <td class="amount"><strong><%= row.totalHours.toFixed(2) %></strong></td>
+              <td class="amount"><strong style="color: var(--green);">$<%= row.totalEarned.toFixed(2) %></strong></td>
+            </tr>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="10"><strong>Total (<%= timesheet.employee_count %> employees)</strong></td>
+            <td class="amount"><strong><%= parseFloat(timesheet.total_hours).toFixed(2) %></strong></td>
+            <td class="amount"><strong style="color: var(--green);">$<%= parseFloat(timesheet.total_wages || 0).toFixed(2) %></strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    <% } %>
+
+    <p style="margin-top: 1.25rem;"><a href="/operation-manager/timesheets" style="color: var(--accent); font-weight: 700;">← Back to Timesheets</a></p>
+  <% } %>
+
+<%- include('../partials/footer') %>

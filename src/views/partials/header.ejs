@@ -11,6 +11,7 @@
       { key: 'dashboard', href: '/manager/dashboard',        icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'checklist', href: '/manager/store-checklist',  icon: 'clipboard-list',   label: 'Daily Checklist' },
       { key: 'invoice',   href: '/manager/received-invoice', icon: 'package-check',    label: 'Received Invoice' },
+      { key: 'cash',      href: '/manager/cash',             icon: 'banknote',         label: 'Cash Report' },
       { key: 'roster',    href: '/manager/roster',           icon: 'users',            label: 'Weekly Roster' },
       { key: 'timesheet', href: '/manager/timesheet',        icon: 'clock',            label: 'Timesheet' },
       { key: 'pending',   href: '/manager/pending',          icon: 'bell-dot',         label: 'Pending' },
@@ -27,7 +28,10 @@
       { key: 'invoices',   href: '/receiving-manager/received-invoices', icon: 'package-check', label: 'Received Invoices' }
     ],
     operation_manager: [
-      { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' }
+      { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'invoices',  href: '/operation-manager/invoices',  icon: 'package-check',    label: 'Invoices' },
+      { key: 'timesheets', href: '/operation-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
+      { key: 'cash',      href: '/operation-manager/cash',      icon: 'banknote',         label: 'Cash Reports' }
     ]
   };
   var items = menus[navRole] || [];

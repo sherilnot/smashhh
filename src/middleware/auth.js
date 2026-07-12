@@ -101,9 +101,18 @@ function roleGuard(role) {
       return res.redirect(LOGIN_PATH);
     }
 
-    // Authenticated but wrong role -> 403 Forbidden (Req 3.2, 3.4, 3.6).
+    // Authenticated but wrong role -> redirect to their correct dashboard
+    // instead of showing a confusing 403 (common when switching accounts in tabs).
     if (req.user.userRole !== role) {
-      return res.status(403).send('403 Forbidden: You do not have access to this resource.');
+      const dashboards = {
+        employee: '/employee/dashboard',
+        store_manager: '/manager/dashboard',
+        warehouse_manager: '/warehouse/dashboard',
+        receiving_manager: '/receiving-manager/dashboard',
+        operation_manager: '/operation-manager/dashboard'
+      };
+      const dest = dashboards[req.user.userRole] || LOGIN_PATH;
+      return res.redirect(dest);
     }
 
     // Role matches -> grant access (Req 3.1, 3.3, 3.5).

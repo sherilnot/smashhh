@@ -8,10 +8,19 @@
 
   <% var successParam = (typeof locals.query !== 'undefined' && locals.query && locals.query.success) ? locals.query.success : null; %>
   <% if (successParam === '1') { %>
-    <div class="msg">✅ Invoice submitted successfully to RM001!</div>
+    <div class="msg">✅ Invoice submitted successfully to OM001!</div>
   <% } %>
 
-  <% if (!invoice) { %>
+  <% if (typeof checklistPending !== 'undefined' && checklistPending) { %>
+    <div class="card" style="text-align: center; padding: 2rem;">
+      <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📋</div>
+      <h2 style="margin: 0 0 0.5rem;">Checklist Required First</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.25rem;">You need to submit today's daily checklist before you can create and send an invoice.</p>
+      <a href="/manager/store-checklist" class="btn" style="background: linear-gradient(180deg, var(--accent), var(--accent-dark)); color: white; padding: 10px 20px;">
+        Go to Daily Checklist
+      </a>
+    </div>
+  <% } else if (!invoice) { %>
     <div class="empty">Unable to load invoice. Make sure you're assigned to a store.</div>
   <% } else { %>
     <div class="card" style="margin-bottom: 1.25rem;">
@@ -29,53 +38,82 @@
       <form method="POST" action="/manager/received-invoice/submit">
         <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
         
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 5%;">#</th>
-              <th style="width: 25%;">Product</th>
-              <th style="width: 15%;">Ordered Qty</th>
-              <th style="width: 15%;">Received Qty</th>
-              <th style="width: 40%;">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (invoice.items && invoice.items.length > 0) { %>
-              <% invoice.items.forEach(function(item, idx) { %>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 3%;"><input type="checkbox" id="selectAllInvoice" checked title="Select/Deselect All"></th>
+                <th style="width: 4%;">#</th>
+                <th style="width: 20%;">Product</th>
+                <th style="width: 9%;">Ordered</th>
+                <th style="width: 11%;">Received Qty</th>
+                <th style="width: 9%;">Unit Price</th>
+                <th style="width: 11%;">Total</th>
+                <th style="width: 28%;">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (invoice.items && invoice.items.length > 0) { %>
+                <% var grandTotal = 0; %>
+                <% invoice.items.forEach(function(item, idx) { %>
+                  <% var price = parseFloat(item.unit_price) || 0; %>
+                  <% var qty = parseFloat(item.quantity_received) || 0; %>
+                  <% var lineTotal = price * qty; %>
+                  <% grandTotal += lineTotal; %>
+                  <tr>
+                    <td style="text-align:center;">
+                      <input type="checkbox" name="selected_<%= item.id %>" value="1" checked class="item-check-inv">
+                    </td>
+                    <td><%= idx + 1 %></td>
+                    <td><strong><%= item.product_name %></strong></td>
+                    <td style="text-align: center; color: var(--text-muted);">
+                      <%= item.quantity_ordered || '-' %>
+                    </td>
+                    <td>
+                      <input type="number" 
+                             name="quantity_<%= item.id %>" 
+                             value="<%= item.quantity_received || '' %>"
+                             placeholder="Qty"
+                             min="0"
+                             step="1"
+                             class="qty-input"
+                             data-price="<%= price %>"
+                             style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                    </td>
+                    <td style="text-align: center; font-weight: 500;">
+                      $<%= price.toFixed(2) %>
+                    </td>
+                    <td class="line-total" style="text-align: center; font-weight: 600;">
+                      $<%= lineTotal.toFixed(2) %>
+                    </td>
+                    <td>
+                      <input type="text" 
+                             name="notes_<%= item.id %>" 
+                             value="<%= item.item_notes || '' %>"
+                             placeholder="Any notes..."
+                             style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                    </td>
+                  </tr>
+                <% }); %>
+                <tr style="background: var(--surface-alt); font-weight: 700;">
+                  <td></td>
+                  <td colspan="5" style="text-align: right;">Grand Total:</td>
+                  <td id="grandTotal" style="text-align: center;">$<%= grandTotal.toFixed(2) %></td>
+                  <td></td>
+                </tr>
+              <% } else { %>
                 <tr>
-                  <td><%= idx + 1 %></td>
-                  <td><strong><%= item.product_name %></strong></td>
-                  <td style="text-align: center; color: var(--text-muted);">
-                    <%= item.quantity_ordered || '-' %>
-                  </td>
-                  <td>
-                    <input type="text" 
-                           name="quantity_<%= item.id %>" 
-                           value="<%= item.quantity_received || '' %>"
-                           placeholder="Qty received"
-                           style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
-                  </td>
-                  <td>
-                    <input type="text" 
-                           name="notes_<%= item.id %>" 
-                           value="<%= item.item_notes || '' %>"
-                           placeholder="Any notes or discrepancies..."
-                           style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                  <td colspan="8" class="empty">
+                    No items yet. Add items below or submit a checklist first to auto-populate.
                   </td>
                 </tr>
-              <% }); %>
-            <% } else { %>
-              <tr>
-                <td colspan="5" class="empty">
-                  No items yet. Add items below or submit a checklist first to auto-populate.
-                </td>
-              </tr>
-            <% } %>
-          </tbody>
-        </table>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
 
         <div style="margin-top: 1.25rem;">
-          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">General Notes for RM001:</label>
+          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">General Notes for OM001:</label>
           <textarea name="generalNotes" 
                     placeholder="Additional comments about this delivery..."
                     style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; min-height: 80px; resize: vertical;"></textarea>
@@ -83,7 +121,7 @@
 
         <div style="margin-top: 1.25rem; display: flex; gap: 10px;">
           <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--green), #388E3C); color: white;">
-            Submit Invoice to RM001
+            Submit Invoice to OM001
           </button>
           <button type="button" class="btn" onclick="toggleAddItem()" style="background: var(--surface-alt);">
             + Add Item
@@ -103,37 +141,56 @@
       </div>
 
     <% } else { %>
-      <!-- Submitted view (read-only) -->
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 5%;">#</th>
-            <th style="width: 25%;">Product</th>
-            <th style="width: 15%;">Ordered Qty</th>
-            <th style="width: 15%;">Received Qty</th>
-            <th style="width: 40%;">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (invoice.items && invoice.items.length > 0) { %>
-            <% invoice.items.forEach(function(item, idx) { %>
-              <tr>
-                <td><%= idx + 1 %></td>
-                <td><strong><%= item.product_name %></strong></td>
-                <td style="text-align: center; color: var(--text-muted);">
-                  <%= item.quantity_ordered || '-' %>
-                </td>
-                <td style="text-align: center; font-weight: 600;">
-                  <%= item.quantity_received || '-' %>
-                </td>
-                <td style="color: var(--text-muted);">
-                  <%= item.item_notes || '-' %>
-                </td>
+      <!-- Submitted view — with option to edit & resubmit -->
+      <div class="info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <span>✓ Invoice submitted to OM001.</span>
+        <form method="POST" action="/manager/received-invoice/reopen" style="margin: 0;">
+          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--mustard, #F4A300), #E09500); color: #333; font-size: 0.85rem;">✏️ Edit & Resubmit</button>
+        </form>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 4%;">#</th>
+              <th style="width: 28%;">Product</th>
+              <th style="width: 12%;">Qty</th>
+              <th style="width: 12%;">Unit Price</th>
+              <th style="width: 14%;">Total</th>
+              <th style="width: 30%;">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (invoice.items && invoice.items.length > 0) { %>
+              <% var grandTotal = 0; %>
+              <% var displayIdx = 0; %>
+              <% invoice.items.forEach(function(item) { %>
+                <% var price = parseFloat(item.unit_price) || 0; %>
+                <% var qty = parseFloat(item.quantity_received) || 0; %>
+                <% if (qty === 0 || item.item_notes === 'NOT SELECTED') return; %>
+                <% var lineTotal = price * qty; %>
+                <% grandTotal += lineTotal; %>
+                <% displayIdx++; %>
+                <tr>
+                  <td><%= displayIdx %></td>
+                  <td><strong><%= item.product_name %></strong></td>
+                  <td style="text-align: center; font-weight: 600;"><%= item.quantity_received %></td>
+                  <td style="text-align: center;">$<%= price.toFixed(2) %></td>
+                  <td style="text-align: center; font-weight: 600;">$<%= lineTotal.toFixed(2) %></td>
+                  <td style="color: var(--text-muted);"><%= item.item_notes || '-' %></td>
+                </tr>
+              <% }); %>
+              <tr style="background: var(--surface-alt); font-weight: 700;">
+                <td colspan="4" style="text-align: right;">Grand Total:</td>
+                <td style="text-align: center;">$<%= grandTotal.toFixed(2) %></td>
+                <td></td>
               </tr>
-            <% }); %>
-          <% } %>
-        </tbody>
-      </table>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
 
       <% if (invoice.notes) { %>
         <div class="card" style="margin-top: 1.25rem;">
@@ -147,6 +204,51 @@
     function toggleAddItem() {
       var form = document.getElementById('addItemForm');
       form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Select all checkbox for invoice items
+    var selectAll = document.getElementById('selectAllInvoice');
+    if (selectAll) {
+      selectAll.addEventListener('change', function() {
+        document.querySelectorAll('.item-check-inv').forEach(function(cb) { cb.checked = selectAll.checked; });
+        recalcGrandTotal();
+      });
+    }
+
+    // When a row is unchecked, zero out its contribution to the total
+    document.querySelectorAll('.item-check-inv').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        recalcGrandTotal();
+      });
+    });
+
+    // Live recalculation of line totals and grand total when quantity changes
+    document.querySelectorAll('.qty-input').forEach(function(input) {
+      input.addEventListener('input', function() {
+        var price = parseFloat(this.dataset.price) || 0;
+        var qty = parseFloat(this.value) || 0;
+        var lineTotal = price * qty;
+        var row = this.closest('tr');
+        var totalCell = row.querySelector('.line-total');
+        if (totalCell) {
+          totalCell.textContent = '$' + lineTotal.toFixed(2);
+        }
+        recalcGrandTotal();
+      });
+    });
+
+    function recalcGrandTotal() {
+      var rows = document.querySelectorAll('tbody tr');
+      var grand = 0;
+      rows.forEach(function(row) {
+        var cb = row.querySelector('.item-check-inv');
+        var totalCell = row.querySelector('.line-total');
+        if (cb && totalCell && cb.checked) {
+          grand += parseFloat(totalCell.textContent.replace('$', '')) || 0;
+        }
+      });
+      var el = document.getElementById('grandTotal');
+      if (el) el.textContent = '$' + grand.toFixed(2);
     }
   </script>
 

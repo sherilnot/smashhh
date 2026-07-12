@@ -1,0 +1,58 @@
+<%- include('../partials/header', { title: 'Timesheets', role: 'operation_manager', active: 'timesheets' }) %>
+
+  <h1>Timesheets</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (timesheets.length === 0 && !error) { %>
+    <div class="empty">No timesheets have been submitted yet.</div>
+  <% } else if (timesheets.length > 0) { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Store</th>
+          <th>Week</th>
+          <th class="amount">Employees</th>
+          <th class="amount">Total Hours</th>
+          <th>Status</th>
+          <th>Submitted</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% timesheets.forEach(function(ts) { %>
+          <tr>
+            <td><strong><%= ts.store_name %></strong></td>
+            <td><%= new Date(ts.week_start).toISOString().split('T')[0] %> — <%= new Date(ts.week_end).toISOString().split('T')[0] %></td>
+            <td class="amount"><%= ts.employee_count %></td>
+            <td class="amount"><%= parseFloat(ts.total_hours).toFixed(2) %></td>
+            <td>
+              <% if (ts.status === 'confirmed') { %>
+                <span class="badge" style="background: var(--green); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">CONFIRMED</span>
+              <% } else { %>
+                <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">SUBMITTED</span>
+              <% } %>
+            </td>
+            <td><%= new Date(ts.submitted_at).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %></td>
+            <td><a href="/operation-manager/timesheets/<%= ts.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <% if (totalPages > 1) { %>
+      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
+        <% if (page > 1) { %>
+          <a href="?page=<%= page - 1 %>" class="btn" style="padding: 4px 12px;">&laquo; Prev</a>
+        <% } %>
+        <span style="padding: 6px 12px; color: var(--text-muted);">Page <%= page %> of <%= totalPages %></span>
+        <% if (page < totalPages) { %>
+          <a href="?page=<%= page + 1 %>" class="btn" style="padding: 4px 12px;">Next &raquo;</a>
+        <% } %>
+      </div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

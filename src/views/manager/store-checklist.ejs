@@ -28,18 +28,19 @@
       <thead>
         <tr>
           <th style="width:5%">#</th>
-          <th style="width:45%">Product</th>
-          <th style="width:25%">Qty Needed</th>
-          <th style="width:25%">Qty To Bring</th>
+          <th style="width:55%">Product</th>
+          <th style="width:20%">Qty To Bring</th>
         </tr>
       </thead>
       <tbody>
-        <% checklist.items.forEach((item, idx) => { %>
+        <% var displayIdx = 0; %>
+        <% checklist.items.forEach((item) => { %>
+          <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || item.quantity_to_bring.trim() === '') return; %>
+          <% displayIdx++; %>
           <tr>
-            <td style="color: var(--muted);"><%= idx + 1 %></td>
+            <td style="color: var(--muted);"><%= displayIdx %></td>
             <td><%= item.product_name %></td>
-            <td><span class="badge"><%= item.quantity_needed %></span></td>
-            <td><strong><%= item.quantity_to_bring || '—' %></strong></td>
+            <td><strong><%= item.quantity_to_bring %></strong></td>
           </tr>
         <% }) %>
       </tbody>
@@ -51,8 +52,9 @@
       <table>
         <thead>
           <tr>
+            <th style="width:5%"><input type="checkbox" id="selectAllChecklist" checked title="Select/Deselect All"></th>
             <th style="width:5%">#</th>
-            <th style="width:40%">Product</th>
+            <th style="width:35%">Product</th>
             <th style="width:25%">Qty Needed</th>
             <th style="width:30%">Qty To Bring</th>
           </tr>
@@ -60,6 +62,9 @@
         <tbody>
           <% checklist.items.forEach((item, idx) => { %>
             <tr>
+              <td style="text-align:center;">
+                <input type="checkbox" name="selected_<%= item.id %>" value="1" checked class="item-check-cl">
+              </td>
               <td style="color: var(--muted);"><%= idx + 1 %></td>
               <td><strong><%= item.product_name %></strong></td>
               <td><span class="badge"><%= item.quantity_needed %></span></td>
@@ -78,6 +83,12 @@
         </button>
       </div>
     </form>
+
+    <script>
+      document.getElementById('selectAllChecklist').addEventListener('change', function() {
+        document.querySelectorAll('.item-check-cl').forEach(function(cb) { cb.checked = this.checked; }.bind(this));
+      });
+    </script>
   <% } %>
 
 <%- include('../partials/footer') %>

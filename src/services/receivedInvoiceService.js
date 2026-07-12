@@ -3,13 +3,49 @@ const { pool } = require('../config/database');
 /**
  * Received Invoice Service
  * Manages daily invoices where shop managers report actual quantities received from warehouse.
+ * Shop managers can edit quantities and the invoice is sent to the Operation Manager (OM001).
  */
 
 /**
+ * Generate a random unit price between min and max (inclusive).
+ * Used to assign a realistic random price to each item on creation.
+ */
+function randomUnitPrice(min = 1.5, max = 25.0) {
+  return Math.round((Math.random() * (max - min) + min) * 100) / 100;
+}
+
+/**
+ * Populate invoice items from the current checklist items.
+ * Only includes items that have a quantity_to_bring (items the manager selected).
+ */
+async function syncInvoiceItemsFromChecklist(client, invoiceId, checklistId) {
+  const checklistItemsRes = await client.query(
+    `SELECT product_name, quantity_to_bring, sort_order
+     FROM store_checklist_items
+     WHERE checklist_id = $1
+       AND quantity_to_bring IS NOT NULL
+       AND quantity_to_bring != ''
+       AND quantity_to_bring != '0'
+     ORDER BY sort_order`,
+    [checklistId]
+  );
+
+  for (const item of checklistItemsRes.rows) {
+    const unitPrice = randomUnitPrice();
+    await client.query(
+      `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_ordered, quantity_received, unit_price, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [invoiceId, item.product_name, item.quantity_to_bring || '', item.quantity_to_bring || '', unitPrice, item.sort_order]
+    );
+  }
+}
+
+/**
  * Get or create today's invoice for a manager's store.
- * Optionally populates items from today's submitted checklist.
+ * REQUIRES a submitted checklist for today — the invoice is based on the checklist.
+ * If no checklist has been submitted yet, returns a flag so the UI can block access.
  * @param {string} managerId
- * @returns {Promise<{ success: boolean, invoice?: object, error?: string }>}
+ * @returns {Promise<{ success: boolean, invoice?: object, checklistPending?: boolean, error?: string }>}
  */
 async function getOrCreateTodayInvoice(managerId) {
   const client = await pool.connect();
@@ -30,6 +66,21 @@ async function getOrCreateTodayInvoice(managerId) {
     const { store_id, store_name } = storeRes.rows[0];
     const today = new Date().toISOString().split('T')[0];
 
+    // Check if there's a submitted/reviewed checklist for today
+    const checklistRes = await client.query(
+      `SELECT id FROM store_checklists 
+       WHERE store_id = $1 AND check_date = $2 AND status IN ('submitted', 'reviewed')
+       LIMIT 1`,
+      [store_id, today]
+    );
+
+    // If no checklist submitted today, block invoice access
+    if (checklistRes.rows.length === 0) {
+      return { success: false, checklistPending: true, error: 'You must submit today\'s checklist before creating an invoice.' };
+    }
+
+    const checklistId = checklistRes.rows[0].id;
+
     // Check if invoice already exists for today
     let invoiceRes = await client.query(
       `SELECT * FROM received_invoices WHERE store_id = $1 AND invoice_date = $2`,
@@ -38,23 +89,10 @@ async function getOrCreateTodayInvoice(managerId) {
 
     let invoiceId;
     let status;
-    let checklistId = null;
 
     if (invoiceRes.rows.length === 0) {
-      // Create new invoice
+      // Create new invoice from today's checklist
       await client.query('BEGIN');
-
-      // Check if there's a submitted checklist for today to reference
-      const checklistRes = await client.query(
-        `SELECT id FROM store_checklists 
-         WHERE store_id = $1 AND check_date = $2 AND status IN ('submitted', 'reviewed')
-         LIMIT 1`,
-        [store_id, today]
-      );
-
-      if (checklistRes.rows.length > 0) {
-        checklistId = checklistRes.rows[0].id;
-      }
 
       const insertRes = await client.query(
         `INSERT INTO received_invoices (store_id, checklist_id, submitted_by, invoice_date, status)
@@ -64,35 +102,44 @@ async function getOrCreateTodayInvoice(managerId) {
       invoiceId = insertRes.rows[0].id;
       status = 'draft';
 
-      // If we have a checklist, populate invoice items from checklist items
-      if (checklistId) {
-        const checklistItemsRes = await client.query(
-          `SELECT product_name, quantity_to_bring, sort_order
-           FROM store_checklist_items
-           WHERE checklist_id = $1
-           ORDER BY sort_order`,
-          [checklistId]
-        );
-
-        for (const item of checklistItemsRes.rows) {
-          await client.query(
-            `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_ordered, quantity_received, sort_order)
-             VALUES ($1, $2, $3, '', $4)`,
-            [invoiceId, item.product_name, item.quantity_to_bring || '', item.sort_order]
-          );
-        }
-      }
+      // Populate invoice items from checklist items
+      await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
 
       await client.query('COMMIT');
     } else {
       invoiceId = invoiceRes.rows[0].id;
       status = invoiceRes.rows[0].status;
-      checklistId = invoiceRes.rows[0].checklist_id;
+
+      // If still in draft, sync items with the checklist every time the page loads.
+      // This ensures any checklist changes (re-submissions, edits) are reflected.
+      if (status === 'draft') {
+        const existingChecklistId = invoiceRes.rows[0].checklist_id;
+
+        // Always re-sync: delete old items and regenerate from checklist
+        await client.query('BEGIN');
+
+        // Update the checklist reference if it changed
+        if (existingChecklistId !== checklistId) {
+          await client.query(
+            `UPDATE received_invoices SET checklist_id = $1 WHERE id = $2`,
+            [checklistId, invoiceId]
+          );
+        }
+
+        // Remove old items and regenerate from current checklist
+        await client.query(
+          `DELETE FROM received_invoice_items WHERE invoice_id = $1`,
+          [invoiceId]
+        );
+        await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
+
+        await client.query('COMMIT');
+      }
     }
 
     // Fetch items
     const itemsRes = await client.query(
-      `SELECT id, product_name, quantity_ordered, quantity_received, item_notes, sort_order
+      `SELECT id, product_name, quantity_ordered, quantity_received, unit_price, item_notes, sort_order
        FROM received_invoice_items
        WHERE invoice_id = $1
        ORDER BY sort_order`,
@@ -157,9 +204,9 @@ async function addInvoiceItem(managerId, invoiceId, productName) {
 
     // Add item
     await client.query(
-      `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_received, sort_order)
-       VALUES ($1, $2, '', $3)`,
-      [invoiceId, productName, nextOrder]
+      `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_received, unit_price, sort_order)
+       VALUES ($1, $2, '', $3, $4)`,
+      [invoiceId, productName, randomUnitPrice(), nextOrder]
     );
 
     return { success: true };
@@ -274,7 +321,7 @@ async function getInvoiceDetail(invoiceId) {
   try {
     const invoiceRes = await pool.query(
       `SELECT ri.id, ri.invoice_date, ri.status, ri.submitted_at, ri.notes,
-              s.name AS store_name, s.location,
+              s.name AS store_name,
               u.first_name, u.last_name
        FROM received_invoices ri
        JOIN stores s ON s.id = ri.store_id
@@ -290,7 +337,7 @@ async function getInvoiceDetail(invoiceId) {
     const invoice = invoiceRes.rows[0];
 
     const itemsRes = await pool.query(
-      `SELECT id, product_name, quantity_ordered, quantity_received, item_notes
+      `SELECT id, product_name, quantity_ordered, quantity_received, unit_price, item_notes
        FROM received_invoice_items
        WHERE invoice_id = $1
        ORDER BY sort_order`,

@@ -1,12 +1,227 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
+const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
+const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
+const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('operation_manager'));
 
-// Placeholder dashboard — functionality to be added later.
+// Dashboard — redirect to invoices list
 router.get('/dashboard', (req, res) => {
-  res.render('operation-manager/dashboard', { user: req.user });
+  res.redirect('/operation-manager/invoices');
+});
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+// List all submitted invoices from shop managers
+router.get('/invoices', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { invoices, total } = await getSubmittedInvoices(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('operation-manager/invoices', {
+      user: req.user,
+      invoices,
+      page,
+      totalPages,
+      total
+    });
+  } catch (e) {
+    console.error('[OperationManager] invoices error', e);
+    res.render('operation-manager/invoices', {
+      user: req.user,
+      invoices: [],
+      page: 1,
+      totalPages: 0,
+      total: 0
+    });
+  }
+});
+
+// View a specific invoice detail
+router.get('/invoices/:id', async (req, res) => {
+  try {
+    const result = await getInvoiceDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('operation-manager/invoice-detail', {
+        user: req.user,
+        invoice: null,
+        error: result.error
+      });
+    }
+    res.render('operation-manager/invoice-detail', {
+      user: req.user,
+      invoice: result.invoice,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] invoice detail error', e);
+    res.status(500).render('operation-manager/invoice-detail', {
+      user: req.user,
+      invoice: null,
+      error: 'Failed to load invoice'
+    });
+  }
+});
+
+// Download invoice as CSV
+router.get('/invoices/:id/download', async (req, res) => {
+  try {
+    const result = await getInvoiceDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).send('Invoice not found');
+    }
+
+    const invoice = result.invoice;
+    const rows = [['#', 'Product', 'Ordered Qty', 'Received Qty', 'Unit Price', 'Total', 'Notes']];
+
+    let grandTotal = 0;
+    let idx = 0;
+    (invoice.items || []).forEach(item => {
+      const price = parseFloat(item.unit_price) || 0;
+      const qty = parseFloat(item.quantity_received) || 0;
+      if (item.item_notes === 'NOT SELECTED' || qty === 0) return;
+      const lineTotal = price * qty;
+      grandTotal += lineTotal;
+      idx++;
+      rows.push([
+        idx,
+        `"${(item.product_name || '').replace(/"/g, '""')}"`,
+        item.quantity_ordered || '',
+        item.quantity_received || '',
+        price.toFixed(2),
+        lineTotal.toFixed(2),
+        `"${(item.item_notes || '').replace(/"/g, '""')}"`
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(['', '', '', '', 'Grand Total:', grandTotal.toFixed(2), '']);
+
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const filename = `invoice_${invoice.store_name.replace(/\s+/g, '_')}_${invoice.invoice_date}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    console.error('[OperationManager] invoice download error', e);
+    res.status(500).send('Failed to generate download');
+  }
+});
+
+// ─── Timesheets ───────────────────────────────────────────────────────────────
+
+// List submitted timesheets
+router.get('/timesheets', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { timesheets, total } = await getSubmittedTimesheets(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('operation-manager/timesheets', {
+      user: req.user,
+      timesheets,
+      page,
+      totalPages,
+      total,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] timesheets error', e);
+    res.render('operation-manager/timesheets', {
+      user: req.user,
+      timesheets: [],
+      page: 1,
+      totalPages: 0,
+      total: 0,
+      error: 'Failed to load timesheets'
+    });
+  }
+});
+
+// View timesheet detail
+router.get('/timesheets/:id', async (req, res) => {
+  try {
+    const result = await getTimesheetDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('operation-manager/timesheet-detail', {
+        user: req.user,
+        timesheet: null,
+        error: result.error
+      });
+    }
+    res.render('operation-manager/timesheet-detail', {
+      user: req.user,
+      timesheet: result.timesheet,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] timesheet detail error', e);
+    res.status(500).render('operation-manager/timesheet-detail', {
+      user: req.user,
+      timesheet: null,
+      error: 'Failed to load timesheet'
+    });
+  }
+});
+
+// Download timesheet as CSV — removed per requirements
+
+// ─── Cash Reports ─────────────────────────────────────────────────────────────
+
+// List all cash submissions
+router.get('/cash', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { submissions, total } = await getAllCashSubmissions(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('operation-manager/cash', {
+      user: req.user,
+      submissions,
+      page,
+      totalPages,
+      total
+    });
+  } catch (e) {
+    console.error('[OperationManager] cash list error', e);
+    res.render('operation-manager/cash', {
+      user: req.user,
+      submissions: [],
+      page: 1,
+      totalPages: 0,
+      total: 0
+    });
+  }
+});
+
+// View cash submission detail
+router.get('/cash/:id', async (req, res) => {
+  try {
+    const result = await getCashSubmissionDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('operation-manager/cash-detail', {
+        user: req.user,
+        submission: null,
+        error: result.error
+      });
+    }
+    res.render('operation-manager/cash-detail', {
+      user: req.user,
+      submission: result.submission,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] cash detail error', e);
+    res.status(500).render('operation-manager/cash-detail', {
+      user: req.user,
+      submission: null,
+      error: 'Failed to load submission'
+    });
+  }
 });
 
 module.exports = router;

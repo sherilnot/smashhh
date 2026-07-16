@@ -1,8 +1,14 @@
 const express = require('express');
+const path = require('path');
 const { requireAuth, roleGuard } = require('../middleware/auth');
+const { pool } = require('../config/database');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
 const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
+const { getAllManagementReports, getManagementReportDetail } = require('../services/managementReportService');
+
+const CASH_UPLOAD_DIR = path.join(__dirname, '../../uploads/cash');
+const REPORT_UPLOAD_DIR = path.join(__dirname, '../../uploads/reports');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('operation_manager'));
@@ -221,6 +227,112 @@ router.get('/cash/:id', async (req, res) => {
       submission: null,
       error: 'Failed to load submission'
     });
+  }
+});
+
+// Serve a cash submission photo — requires auth (operation_manager only via
+// the roleGuard applied to this whole router). Uploaded files live outside
+// public/ specifically so they can never be reached without going through
+// this check.
+router.get('/cash/photo/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    if (path.basename(filename) !== filename) {
+      return res.status(400).send('Invalid filename');
+    }
+
+    const existsRes = await pool.query(
+      `SELECT 1 FROM cash_submission_images WHERE filename = $1`,
+      [filename]
+    );
+    if (existsRes.rows.length === 0) {
+      return res.status(404).send('Not found');
+    }
+
+    res.sendFile(path.join(CASH_UPLOAD_DIR, filename));
+  } catch (e) {
+    console.error('[OperationManager] cash photo error', e);
+    res.status(500).send('Failed to load photo');
+  }
+});
+
+// ─── Management Reports ────────────────────────────────────────────────────────
+
+// List all management reports
+router.get('/reports', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { reports, total } = await getAllManagementReports(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('operation-manager/reports', {
+      user: req.user,
+      reports,
+      page,
+      totalPages,
+      total
+    });
+  } catch (e) {
+    console.error('[OperationManager] reports list error', e);
+    res.render('operation-manager/reports', {
+      user: req.user,
+      reports: [],
+      page: 1,
+      totalPages: 0,
+      total: 0
+    });
+  }
+});
+
+// View management report detail
+router.get('/reports/:id', async (req, res) => {
+  try {
+    const result = await getManagementReportDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('operation-manager/report-detail', {
+        user: req.user,
+        report: null,
+        error: result.error
+      });
+    }
+    res.render('operation-manager/report-detail', {
+      user: req.user,
+      report: result.report,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] report detail error', e);
+    res.status(500).render('operation-manager/report-detail', {
+      user: req.user,
+      report: null,
+      error: 'Failed to load report'
+    });
+  }
+});
+
+// Serve a management report photo — requires auth (operation_manager only
+// via the roleGuard applied to this whole router). Uploaded files live
+// outside public/ specifically so they can never be reached without going
+// through this check.
+router.get('/reports/photo/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    if (path.basename(filename) !== filename) {
+      return res.status(400).send('Invalid filename');
+    }
+
+    const existsRes = await pool.query(
+      `SELECT 1 FROM management_report_images WHERE filename = $1`,
+      [filename]
+    );
+    if (existsRes.rows.length === 0) {
+      return res.status(404).send('Not found');
+    }
+
+    res.sendFile(path.join(REPORT_UPLOAD_DIR, filename));
+  } catch (e) {
+    console.error('[OperationManager] report photo error', e);
+    res.status(500).send('Failed to load photo');
   }
 });
 

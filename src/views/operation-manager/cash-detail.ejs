@@ -39,8 +39,8 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
         <% submission.images.forEach(function(img) { %>
           <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-            <a href="/uploads/cash/<%= img.filename %>" target="_blank">
-              <img src="/uploads/cash/<%= img.filename %>" alt="<%= img.original_name %>"
+            <a href="/operation-manager/cash/photo/<%= img.filename %>" target="_blank">
+              <img src="/operation-manager/cash/photo/<%= img.filename %>" alt="<%= img.original_name %>"
                    style="width: 100%; height: 200px; object-fit: cover; display: block;">
             </a>
             <div style="padding: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">

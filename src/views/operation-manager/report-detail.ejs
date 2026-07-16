@@ -1,0 +1,53 @@
+<%- include('../partials/header', { title: 'Report Detail', role: 'operation_manager', active: 'reports' }) %>
+
+  <h1>Report Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (!report) { %>
+    <div class="empty">Report not found.</div>
+  <% } else { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <strong><%= report.store_name %></strong>
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.85rem;">
+          <%= new Date(report.submitted_at).toLocaleString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+        </div>
+      </div>
+      <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
+        Submitted by: <strong><%= report.first_name %> <%= report.last_name %></strong>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <strong>Report:</strong>
+      <p style="margin-top: 0.5rem; white-space: pre-wrap;"><%= report.report_text %></p>
+    </div>
+
+    <% if (report.images && report.images.length > 0) { %>
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Photos</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+        <% report.images.forEach(function(img) { %>
+          <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+            <a href="/operation-manager/reports/photo/<%= img.filename %>" target="_blank">
+              <img src="/operation-manager/reports/photo/<%= img.filename %>" alt="<%= img.original_name %>"
+                   style="width: 100%; height: 200px; object-fit: cover; display: block;">
+            </a>
+            <div style="padding: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+              <%= img.original_name %> (<%= Math.round(img.file_size / 1024) %>KB)
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <div style="margin-top: 1.5rem;">
+      <a href="/operation-manager/reports" class="btn" style="padding: 6px 16px;">&larr; Back to Reports</a>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

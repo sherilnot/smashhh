@@ -17,6 +17,15 @@ function randomUnitPrice(min = 1.5, max = 25.0) {
 /**
  * Populate invoice items from the current checklist items.
  * Only includes items that have a quantity_to_bring (items the manager selected).
+ *
+ * Non-destructive: this is called both when creating a fresh invoice AND on
+ * every subsequent page load while the invoice is still a draft (so checklist
+ * edits stay reflected). Items already on the invoice (matched by
+ * product_name) are left completely untouched — previously fixed this
+ * silently wiping a manager's entered quantity_received/item_notes on every
+ * page reload by deleting and recreating every row. Only genuinely new
+ * checklist items get inserted, and only invoice items whose product is no
+ * longer on the checklist get removed.
  */
 async function syncInvoiceItemsFromChecklist(client, invoiceId, checklistId) {
   const checklistItemsRes = await client.query(
@@ -30,13 +39,31 @@ async function syncInvoiceItemsFromChecklist(client, invoiceId, checklistId) {
     [checklistId]
   );
 
+  const existingRes = await client.query(
+    `SELECT id, product_name FROM received_invoice_items WHERE invoice_id = $1`,
+    [invoiceId]
+  );
+  const existingByName = new Map(existingRes.rows.map(r => [r.product_name, r.id]));
+  const checklistNames = new Set(checklistItemsRes.rows.map(r => r.product_name));
+
+  // Insert only items that aren't already on the invoice.
   for (const item of checklistItemsRes.rows) {
+    if (existingByName.has(item.product_name)) continue;
     const unitPrice = randomUnitPrice();
     await client.query(
       `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_ordered, quantity_received, unit_price, sort_order)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [invoiceId, item.product_name, item.quantity_to_bring || '', item.quantity_to_bring || '', unitPrice, item.sort_order]
     );
+  }
+
+  // Remove invoice items whose product was removed from the checklist
+  // (deselected or quantity cleared) — these are the only rows safe to drop
+  // since they no longer correspond to anything the manager is meant to report on.
+  for (const [name, id] of existingByName) {
+    if (!checklistNames.has(name)) {
+      await client.query(`DELETE FROM received_invoice_items WHERE id = $1`, [id]);
+    }
   }
 }
 
@@ -126,11 +153,11 @@ async function getOrCreateTodayInvoice(managerId) {
           );
         }
 
-        // Remove old items and regenerate from current checklist
-        await client.query(
-          `DELETE FROM received_invoice_items WHERE invoice_id = $1`,
-          [invoiceId]
-        );
+        // Sync with the current checklist state (adds newly-selected
+        // items, removes items no longer on the checklist) without
+        // touching any item that's still on it — see
+        // syncInvoiceItemsFromChecklist for why the previous
+        // delete-everything-then-recreate approach was removed.
         await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
 
         await client.query('COMMIT');

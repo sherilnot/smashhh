@@ -79,15 +79,15 @@ router.post('/book-weekly-shifts', async (req, res) => {
     const { hasSubmitted, submittedAt } = await hasSubmittedThisWeek(req.user.userId);
     if (hasSubmitted) {
       console.log('[Employee] Submission blocked - already submitted at:', submittedAt);
-      return res.redirect('/employee/shifts?error=' + encodeURIComponent('You have already submitted your shifts for next week. You can submit again next Wednesday.'));
+      return res.redirect('/employee/shifts?error=' + encodeURIComponent('You have already submitted your shifts for next week. You can submit again next Monday.'));
     }
     
-    // Validate submission window (Wed-Sat only)
+    // Validate submission window (Mon-Sat only)
     const now = new Date();
     const currentDay = now.getDay();
-    if (currentDay < 3 || currentDay > 6) {
+    if (currentDay === 0) {
       console.log('[Employee] Submission blocked - outside window. Current day:', currentDay);
-      return res.redirect('/employee/shifts?error=' + encodeURIComponent('Shift booking is only available Wednesday to Saturday'));
+      return res.redirect('/employee/shifts?error=' + encodeURIComponent('Shift booking is only available Monday to Saturday'));
     }
 
     const { pool } = require('../config/database');

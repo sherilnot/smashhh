@@ -23,6 +23,7 @@
     </div>
 
     <% if (timesheet.timesheetRows && timesheet.timesheetRows.length > 0) { %>
+      <div class="table-scroll">
       <table style="table-layout: fixed; width: 100%;">
         <colgroup>
           <col style="width: 12%;">
@@ -89,6 +90,7 @@
           </tr>
         </tfoot>
       </table>
+      </div>
     <% } %>
 
     <p style="margin-top: 1.25rem;"><a href="/operation-manager/timesheets" style="color: var(--accent); font-weight: 700;">← Back to Timesheets</a></p>

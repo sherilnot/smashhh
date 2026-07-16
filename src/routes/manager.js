@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getPendingRequests, confirmBooking, rejectBooking } = require('../services/confirmationService');
@@ -11,19 +12,105 @@ const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = req
 const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotificationLogs, getDeliveryRate } = require('../services/notificationTrackerService');
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
+const { createManagementReport, getManagerReports } = require('../services/managementReportService');
 
-// Multer config for cash photo uploads
-const cashStorage = multer.diskStorage({
-  destination: path.join(__dirname, '../../public/uploads/cash'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, 'cash-' + uniqueSuffix + ext);
+// Multer config for cash photo uploads.
+//
+// Security: uploads are stored OUTSIDE public/ (so they're never served by
+// express.static() to unauthenticated requests) and are only ever exposed
+// through the authenticated /manager/cash/photo/:filename and
+// /operation-manager/cash/photo/:filename routes below. The saved filename
+// always uses a fixed, server-generated extension chosen from an allowlist
+// based on the file's actual signature — never the client-supplied
+// originalname or mimetype, both of which are trivially spoofable and were
+// previously used to let arbitrary file types (proved: a raw .php webshell)
+// get stored and served as static files.
+const CASH_UPLOAD_DIR = path.join(__dirname, '../../uploads/cash');
+fs.mkdirSync(CASH_UPLOAD_DIR, { recursive: true });
+
+// Minimal magic-byte signatures for the image formats we accept. Checking
+// actual file content (rather than trusting the client-supplied Content-Type
+// header) prevents disguising a non-image file as an image upload.
+const IMAGE_SIGNATURES = [
+  { ext: '.jpg', bytes: [0xff, 0xd8, 0xff] },
+  { ext: '.png', bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { ext: '.gif', bytes: [0x47, 0x49, 0x46, 0x38] },
+  { ext: '.webp', bytes: [0x52, 0x49, 0x46, 0x46], offset: 0, webp: true } // RIFF....WEBP
+];
+
+function detectImageExtension(buffer) {
+  for (const sig of IMAGE_SIGNATURES) {
+    if (buffer.length < sig.bytes.length) continue;
+    const matches = sig.bytes.every((b, i) => buffer[i] === b);
+    if (matches) {
+      if (sig.webp) {
+        // WEBP: bytes 0-3 are 'RIFF', bytes 8-11 must be 'WEBP'.
+        const isWebp = buffer.length >= 12 &&
+          buffer.slice(8, 12).toString('ascii') === 'WEBP';
+        if (isWebp) return '.webp';
+        continue;
+      }
+      return sig.ext;
+    }
+  }
+  return null;
+}
+
+// Use memory storage first so we can inspect the actual file bytes before
+// deciding whether/how to persist it to disk.
+const cashUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+  fileFilter: (req, file, cb) => {
+    // Cheap first-pass filter on the client-claimed type; the authoritative
+    // check happens after upload via detectImageExtension() on the real
+    // bytes, since this header is attacker-controlled.
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
   }
 });
-const cashUpload = multer({
-  storage: cashStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+
+/**
+ * Persist multer's in-memory files to disk after verifying their real
+ * content is actually an image, using a safe server-generated filename.
+ * Files that fail content verification are silently dropped rather than
+ * saved — the caller should treat req.files as this filtered/rewritten set.
+ *
+ * @param {Array} files - req.files from multer memoryStorage
+ * @returns {Array<{ filename, originalname, mimetype, size }>}
+ */
+function persistVerifiedCashPhotos(files) {
+  const saved = [];
+  for (const file of files || []) {
+    const ext = detectImageExtension(file.buffer);
+    if (!ext) continue; // not a real image — drop it
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = 'cash-' + uniqueSuffix + ext;
+    fs.writeFileSync(path.join(CASH_UPLOAD_DIR, filename), file.buffer);
+    saved.push({
+      filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+  }
+  return saved;
+}
+
+// Same idea as CASH_UPLOAD_DIR/persistVerifiedCashPhotos above, but for
+// management report photos. Kept as a separate directory/prefix so report
+// images and cash images never collide or get mixed up, even though the
+// underlying validation (real image content check, safe generated filename)
+// is identical.
+const REPORT_UPLOAD_DIR = path.join(__dirname, '../../uploads/reports');
+fs.mkdirSync(REPORT_UPLOAD_DIR, { recursive: true });
+
+const reportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -32,6 +119,24 @@ const cashUpload = multer({
     }
   }
 });
+
+function persistVerifiedReportPhotos(files) {
+  const saved = [];
+  for (const file of files || []) {
+    const ext = detectImageExtension(file.buffer);
+    if (!ext) continue; // not a real image — drop it
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const filename = 'report-' + uniqueSuffix + ext;
+    fs.writeFileSync(path.join(REPORT_UPLOAD_DIR, filename), file.buffer);
+    saved.push({
+      filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+  }
+  return saved;
+}
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('store_manager'));
@@ -1379,7 +1484,15 @@ router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
       return res.redirect('/manager/cash?error=' + encodeURIComponent('Please upload at least one photo'));
     }
 
-    const result = await createCashSubmission(req.user.userId, parsedAmount, notes, req.files);
+    // Verify each file's actual content is a real image before persisting
+    // to disk; anything that fails the signature check (e.g. a non-image
+    // file disguised with an image MIME type) is silently dropped.
+    const verifiedFiles = persistVerifiedCashPhotos(req.files);
+    if (verifiedFiles.length === 0) {
+      return res.redirect('/manager/cash?error=' + encodeURIComponent('None of the uploaded files were valid images'));
+    }
+
+    const result = await createCashSubmission(req.user.userId, parsedAmount, notes, verifiedFiles);
     if (!result.success) {
       return res.redirect('/manager/cash?error=' + encodeURIComponent(result.error));
     }
@@ -1388,6 +1501,114 @@ router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
   } catch (e) {
     console.error('[Manager] cash submit error', e);
     res.redirect('/manager/cash?error=' + encodeURIComponent('Failed to submit'));
+  }
+});
+
+// Serve a cash submission photo — requires auth and store-scoped access, so
+// uploaded financial evidence is never reachable by an unauthenticated
+// request the way it was when these files lived under public/uploads.
+router.get('/cash/photo/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    // Guard against path traversal in the filename param itself.
+    if (path.basename(filename) !== filename) {
+      return res.status(400).send('Invalid filename');
+    }
+
+    const ownsRes = await pool.query(
+      `SELECT 1 FROM cash_submission_images csi
+       JOIN cash_submissions cs ON cs.id = csi.submission_id
+       JOIN store_manager_assignments sma ON sma.store_id = cs.store_id
+       WHERE csi.filename = $1 AND sma.manager_id = $2`,
+      [filename, req.user.userId]
+    );
+    if (ownsRes.rows.length === 0) {
+      return res.status(404).send('Not found');
+    }
+
+    res.sendFile(path.join(CASH_UPLOAD_DIR, filename));
+  } catch (e) {
+    console.error('[Manager] cash photo error', e);
+    res.status(500).send('Failed to load photo');
+  }
+});
+
+// ─── Management Reports (Send text + photos to OM001) ──────────────────────────
+
+router.get('/reports', async (req, res) => {
+  try {
+    const result = await getManagerReports(req.user.userId);
+    res.render('manager/reports', {
+      user: req.user,
+      reports: result.success ? result.reports : [],
+      error: result.success ? (req.query.error || null) : result.error,
+      success: req.query.success === '1'
+    });
+  } catch (e) {
+    console.error('[Manager] reports page error', e);
+    res.render('manager/reports', {
+      user: req.user,
+      reports: [],
+      error: 'Failed to load page',
+      success: false
+    });
+  }
+});
+
+router.post('/reports/submit', reportUpload.array('photos', 5), async (req, res) => {
+  try {
+    const { reportText } = req.body;
+
+    if (!reportText || !reportText.trim()) {
+      return res.redirect('/manager/reports?error=' + encodeURIComponent('Please enter a report'));
+    }
+
+    // Verify each file's actual content is a real image before persisting
+    // to disk; anything that fails the signature check (e.g. a non-image
+    // file disguised with an image MIME type) is silently dropped.
+    const verifiedFiles = req.files && req.files.length > 0 ? persistVerifiedReportPhotos(req.files) : [];
+    if (req.files && req.files.length > 0 && verifiedFiles.length === 0) {
+      return res.redirect('/manager/reports?error=' + encodeURIComponent('None of the uploaded files were valid images'));
+    }
+
+    const result = await createManagementReport(req.user.userId, reportText.trim(), verifiedFiles);
+    if (!result.success) {
+      return res.redirect('/manager/reports?error=' + encodeURIComponent(result.error));
+    }
+
+    res.redirect('/manager/reports?success=1');
+  } catch (e) {
+    console.error('[Manager] reports submit error', e);
+    res.redirect('/manager/reports?error=' + encodeURIComponent('Failed to submit'));
+  }
+});
+
+// Serve a management report photo — requires auth and store-scoped access,
+// so uploaded report evidence is never reachable by an unauthenticated
+// request.
+router.get('/reports/photo/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    // Guard against path traversal in the filename param itself.
+    if (path.basename(filename) !== filename) {
+      return res.status(400).send('Invalid filename');
+    }
+
+    const ownsRes = await pool.query(
+      `SELECT 1 FROM management_report_images mri
+       JOIN management_reports mr ON mr.id = mri.report_id
+       JOIN store_manager_assignments sma ON sma.store_id = mr.store_id
+       WHERE mri.filename = $1 AND sma.manager_id = $2`,
+      [filename, req.user.userId]
+    );
+    if (ownsRes.rows.length === 0) {
+      return res.status(404).send('Not found');
+    }
+
+    res.sendFile(path.join(REPORT_UPLOAD_DIR, filename));
+  } catch (e) {
+    console.error('[Manager] report photo error', e);
+    res.status(500).send('Failed to load photo');
   }
 });
 

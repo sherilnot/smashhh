@@ -84,6 +84,60 @@ a:hover { color: var(--ketchup-dark); }
   border: 1px solid rgba(255,255,255,0.1);
 }
 
+/* ---------- Hamburger button (mobile drawer trigger) ---------- */
+.hamburger-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-right: 0.6rem;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover { background: rgba(255,255,255,0.16); transform: none; box-shadow: none; }
+.hamburger-btn .nav-icon { width: 20px; height: 20px; }
+
+/* Hand-drawn three-bar icon so the button is always visible even if the
+   Lucide icon script fails to load (e.g. blocked by a browser's tracker
+   protection or a slow/flaky connection through a tunnel). */
+.hamburger-icon {
+  display: block;
+  width: 18px;
+  height: 13px;
+  position: relative;
+}
+.hamburger-icon span {
+  display: block;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #fff;
+  border-radius: 2px;
+}
+.hamburger-icon span:nth-child(1) { top: 0; }
+.hamburger-icon span:nth-child(2) { top: 5.5px; }
+.hamburger-icon span:nth-child(3) { top: 11px; }
+
+/* ---------- Sidebar overlay (mobile drawer backdrop) ---------- */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 15, 5, 0.5);
+  z-index: 89;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.sidebar-overlay.visible { display: block; opacity: 1; }
+
 /* ---------- Layout ---------- */
 .layout { display: flex; min-height: calc(100vh - 60px); }
 
@@ -374,18 +428,82 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
 
 /* ---------- Responsive ---------- */
 @media (max-width: 768px) {
-  .layout { flex-direction: column; }
-  .sidebar {
-    width: 100%; flex-direction: row; overflow-x: auto; padding: 0.5rem 0.75rem;
-    gap: 0; border-right: none; border-bottom: 1px solid var(--border);
+  .hamburger-btn { display: flex; }
+  .brand { font-size: 1rem; gap: 0.4rem; }
+  .brand svg { width: 19px; height: 19px; }
+  .topbar { padding: 0 0.9rem; height: 54px; }
+  .topbar .who {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.55rem;
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .sidebar .section-label { display: none; }
-  .sidebar .logout { margin-top: 0; margin-left: auto; }
-  .sidebar .logout button { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
-  .content { padding: 1.25rem 1rem; }
-  .summary { flex-wrap: wrap; gap: 1rem; }
-  table { font-size: 0.85rem; }
-  th, td { padding: 0.5rem 0.6rem; }
+
+  .layout { flex-direction: column; }
+
+  /* Sidebar becomes an off-canvas drawer instead of a horizontal-scroll strip */
+  .sidebar {
+    position: fixed;
+    top: 54px;
+    left: 0;
+    bottom: 0;
+    width: min(78vw, 280px);
+    max-width: 280px;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    z-index: 90;
+    padding: 1rem 0.75rem;
+    gap: 2px;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 8px 0 30px rgba(61, 30, 6, 0.15);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar .section-label { display: block; }
+  .sidebar a { padding: 0.75rem 0.9rem; font-size: 0.95rem; }
+  .sidebar .logout { margin-top: 1rem; margin-left: 0; }
+  .sidebar .logout button { padding: 0.75rem 0.9rem; font-size: 0.95rem; }
+
+  /* Reduce overall clutter: tighter content padding, smaller headings */
+  .content { padding: 1rem 0.85rem; }
+  .content h1 { font-size: 1.2rem; margin-bottom: 1rem; }
+  .content h2 { font-size: 0.9rem; margin: 1.25rem 0 0.6rem; }
+
+  .card { padding: 0.85rem 1rem; margin-bottom: 1rem; }
+
+  .summary { flex-wrap: wrap; gap: 0.75rem; padding: 0.85rem 1rem; }
+  .summary strong { font-size: 1.15rem; }
+
+  /* Tables: on mobile, let tables scroll horizontally at their natural
+     content width instead of being squeezed to fit the screen. Previously
+     thead/tbody were each set to display:table independently, which made
+     the browser compute column widths for the header and body SEPARATELY
+     — so each day's header no longer lined up with that day's shift cells
+     underneath it. The reliable fix is to leave <table> and its children
+     completely untouched (so the browser's native single shared
+     column-width algorithm keeps header and body columns aligned) and
+     instead scroll a wrapping container around it — see .table-scroll. */
+  table { font-size: 0.8rem; }
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 0.5rem;
+  }
+  .table-scroll table { margin-top: 0; width: auto; }
+  th, td { padding: 0.5rem 0.6rem; white-space: nowrap; }
+
+  .btn, button { padding: 0.5rem 0.9rem; font-size: 0.8rem; }
+
+  form.filter, form.date-form {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.7rem 0.85rem;
+  }
 }
 
 /* Small action buttons for inline forms */

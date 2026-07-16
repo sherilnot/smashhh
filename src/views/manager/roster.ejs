@@ -62,6 +62,7 @@
     </div>
 
     <!-- Roster Grid: employees as rows, days as columns -->
+    <div class="table-scroll">
     <table style="width: 100%;">
       <thead>
         <tr>
@@ -117,6 +118,7 @@
         <% }) %>
       </tbody>
     </table>
+    </div>
 
     <% if (editMode && employees && employees.length > 0) { %>
       <!-- Assign employee to shift -->

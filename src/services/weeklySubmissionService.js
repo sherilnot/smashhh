@@ -3,7 +3,7 @@ const { pool } = require('../config/database');
 /**
  * Weekly Submission Service
  * Tracks when employees submit their weekly shift preferences
- * Ensures they can only submit once per booking window (Wed-Sat)
+ * Ensures they can only submit once per booking window (Mon-Sat)
  */
 
 /**
@@ -100,39 +100,36 @@ async function recordSubmission(employeeId) {
 }
 
 /**
- * Check if we're in the booking window (Wednesday-Saturday)
+ * Check if we're in the booking window (Monday-Saturday). Employees can book
+ * from Monday onward; reminder notifications for those who haven't booked
+ * yet still only start Wednesday (see notificationService.js /
+ * notificationTrackerService.js), so this window intentionally opens earlier
+ * than the reminder window.
  * @returns {boolean}
  */
 function isInBookingWindow() {
   const now = new Date();
   const currentDay = now.getDay();
-  return currentDay >= 3 && currentDay <= 6; // Wed=3, Sat=6
+  return currentDay >= 1 && currentDay <= 6; // Mon=1, Sat=6
 }
 
 /**
- * Get when the next booking window opens
+ * Get when the next booking window opens (the next Monday).
  * @returns {Date}
  */
 function getNextBookingWindowStart() {
   const now = new Date();
   const currentDay = now.getDay();
-  
-  let daysUntilWednesday;
-  if (currentDay === 0) { // Sunday
-    daysUntilWednesday = 3;
-  } else if (currentDay === 1) { // Monday
-    daysUntilWednesday = 2;
-  } else if (currentDay === 2) { // Tuesday
-    daysUntilWednesday = 1;
-  } else { // Wed-Sat
-    daysUntilWednesday = 7 - currentDay + 3; // Days until next Wednesday
-  }
-  
-  const nextWednesday = new Date(now);
-  nextWednesday.setDate(now.getDate() + daysUntilWednesday);
-  nextWednesday.setHours(0, 0, 0, 0);
-  
-  return nextWednesday;
+
+  // Only Sunday (0) is outside the Mon-Sat window, so the next window always
+  // opens the following day.
+  const daysUntilMonday = currentDay === 0 ? 1 : 8 - currentDay;
+
+  const nextMonday = new Date(now);
+  nextMonday.setDate(now.getDate() + daysUntilMonday);
+  nextMonday.setHours(0, 0, 0, 0);
+
+  return nextMonday;
 }
 
 /**
@@ -153,7 +150,7 @@ async function getSubmissionStatus(employeeId) {
     message = `Booking opens on ${nextWindow.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
     canSubmit = false;
   } else if (hasSubmitted) {
-    message = `You've already submitted shifts for the week of ${nextMonday.toLocaleDateString()}. You can submit again next Wednesday.`;
+    message = `You've already submitted shifts for the week of ${nextMonday.toLocaleDateString()}. You can submit again next Monday.`;
     canSubmit = false;
   } else {
     message = `Book your shifts for ${nextMonday.toLocaleDateString()} - ${nextSunday.toLocaleDateString()}`;

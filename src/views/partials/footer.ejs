@@ -1,5 +1,45 @@
     </main>
   </div>
-  <script>lucide.createIcons();</script>
+  <script>
+    // Guarded: if the Lucide icon script failed to load (blocked by the
+    // browser, offline, slow tunnel, etc.) this must not throw and take
+    // down the rest of this script block — the drawer toggle logic below
+    // still needs to run regardless of whether icons rendered.
+    if (typeof lucide !== 'undefined') {
+      try { lucide.createIcons(); } catch (e) { /* ignore icon render failures */ }
+    }
+
+    (function () {
+      var hamburgerBtn = document.getElementById('hamburgerBtn');
+      var sidebar = document.getElementById('sidebar');
+      var overlay = document.getElementById('sidebarOverlay');
+      if (!hamburgerBtn || !sidebar || !overlay) return;
+
+      function openDrawer() {
+        sidebar.classList.add('open');
+        overlay.classList.add('visible');
+        hamburgerBtn.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeDrawer() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('visible');
+        hamburgerBtn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      }
+
+      hamburgerBtn.addEventListener('click', function () {
+        if (sidebar.classList.contains('open')) closeDrawer();
+        else openDrawer();
+      });
+      overlay.addEventListener('click', closeDrawer);
+      sidebar.querySelectorAll('a, form button').forEach(function (el) {
+        el.addEventListener('click', closeDrawer);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeDrawer();
+      });
+    })();
+  </script>
 </body>
 </html>

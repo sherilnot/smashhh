@@ -9,10 +9,16 @@ async function seed() {
 
     // Seed users (4 managers — one per store, pre-assigned below)
     const users = [
-      // Store A employees
-      { user_id: 'emp001', password: '123', role: 'employee', first: 'Alice', last: 'Smith', email: 'alice@example.com', wage: 15.50, store: 'Store A', employmentType: 'permanent' },
-      { user_id: 'emp002', password: '123', role: 'employee', first: 'Bob', last: 'Jones', email: 'bob@example.com', wage: 17.00, store: 'Store A', employmentType: 'permanent' },
-      { user_id: 'emp003', password: '123', role: 'employee', first: 'Eve', last: 'Taylor', email: 'eve@example.com', wage: 16.00, store: 'Store A', employmentType: 'casual' },
+      // Rizin's Seaford employees (formerly Store A)
+      { user_id: 'emp001', password: '123', role: 'employee', first: 'Harry', last: '', email: 'emp001@rizinsseaford.local', wage: 16.60, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp002', password: '123', role: 'employee', first: 'Billy', last: '', email: 'emp002@rizinsseaford.local', wage: 19.90, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp003', password: '123', role: 'employee', first: 'Kyra', last: '', email: 'emp003@rizinsseaford.local', wage: 19.90, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp013', password: '123', role: 'employee', first: 'Sabin', last: '', email: 'emp013@rizinsseaford.local', wage: 20.00, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp014', password: '123', role: 'employee', first: 'Shabas', last: '', email: 'emp014@rizinsseaford.local', wage: 23.00, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp015', password: '123', role: 'employee', first: 'Ashwin', last: '', email: 'emp015@rizinsseaford.local', wage: 23.00, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp016', password: '123', role: 'employee', first: 'Ashin', last: 'Das', email: 'emp016@rizinsseaford.local', wage: 23.00, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp017', password: '123', role: 'employee', first: 'Thejus', last: '', email: 'emp017@rizinsseaford.local', wage: 23.00, store: "Rizin's Seaford", employmentType: 'permanent' },
+      { user_id: 'emp018', password: '123', role: 'employee', first: 'Javad', last: 'Ali', email: 'emp018@rizinsseaford.local', wage: 23.00, store: "Rizin's Seaford", employmentType: 'permanent' },
       // Store B employees
       { user_id: 'emp004', password: '123', role: 'employee', first: 'Liam', last: 'Nguyen', email: 'liam@example.com', wage: 16.50, store: 'Store B', employmentType: 'permanent' },
       { user_id: 'emp005', password: '123', role: 'employee', first: 'Mia', last: 'Chen', email: 'mia@example.com', wage: 15.00, store: 'Store B', employmentType: 'casual' },
@@ -54,7 +60,7 @@ async function seed() {
 
     // Seed 4 stores — each one pre-assigned to a manager (no manual assignment needed)
     const storeConfig = [
-      { name: 'Store A', manager: 'mgr001' },
+      { name: "Rizin's Seaford", manager: 'mgr001' },
       { name: 'Store B', manager: 'mgr002' },
       { name: 'Store C', manager: 'mgr003' },
       { name: 'Store D', manager: 'mgr004' },
@@ -210,10 +216,16 @@ async function seed() {
 
     await client.query('COMMIT');
     console.log('\n[Seed] Done! Test credentials (all passwords: 123):');
-    console.log('  Employees (Store A):');
-    console.log('    emp001 (Alice Smith, $15.50/hr, permanent)');
-    console.log('    emp002 (Bob Jones, $17.00/hr, permanent)');
-    console.log('    emp003 (Eve Taylor, $16.00/hr, casual)');
+    console.log('  Employees (Rizin\'s Seaford):');
+    console.log('    emp001 (Harry, $16.60/hr, permanent)');
+    console.log('    emp002 (Billy, $19.90/hr, permanent)');
+    console.log('    emp003 (Kyra, $19.90/hr, permanent)');
+    console.log('    emp013 (Sabin, $20.00/hr, permanent)');
+    console.log('    emp014 (Shabas, $23.00/hr, permanent)');
+    console.log('    emp015 (Ashwin, $23.00/hr, permanent)');
+    console.log('    emp016 (Ashin Das, $23.00/hr, permanent)');
+    console.log('    emp017 (Thejus, $23.00/hr, permanent)');
+    console.log('    emp018 (Javad Ali, $23.00/hr, permanent)');
     console.log('  Employees (Store B):');
     console.log('    emp004 (Liam Nguyen, $16.50/hr, permanent)');
     console.log('    emp005 (Mia Chen, $15.00/hr, casual)');
@@ -227,7 +239,7 @@ async function seed() {
     console.log('    emp011 (Ava Kim, $17.00/hr, casual)');
     console.log('    emp012 (Ethan Pham, $15.00/hr, casual)');
     console.log('  Store Managers (each owns one store):');
-    console.log('    mgr001 (Carol White  → Store A)');
+    console.log('    mgr001 (Carol White  → Rizin\'s Seaford)');
     console.log('    mgr002 (Frank Garcia → Store B)');
     console.log('    mgr003 (Grace Lee    → Store C)');
     console.log('    mgr004 (Henry Patel  → Store D)');

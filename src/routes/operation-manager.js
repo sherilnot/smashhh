@@ -3,6 +3,8 @@ const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
 const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
+const { generateInvoicePdf } = require('../services/invoicePdfService');
+const { getAllMaintenanceReports, getMaintenanceReportDetail } = require('../services/maintenanceService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('operation_manager'));
@@ -66,8 +68,30 @@ router.get('/invoices/:id', async (req, res) => {
   }
 });
 
-// Download invoice as CSV
+// Download invoice as PDF
 router.get('/invoices/:id/download', async (req, res) => {
+  try {
+    const result = await getInvoiceDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).send('Invoice not found');
+    }
+
+    const invoice = result.invoice;
+    const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoice.invoice_date}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const pdfStream = generateInvoicePdf(invoice);
+    pdfStream.pipe(res);
+  } catch (e) {
+    console.error('[OperationManager] invoice PDF download error', e);
+    res.status(500).send('Failed to generate PDF');
+  }
+});
+
+// Download invoice as CSV (legacy)
+router.get('/invoices/:id/download-csv', async (req, res) => {
   try {
     const result = await getInvoiceDetail(req.params.id);
     if (!result.success) {
@@ -107,7 +131,7 @@ router.get('/invoices/:id/download', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
   } catch (e) {
-    console.error('[OperationManager] invoice download error', e);
+    console.error('[OperationManager] invoice CSV download error', e);
     res.status(500).send('Failed to generate download');
   }
 });
@@ -220,6 +244,60 @@ router.get('/cash/:id', async (req, res) => {
       user: req.user,
       submission: null,
       error: 'Failed to load submission'
+    });
+  }
+});
+
+// ─── Maintenance Reports ──────────────────────────────────────────────────────
+
+// List all maintenance reports from shop managers
+router.get('/maintenance', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { submissions, total } = await getAllMaintenanceReports(page, 50);
+    const totalPages = Math.ceil(total / 50);
+
+    res.render('operation-manager/maintenance', {
+      user: req.user,
+      reports: submissions,
+      page,
+      totalPages,
+      total
+    });
+  } catch (e) {
+    console.error('[OperationManager] maintenance list error', e);
+    res.render('operation-manager/maintenance', {
+      user: req.user,
+      reports: [],
+      page: 1,
+      totalPages: 0,
+      total: 0
+    });
+  }
+});
+
+// View maintenance report detail
+router.get('/maintenance/:id', async (req, res) => {
+  try {
+    const result = await getMaintenanceReportDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('operation-manager/maintenance-detail', {
+        user: req.user,
+        report: null,
+        error: 'Report not found'
+      });
+    }
+    res.render('operation-manager/maintenance-detail', {
+      user: req.user,
+      report: result.report,
+      error: null
+    });
+  } catch (e) {
+    console.error('[OperationManager] maintenance detail error', e);
+    res.status(500).render('operation-manager/maintenance-detail', {
+      user: req.user,
+      report: null,
+      error: 'Failed to load report'
     });
   }
 });

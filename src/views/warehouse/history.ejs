@@ -14,7 +14,7 @@
       <tbody>
         <% history.forEach(h => { %>
         <tr>
-          <td><%= new Date(h.check_date).toLocaleDateString() %></td>
+          <td><%= formatDate(h.check_date) %></td>
           <td class="status-<%= h.status %>"><%= h.status %></td>
           <td><%= h.total_items %></td>
           <td><%= h.checked_items %> / <%= h.total_items %></td>

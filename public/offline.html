@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — Rizins Smash</title>
+  <link rel="stylesheet" href="/css/theme.css" />
+  <style>
+    .offline-wrap {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 2rem; text-align: center;
+    }
+    .offline-card {
+      background: var(--cream-glass); padding: 3rem 2rem;
+      border-radius: var(--radius); border: 1px solid var(--border);
+      box-shadow: var(--shadow); max-width: 400px;
+    }
+    .offline-card h1 { font-size: 1.5rem; color: var(--bun-dark); margin-bottom: 0.75rem; }
+    .offline-card p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="offline-wrap">
+    <div class="offline-card">
+      <h1>You're offline</h1>
+      <p>Check your internet connection and try again.</p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </div>
+</body>
+</html>

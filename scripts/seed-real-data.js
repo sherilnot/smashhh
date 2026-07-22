@@ -1,4 +1,4 @@
-require('dotenv').config();
+s=drequire('dotenv').config();
 const { pool } = require('../src/config/database');
 const { hashPassword } = require('../src/services/authService');
 

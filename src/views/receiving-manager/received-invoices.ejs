@@ -20,9 +20,9 @@
         <% invoices.forEach(function(inv) { %>
           <tr>
             <td><strong><%= inv.store_name %></strong></td>
-            <td><%= new Date(inv.invoice_date).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) %></td>
+            <td><%= formatDate(inv.invoice_date) %></td>
             <td><%= inv.first_name %> <%= inv.last_name %></td>
-            <td><%= new Date(inv.submitted_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' }) %></td>
+            <td><%= formatDateTime(inv.submitted_at) %></td>
             <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
               <%= inv.notes || '-' %>
             </td>

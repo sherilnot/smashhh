@@ -25,7 +25,7 @@
         <% timesheets.forEach(function(ts) { %>
           <tr>
             <td><strong><%= ts.store_name %></strong></td>
-            <td><%= new Date(ts.week_start).toISOString().split('T')[0] %> — <%= new Date(ts.week_end).toISOString().split('T')[0] %></td>
+            <td><%= formatDate(ts.week_start) %> — <%= formatDate(ts.week_end) %></td>
             <td class="amount"><%= ts.employee_count %></td>
             <td class="amount"><%= parseFloat(ts.total_hours).toFixed(2) %></td>
             <td>
@@ -35,7 +35,7 @@
                 <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">SUBMITTED</span>
               <% } %>
             </td>
-            <td><%= new Date(ts.submitted_at).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %></td>
+            <td><%= formatDateTime(ts.submitted_at) %></td>
             <td><a href="/operation-manager/timesheets/<%= ts.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
           </tr>
         <% }); %>

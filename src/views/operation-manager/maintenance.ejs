@@ -1,10 +1,10 @@
-<%- include('../partials/header', { title: 'Cash Reports', role: 'operation_manager', active: 'cash' }) %>
+<%- include('../partials/header', { title: 'Maintenance Reports', role: 'operation_manager', active: 'maintenance' }) %>
 
-  <h1>Cash Reports</h1>
-  <p style="color: var(--text-muted); margin-bottom: 1.25rem;">Photos of liquid cash submitted by shop managers.</p>
+  <h1>Maintenance Reports</h1>
+  <p style="color: var(--text-muted); margin-bottom: 1.25rem;">Maintenance issues reported by shop managers.</p>
 
-  <% if (submissions.length === 0) { %>
-    <div class="empty">No cash reports have been submitted yet.</div>
+  <% if (reports.length === 0) { %>
+    <div class="empty">No maintenance reports have been submitted yet.</div>
   <% } else { %>
     <table>
       <thead>
@@ -12,28 +12,28 @@
           <th>Date</th>
           <th>Store</th>
           <th>Submitted By</th>
-          <th class="amount">Amount</th>
+          <th>Description</th>
           <th>Photos</th>
           <th>Status</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        <% submissions.forEach(function(sub) { %>
+        <% reports.forEach(function(report) { %>
           <tr>
-            <td><%= formatDateTime(sub.submitted_at) %></td>
-            <td><strong><%= sub.store_name %></strong></td>
-            <td><%= sub.first_name %> <%= sub.last_name %></td>
-            <td class="amount" style="font-weight: 600;">$<%= parseFloat(sub.amount).toFixed(2) %></td>
-            <td><%= sub.image_count %> image<%= parseInt(sub.image_count) > 1 ? 's' : '' %></td>
+            <td><%= formatDateTime(report.submitted_at) %></td>
+            <td><strong><%= report.store_name %></strong></td>
+            <td><%= report.first_name %> <%= report.last_name %></td>
+            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= report.description %></td>
+            <td><%= report.image_count %> image<%= parseInt(report.image_count) > 1 ? 's' : '' %></td>
             <td>
-              <% if (sub.status === 'reviewed') { %>
+              <% if (report.status === 'reviewed') { %>
                 <span class="badge" style="background: var(--green); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">REVIEWED</span>
               <% } else { %>
                 <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">NEW</span>
               <% } %>
             </td>
-            <td><a href="/operation-manager/cash/<%= sub.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
+            <td><a href="/operation-manager/maintenance/<%= report.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
           </tr>
         <% }); %>
       </tbody>

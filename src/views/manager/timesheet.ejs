@@ -26,7 +26,7 @@
       <% } %>
 
       <div style="text-align: center;">
-        <strong style="font-size: 1.1rem; color: var(--bun-dark);"><%= weekStartFormatted %> — <%= weekEndFormatted %></strong>
+        <strong style="font-size: 1.1rem; color: var(--bun-dark);"><%= formatDate(weekStartFormatted) %> — <%= formatDate(weekEndFormatted) %></strong>
       </div>
 
       <% if (canGoNext) { %>
@@ -62,7 +62,7 @@
             <th style="width: 14%;">Employee</th>
             <th style="width: 7%;">Type</th>
             <% dayLabels.forEach(function(label, i) { %>
-              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= dayDates[i].slice(5) %></span></th>
+              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= formatDateShort(dayDates[i]) %></span></th>
             <% }) %>
             <th class="amount">Total</th>
           </tr>

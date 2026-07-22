@@ -114,7 +114,7 @@
       <tbody>
         <% entries.forEach(entry => { %>
           <tr>
-            <td><%= new Date(entry.date).toLocaleDateString() %></td>
+            <td><%= formatDate(entry.date) %></td>
             <td><%= entry.hoursWorked %></td>
             <td class="amount">$<%= Number(entry.wageEarned).toFixed(2) %></td>
           </tr>

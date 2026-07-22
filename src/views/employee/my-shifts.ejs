@@ -23,7 +23,7 @@
         <% shifts.forEach(shift => { %>
           <% const status = (shift.bookingStatus === null || shift.bookingStatus === undefined || shift.bookingStatus === '') ? null : String(shift.bookingStatus); %>
           <tr>
-            <td><%= new Date(shift.startTime).toLocaleDateString() %></td>
+            <td><%= formatDate(shift.startTime) %></td>
             <td><%= new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
             <td><%= new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
             <td><%= shift.storeLocation %></td>

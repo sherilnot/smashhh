@@ -40,7 +40,7 @@
                 <tr><th>Date</th><th>Hours</th><th>Wage</th></tr>
                 <% r.shiftBreakdown.forEach(s => { %>
                 <tr>
-                  <td><%= new Date(s.date).toLocaleDateString() %></td>
+                  <td><%= formatDate(s.date) %></td>
                   <td><%= s.hoursWorked %></td>
                   <td>$<%= s.wageEarned.toFixed(2) %></td>
                 </tr>

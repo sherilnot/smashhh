@@ -15,7 +15,7 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
         <div>
           <small style="color: var(--text-muted);">Invoice Date</small><br>
-          <strong><%= new Date(invoice.invoice_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %></strong>
+          <strong><%= formatDate(invoice.invoice_date) %></strong>
         </div>
         <div>
           <small style="color: var(--text-muted);">Submitted By</small><br>
@@ -23,7 +23,7 @@
         </div>
         <div>
           <small style="color: var(--text-muted);">Submitted At</small><br>
-          <strong><%= new Date(invoice.submitted_at).toLocaleString('en-AU') %></strong>
+          <strong><%= formatDateTime(invoice.submitted_at) %></strong>
         </div>
         <% if (invoice.location) { %>
         <div>

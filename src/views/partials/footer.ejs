@@ -1,5 +1,84 @@
     </main>
   </div>
+
+  <!-- Install banner -->
+  <div id="pwa-install-banner" style="display:none; position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); z-index:999; background:linear-gradient(135deg,#1a1a1a,#2a1507); color:#fff; padding:0.85rem 1.25rem; border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,0.3); display:none; align-items:center; gap:0.75rem; font-size:0.9rem; max-width:90vw;">
+    <span>📲 Install <strong>Rizins Smash</strong> as an app</span>
+    <button id="pwa-install-btn" style="background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1a1a; border:none; padding:0.45rem 1rem; border-radius:8px; font-weight:700; font-size:0.82rem; cursor:pointer; white-space:nowrap;">Install</button>
+    <button id="pwa-dismiss-btn" style="background:transparent; border:none; color:rgba(255,255,255,0.5); font-size:1.2rem; cursor:pointer; padding:0 0.25rem; line-height:1;" aria-label="Dismiss">&times;</button>
+  </div>
+
   <script>lucide.createIcons();</script>
+  <script>
+    // Sidebar toggle for mobile
+    (function() {
+      const toggle = document.getElementById('menuToggle');
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+
+      if (toggle && sidebar) {
+        toggle.addEventListener('click', () => {
+          sidebar.classList.toggle('open');
+          overlay.classList.toggle('open');
+        });
+        overlay.addEventListener('click', () => {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('open');
+        });
+        // Close sidebar when a nav link is clicked (mobile)
+        sidebar.querySelectorAll('a').forEach(link => {
+          link.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+          });
+        });
+      }
+    })();
+  </script>
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('[PWA] SW registered, scope:', reg.scope))
+        .catch(err => console.warn('[PWA] SW registration failed:', err));
+    }
+
+    // PWA Install prompt
+    let deferredPrompt;
+    const banner = document.getElementById('pwa-install-banner');
+    const installBtn = document.getElementById('pwa-install-btn');
+    const dismissBtn = document.getElementById('pwa-dismiss-btn');
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!localStorage.getItem('pwa-dismissed')) {
+        banner.style.display = 'flex';
+      }
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('[PWA] Install outcome:', outcome);
+        deferredPrompt = null;
+        banner.style.display = 'none';
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        banner.style.display = 'none';
+        localStorage.setItem('pwa-dismissed', '1');
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      banner.style.display = 'none';
+      console.log('[PWA] App installed');
+    });
+  </script>
 </body>
 </html>

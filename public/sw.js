@@ -1,35 +1,103 @@
 /**
- * Service Worker for Web Push Notifications
- * Handles push events and notification clicks even when browser is closed
+ * Service Worker — PWA + Web Push Notifications
+ * Provides offline caching and handles push events
  */
 
-// Service Worker version - increment when updating
-const VERSION = 'v1.0.1';
+const VERSION = 'v2.0.0';
+const CACHE_NAME = `rizins-cache-${VERSION}`;
+
+// Assets to pre-cache on install (app shell)
+const APP_SHELL = [
+  '/css/theme.css',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/manifest.json'
+];
 
 console.log(`[ServiceWorker ${VERSION}] Loading...`);
 
-// Install event - cache resources if needed
+// ─── Install: pre-cache app shell ───────────────────────────────────────────
 self.addEventListener('install', event => {
   console.log(`[ServiceWorker ${VERSION}] Installing...`);
-  self.skipWaiting(); // Activate immediately
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// Activate event - clean up old caches
+// ─── Activate: clean old caches ─────────────────────────────────────────────
 self.addEventListener('activate', event => {
   console.log(`[ServiceWorker ${VERSION}] Activating...`);
-  event.waitUntil(self.clients.claim()); // Take control immediately
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
+  );
 });
 
-// Push event - received when server sends a push notification
+// ─── Fetch: network-first with cache fallback ───────────────────────────────
+self.addEventListener('fetch', event => {
+  const { request } = event;
+
+  // Skip non-GET and cross-origin requests
+  if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // For navigation requests, try network first, fall back to offline page
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Cache successful page responses
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request).then(cached => cached || caches.match('/offline.html')))
+    );
+    return;
+  }
+
+  // For static assets (css, js, images), cache-first
+  if (request.url.match(/\.(css|js|png|jpg|jpeg|svg|ico|woff2?)$/)) {
+    event.respondWith(
+      caches.match(request).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Everything else: network first, cache fallback
+  event.respondWith(
+    fetch(request)
+      .then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+        return response;
+      })
+      .catch(() => caches.match(request))
+  );
+});
+
+// ─── Push Notifications ─────────────────────────────────────────────────────
 self.addEventListener('push', event => {
-  console.log('[ServiceWorker] Push received:', event);
-  console.log('[ServiceWorker] Has data:', !!event.data);
-  
   let notificationData = {
     title: 'Book Your Shifts',
-    body: 'Don\'t forget to book your shifts for next week!',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    body: "Don't forget to book your shifts for next week!",
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: 'shift-booking-reminder',
     requireInteraction: false,
     vibrate: [200, 100, 200],
@@ -39,126 +107,73 @@ self.addEventListener('push', event => {
     }
   };
 
-  // Parse notification data from server if provided
   if (event.data) {
     try {
-      console.log('[ServiceWorker] Parsing push data...');
       const serverData = event.data.json();
-      console.log('[ServiceWorker] Server data:', serverData);
-      
       notificationData = {
         ...notificationData,
         title: serverData.title || notificationData.title,
         body: serverData.message || serverData.body || notificationData.body,
-        data: {
-          ...notificationData.data,
-          ...serverData.data
-        }
+        data: { ...notificationData.data, ...serverData.data }
       };
     } catch (e) {
-      console.error('[ServiceWorker] Error parsing push data:', e);
-      // Use notification text as body if JSON parsing fails
       try {
         const text = event.data.text();
-        console.log('[ServiceWorker] Using text data:', text);
         notificationData.body = text || notificationData.body;
-      } catch (textError) {
-        console.error('[ServiceWorker] Error reading text:', textError);
-      }
+      } catch (_) {}
     }
   }
 
-  console.log('[ServiceWorker] Showing notification:', notificationData.title);
-
-  // Show the notification
-  const notificationPromise = self.registration.showNotification(notificationData.title, {
-    body: notificationData.body,
-    icon: notificationData.icon,
-    badge: notificationData.badge,
-    tag: notificationData.tag,
-    requireInteraction: notificationData.requireInteraction,
-    vibrate: notificationData.vibrate,
-    data: notificationData.data
-  });
-
-  notificationPromise.then(() => {
-    console.log('[ServiceWorker] ✅ Notification shown successfully');
-  }).catch(err => {
-    console.error('[ServiceWorker] ❌ Failed to show notification:', err);
-  });
-
-  event.waitUntil(notificationPromise);
-});
-
-// Notification click event - handle when user clicks the notification
-self.addEventListener('notificationclick', event => {
-  console.log('[ServiceWorker] Notification clicked:', event);
-  
-  event.notification.close(); // Close the notification
-
-  // Get the URL from notification data
-  const urlToOpen = event.notification.data?.url || '/employee/shifts';
-
-  // Open or focus the app window
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(windowClients => {
-        // Check if there's already a window open to the app
-        for (let client of windowClients) {
-          if (client.url.includes(self.registration.scope) && 'focus' in client) {
-            // Focus existing window and navigate to URL
-            return client.focus().then(client => {
-              if ('navigate' in client) {
-                return client.navigate(urlToOpen);
-              }
-            });
-          }
-        }
-        // No window open, open a new one
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
-        }
-      })
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      vibrate: notificationData.vibrate,
+      data: notificationData.data
+    })
   );
 });
 
-// Handle push subscription change (e.g., token refresh)
+// ─── Notification Click ─────────────────────────────────────────────────────
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const urlToOpen = event.notification.data?.url || '/employee/shifts';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes(self.registration.scope) && 'focus' in client) {
+          return client.focus().then(c => ('navigate' in c) ? c.navigate(urlToOpen) : c);
+        }
+      }
+      return clients.openWindow ? clients.openWindow(urlToOpen) : null;
+    })
+  );
+});
+
+// ─── Push Subscription Change ───────────────────────────────────────────────
 self.addEventListener('pushsubscriptionchange', event => {
-  console.log('[ServiceWorker] Push subscription changed');
-  
   event.waitUntil(
     self.registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: self.vapidPublicKey
-    })
-    .then(subscription => {
-      console.log('[ServiceWorker] Re-subscribed:', subscription);
-      
-      // Send new subscription to server
-      return fetch('/employee/notifications/subscribe', {
+    }).then(subscription =>
+      fetch('/employee/notifications/subscribe', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription })
-      });
-    })
+      })
+    )
   );
 });
 
-// Message event - handle messages from main app
+// ─── Message handler ────────────────────────────────────────────────────────
 self.addEventListener('message', event => {
-  console.log('[ServiceWorker] Message received:', event.data);
-  
-  if (event.data.type === 'CHECK_UPDATE') {
-    // Check for service worker updates
-    self.registration.update();
-  }
-  
-  if (event.data.type === 'SET_VAPID_KEY') {
-    // Store VAPID public key
-    self.vapidPublicKey = event.data.key;
-  }
+  if (event.data.type === 'CHECK_UPDATE') self.registration.update();
+  if (event.data.type === 'SET_VAPID_KEY') self.vapidPublicKey = event.data.key;
 });
 
 console.log(`[ServiceWorker ${VERSION}] Loaded successfully`);

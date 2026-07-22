@@ -9,26 +9,37 @@ require('dotenv').config();
  */
 
 // Connection configuration from environment variables
-const poolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  min: 5,  // Minimum connections in pool
-  max: 20, // Maximum connections in pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Wait 10 seconds before timing out
-  maxUses: 7500, // Rotate connections after 7500 uses
-};
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      min: 2,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      min: 5,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      maxUses: 7500,
+    };
 
-// Validate required environment variables
-const requiredEnvVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+// Validate required environment variables (skip if DATABASE_URL is set)
+if (!process.env.DATABASE_URL) {
+  const requiredEnvVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
-if (missingVars.length > 0) {
-  console.error(`[Database] Missing required environment variables: ${missingVars.join(', ')}`);
-  throw new Error(`Database configuration error: Missing environment variables`);
+  if (missingVars.length > 0) {
+    console.error(`[Database] Missing required environment variables: ${missingVars.join(', ')}`);
+    throw new Error(`Database configuration error: Missing environment variables`);
+  }
 }
 
 // Create connection pool

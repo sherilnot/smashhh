@@ -79,16 +79,13 @@ router.post('/book-weekly-shifts', async (req, res) => {
     const { hasSubmitted, submittedAt } = await hasSubmittedThisWeek(req.user.userId);
     if (hasSubmitted) {
       console.log('[Employee] Submission blocked - already submitted at:', submittedAt);
-      return res.redirect('/employee/shifts?error=' + encodeURIComponent('You have already submitted your shifts for next week. You can submit again next Wednesday.'));
+      return res.redirect('/employee/shifts?error=' + encodeURIComponent('You have already submitted your shifts for next week.'));
     }
     
-    // Validate submission window (Wed-Sat only)
+    // Validate submission window (Mon-Sun — employees can book any day)
     const now = new Date();
     const currentDay = now.getDay();
-    if (currentDay < 3 || currentDay > 6) {
-      console.log('[Employee] Submission blocked - outside window. Current day:', currentDay);
-      return res.redirect('/employee/shifts?error=' + encodeURIComponent('Shift booking is only available Wednesday to Saturday'));
-    }
+    // No day restriction — employees can book from Monday onwards
 
     const { pool } = require('../config/database');
     
@@ -217,7 +214,7 @@ router.post('/book-weekly-shifts', async (req, res) => {
     await recordSubmission(req.user.userId);
     console.log('[Employee] Recorded weekly submission for employee:', req.user.userId);
 
-    return res.redirect('/employee/my-shifts?success=' + encodeURIComponent(`Successfully submitted ${bookedCount} shift request(s) for manager approval. You can submit again next Wednesday.`));
+    return res.redirect('/employee/my-shifts?success=' + encodeURIComponent(`Successfully submitted ${bookedCount} shift request(s) for manager approval.`));
   } catch (e) {
     console.error('[Employee] book-weekly-shifts error', e);
     return res.redirect('/employee/shifts?error=' + encodeURIComponent('Failed to book shifts'));
@@ -305,6 +302,28 @@ router.post('/book-shift', async (req, res) => {
   } catch (e) {
     console.error('[Employee] book-shift error', e);
     return res.render('employee/shifts', { shifts: [], nextWeekDays: [], error: 'Failed to book shift' });
+  }
+});
+
+// My Roster (published by manager) — visual card view
+router.get('/my-roster', async (req, res) => {
+  try {
+    const { getEmployeePublishedRoster } = require('../services/publishedRosterService');
+    const weekStart = req.query.date || null;
+    const result = await getEmployeePublishedRoster(req.user.userId, weekStart);
+
+    res.render('employee/my-roster', {
+      user: req.user,
+      roster: result.success ? result.roster : null,
+      error: result.success ? null : result.error
+    });
+  } catch (e) {
+    console.error('[Employee] my-roster error:', e);
+    res.render('employee/my-roster', {
+      user: req.user,
+      roster: null,
+      error: 'Failed to load roster'
+    });
   }
 });
 
@@ -503,7 +522,7 @@ router.get('/notifications/debug', async (req, res) => {
     res.json({
       currentDay: currentDay,
       currentDayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][currentDay],
-      inBookingWindow: currentDay >= 3 && currentDay <= 6,
+      inBookingWindow: true,
       nextWeekRange: {
         monday: nextMonday.toDateString(),
         sunday: nextSunday.toDateString()

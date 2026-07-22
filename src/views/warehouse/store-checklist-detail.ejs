@@ -10,7 +10,7 @@
     <div class="card" style="margin-bottom: 1.25rem;">
       <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
         <div><strong>Store:</strong> <%= checklist.store_name %></div>
-        <div><strong>Date:</strong> <%= new Date(checklist.check_date).toLocaleDateString('en-CA') %></div>
+        <div><strong>Date:</strong> <%= formatDate(checklist.check_date) %></div>
         <div><strong>By:</strong> <%= checklist.first_name %> <%= checklist.last_name %></div>
         <div><strong>Status:</strong>
           <span class="badge" style="background: <%= checklist.status === 'reviewed' ? 'var(--lettuce)' : 'var(--mustard)' %>; color: <%= checklist.status === 'reviewed' ? '#fff' : 'var(--bun-dark)' %>;">

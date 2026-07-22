@@ -19,10 +19,10 @@
       <tbody>
         <% invoices.forEach(function(inv) { %>
           <tr>
-            <td><%= new Date(inv.invoice_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) %></td>
+            <td><%= formatDate(inv.invoice_date) %></td>
             <td><strong><%= inv.store_name %></strong></td>
             <td><%= inv.first_name %> <%= inv.last_name %></td>
-            <td><%= inv.submitted_at ? new Date(inv.submitted_at).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-' %></td>
+            <td><%= inv.submitted_at ? formatDateTime(inv.submitted_at) : '-' %></td>
             <td><a href="/operation-manager/invoices/<%= inv.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
           </tr>
         <% }); %>

@@ -15,7 +15,7 @@
           <strong><%= submission.store_name %></strong>
         </div>
         <div style="color: var(--text-muted); font-size: 0.85rem;">
-          <%= new Date(submission.submitted_at).toLocaleString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+          <%= formatDateTime(submission.submitted_at) %>
         </div>
       </div>
       <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">

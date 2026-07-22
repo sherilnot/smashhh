@@ -25,8 +25,8 @@
         <% bookings.forEach(b => { %>
         <tr>
           <td><%= b.first_name %> <%= b.last_name %></td>
-          <td><%= new Date(b.start_time).toLocaleDateString() %> <%= new Date(b.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-          <td><%= new Date(b.end_time).toLocaleDateString() %> <%= new Date(b.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+          <td><%= formatDate(b.start_time) %> <%= new Date(b.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+          <td><%= formatDate(b.end_time) %> <%= new Date(b.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
           <td><%= b.store_location %></td>
           <td>
             <form method="POST" action="/manager/end-shift">

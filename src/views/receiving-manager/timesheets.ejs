@@ -28,10 +28,10 @@
         <% timesheets.forEach(ts => { %>
           <tr>
             <td><strong><%= ts.store_name %></strong></td>
-            <td><%= new Date(ts.week_start).toISOString().split('T')[0] %> — <%= new Date(ts.week_end).toISOString().split('T')[0] %></td>
+            <td><%= formatDate(ts.week_start) %> — <%= formatDate(ts.week_end) %></td>
             <td class="amount"><%= ts.employee_count %></td>
             <td class="amount"><%= parseFloat(ts.total_hours).toFixed(2) %></td>
-            <td><%= new Date(ts.submitted_at).toLocaleString('en-AU') %></td>
+            <td><%= formatDateTime(ts.submitted_at) %></td>
             <td><a href="/receiving-manager/timesheets/<%= ts.id %>" class="btn" style="font-size: 0.8rem; padding: 0.35rem 0.7rem;">View</a></td>
           </tr>
         <% }) %>

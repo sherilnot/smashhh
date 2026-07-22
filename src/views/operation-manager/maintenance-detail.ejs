@@ -1,0 +1,62 @@
+<%- include('../partials/header', { title: 'Maintenance Report Detail', role: 'operation_manager', active: 'maintenance' }) %>
+
+  <h1>Maintenance Report Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (!report) { %>
+    <div class="empty">Report not found.</div>
+  <% } else { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <strong><%= report.store_name %></strong>
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.85rem;">
+          <%= formatDateTime(report.submitted_at) %>
+        </div>
+      </div>
+      <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
+        Submitted by: <strong><%= report.first_name %> <%= report.last_name %></strong>
+      </div>
+      <div style="margin-top: 0.25rem;">
+        <% if (report.status === 'reviewed') { %>
+          <span class="badge" style="background: var(--green); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">REVIEWED</span>
+        <% } else { %>
+          <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">NEW</span>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <strong>Description:</strong>
+      <p style="margin-top: 0.5rem; white-space: pre-wrap;"><%= report.description %></p>
+    </div>
+
+    <% if (report.images && report.images.length > 0) { %>
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Photos (<%= report.images.length %>)</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+        <% report.images.forEach(function(img) { %>
+          <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+            <a href="/uploads/maintenance/<%= img.filename %>" target="_blank">
+              <img src="/uploads/maintenance/<%= img.filename %>" alt="<%= img.original_name %>"
+                   style="width: 100%; height: 200px; object-fit: cover; display: block;">
+            </a>
+            <div style="padding: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+              <%= img.original_name %>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } else { %>
+      <p style="color: var(--text-muted);">No photos attached.</p>
+    <% } %>
+
+    <div style="margin-top: 1.5rem;">
+      <a href="/operation-manager/maintenance" class="btn" style="padding: 6px 16px;">&larr; Back to Maintenance Reports</a>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

@@ -1,7 +1,5 @@
 <%- include('../partials/header', { title: 'Invoice Detail', role: 'operation_manager', active: 'invoices' }) %>
 
-  <h1>Invoice Detail</h1>
-
   <% if (error) { %>
     <div class="error"><%= error %></div>
   <% } %>
@@ -9,85 +7,248 @@
   <% if (!invoice) { %>
     <div class="empty">Invoice not found.</div>
   <% } else { %>
-    <div class="card" style="margin-bottom: 1.25rem;">
-      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-        <div>
-          <strong><%= invoice.store_name %></strong>
-        </div>
-        <div style="color: var(--text-muted); font-size: 0.85rem;">
-          <%= new Date(invoice.invoice_date).toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+
+  <style>
+    .inv-sheet {
+      background: #fff;
+      padding: 3rem 3.5rem;
+      max-width: 860px;
+      margin: 0 auto;
+      font-family: 'Aptos', 'Calibri', 'Segoe UI', Arial, sans-serif;
+      color: #1a1a2e;
+      border: 1px solid #ddd;
+    }
+    /* Row 1: Company name + INVOICE title */
+    .inv-row1 {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.25rem;
+    }
+    .inv-row1 .company-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1b2a5e;
+      font-family: 'Aptos', 'Calibri', Arial, sans-serif;
+    }
+    .inv-row1 .invoice-word {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #1b2a5e;
+      font-family: 'Aptos', 'Calibri', Arial, sans-serif;
+      letter-spacing: 1px;
+    }
+    /* Row 2-3: Address */
+    .inv-address {
+      font-size: 0.88rem;
+      color: #333;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+    /* Row 4: Bill To / Invoice # / Date */
+    .inv-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.25rem;
+      gap: 1rem;
+    }
+    .inv-meta-row .bill-label {
+      font-weight: 700;
+      color: #1b2a5e;
+      font-size: 0.88rem;
+    }
+    .inv-meta-row .bill-value {
+      font-size: 0.88rem;
+      color: #333;
+      line-height: 1.5;
+    }
+    .inv-meta-right {
+      display: flex;
+      gap: 2.5rem;
+      align-items: flex-start;
+    }
+    .inv-meta-right .meta-block .meta-label {
+      font-weight: 700;
+      color: #1b2a5e;
+      font-size: 0.82rem;
+    }
+    .inv-meta-right .meta-block .meta-value {
+      font-size: 0.88rem;
+      color: #333;
+    }
+
+    /* Items table — mimics Excel exactly */
+    .inv-items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+      font-size: 0.88rem;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
+      background: transparent;
+    }
+    .inv-items thead th {
+      background: #1b2a5e;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      padding: 0.6rem 0.7rem;
+      border: none;
+      letter-spacing: 0.3px;
+    }
+    .inv-items thead th.al-c { text-align: center; }
+    .inv-items thead th.al-r { text-align: right; }
+    .inv-items tbody tr {
+      border-bottom: 1px solid #e0e4ef;
+    }
+    .inv-items tbody tr:nth-child(odd) {
+      background: #f4f6fb;
+    }
+    .inv-items tbody tr:nth-child(even) {
+      background: #fff;
+    }
+    .inv-items tbody td {
+      padding: 0.5rem 0.7rem;
+      border: none;
+      font-size: 0.86rem;
+      color: #222;
+      vertical-align: middle;
+    }
+    .inv-items tbody td.al-c { text-align: center; }
+    .inv-items tbody td.al-r { text-align: right; }
+    .inv-items tbody td.price::before { content: '$ '; }
+    .inv-items tfoot td {
+      padding: 0.7rem 0.7rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border-top: 2px solid #1b2a5e;
+      color: #1b2a5e;
+      background: transparent;
+      border-bottom: none;
+    }
+
+    .inv-actions {
+      margin-top: 2rem;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media print {
+      .topbar, .sidebar, .sidebar-overlay, .inv-actions, .menu-toggle { display: none !important; }
+      .layout { display: block !important; }
+      .content { padding: 0 !important; max-width: 100% !important; }
+      .inv-sheet { box-shadow: none; border: none; padding: 1.5rem; }
+    }
+    @media (max-width: 600px) {
+      .inv-sheet { padding: 1.5rem 1rem; }
+      .inv-row1 .company-name { font-size: 1.2rem; }
+      .inv-row1 .invoice-word { font-size: 1.5rem; }
+      .inv-meta-row { flex-direction: column; }
+      .inv-meta-right { gap: 1.5rem; }
+    }
+  </style>
+
+  <div class="inv-sheet">
+    <!-- Company + INVOICE -->
+    <div class="inv-row1">
+      <div class="company-name">FLAVIO PTY LTD</div>
+      <div class="invoice-word">INVOICE</div>
+    </div>
+
+    <!-- Address -->
+    <div class="inv-address">
+      16 Adelaide st<br>
+      Dandenong VIC 3175
+    </div>
+
+    <!-- Bill To + Invoice # + Date -->
+    <div class="inv-meta-row">
+      <div>
+        <div class="bill-label">BILL TO</div>
+        <div class="bill-value">
+          Rizins Burgers <%= invoice.store_name %><br>
+          <% if (invoice.store_name === 'Seaford') { %>
+            6/366 Frankston-Dandenong Rd, Seaford VIC 3198
+          <% } else if (invoice.store_name === 'Dandenong') { %>
+            16 Adelaide St, Dandenong VIC 3175
+          <% } else if (invoice.store_name === 'Mitcham') { %>
+            454 Whitehorse Rd, Mitcham VIC 3132
+          <% } else if (invoice.store_name === 'Frankston') { %>
+            123 Wells St, Frankston VIC 3199
+          <% } %>
         </div>
       </div>
-      <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
-        Submitted by: <strong><%= invoice.first_name %> <%= invoice.last_name %></strong>
-        <% if (invoice.submitted_at) { %>
-          &nbsp;at&nbsp;<%= new Date(invoice.submitted_at).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %>
-        <% } %>
+      <div class="inv-meta-right">
+        <div class="meta-block">
+          <div class="meta-label">INVOICE #</div>
+          <div class="meta-value"><%= invoice.invoice_number || invoice.id.substring(0,8).toUpperCase() %></div>
+        </div>
+        <div class="meta-block">
+          <div class="meta-label">DATE</div>
+          <div class="meta-value"><%= formatDate(invoice.invoice_date) %></div>
+        </div>
       </div>
     </div>
 
-    <div style="overflow-x: auto;">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 4%;">#</th>
-            <th style="width: 25%;">Product</th>
-            <th style="width: 12%;">Ordered</th>
-            <th style="width: 12%;">Received</th>
-            <th style="width: 10%;">Unit Price</th>
-            <th style="width: 12%;">Total</th>
-            <th style="width: 25%;">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (invoice.items && invoice.items.length > 0) { %>
-            <% var grandTotal = 0; %>
-            <% var displayIdx = 0; %>
-            <% invoice.items.forEach(function(item, idx) { %>
-              <% var price = parseFloat(item.unit_price) || 0; %>
-              <% var qty = parseFloat(item.quantity_received) || 0; %>
-              <% var lineTotal = price * qty; %>
-              <% if (item.item_notes === 'NOT SELECTED' || qty === 0) { return; } %>
-              <% grandTotal += lineTotal; %>
-              <% displayIdx++; %>
-              <% var mismatch = item.quantity_ordered && item.quantity_received && item.quantity_ordered !== item.quantity_received; %>
-              <tr style="<%= mismatch ? 'background: #FFF3E0;' : '' %>">
-                <td><%= displayIdx %></td>
-                <td><strong><%= item.product_name %></strong></td>
-                <td style="text-align: center; color: var(--text-muted);"><%= item.quantity_ordered || '-' %></td>
-                <td style="text-align: center; font-weight: 600;">
-                  <%= item.quantity_received || '-' %>
-                  <% if (mismatch) { %>
-                    <span style="color: #E65100; font-size: 0.75rem; display: block;">⚠ differs</span>
-                  <% } %>
-                </td>
-                <td style="text-align: center;">$<%= price.toFixed(2) %></td>
-                <td style="text-align: center; font-weight: 600;">$<%= lineTotal.toFixed(2) %></td>
-                <td style="color: var(--text-muted); font-size: 0.85rem;"><%= item.item_notes || '-' %></td>
-              </tr>
-            <% }); %>
-            <tr style="background: var(--surface-alt); font-weight: 700;">
-              <td colspan="5" style="text-align: right;">Grand Total:</td>
-              <td style="text-align: center;">$<%= grandTotal.toFixed(2) %></td>
-              <td></td>
+    <!-- Items Table -->
+    <table class="inv-items">
+      <thead>
+        <tr>
+          <th style="width:35%;">DESCRIPTION</th>
+          <th class="al-c" style="width:12%;">QTY</th>
+          <th class="al-c" style="width:18%;">UNIT PRICE</th>
+          <th class="al-c" style="width:12%;">GST</th>
+          <th class="al-r" style="width:18%;">AMOUNT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (invoice.items && invoice.items.length > 0) { %>
+          <% var grandTotal = 0; %>
+          <% invoice.items.forEach(function(item) { %>
+            <% var price = parseFloat(item.unit_price) || 0; %>
+            <% var qty = parseFloat(item.quantity_received) || 0; %>
+            <% if (item.item_notes === 'NOT SELECTED' || qty === 0) { return; } %>
+            <% var lineTotal = price * qty; %>
+            <% grandTotal += lineTotal; %>
+            <tr>
+              <td><%= item.product_name %></td>
+              <td class="al-c"><%= qty || '' %></td>
+              <td class="al-c price"><%= price.toFixed(2) %></td>
+              <td class="al-c" style="color:#999;">-</td>
+              <td class="al-r" style="font-weight:600;"><%= lineTotal > 0 ? lineTotal.toFixed(2) : '-' %></td>
             </tr>
-          <% } else { %>
-            <tr><td colspan="7" class="empty">No items in this invoice.</td></tr>
-          <% } %>
-        </tbody>
-      </table>
-    </div>
+          <% }); %>
+        <% } else { %>
+          <tr><td colspan="5" style="text-align:center; padding:2rem; color:#999;">No items in this invoice.</td></tr>
+        <% } %>
+      </tbody>
+      <% if (typeof grandTotal !== 'undefined' && grandTotal > 0) { %>
+      <tfoot>
+        <tr>
+          <td colspan="4" style="text-align:right;">TOTAL</td>
+          <td style="text-align:right;">$ <%= grandTotal.toFixed(2) %></td>
+        </tr>
+      </tfoot>
+      <% } %>
+    </table>
 
     <% if (invoice.notes) { %>
-      <div class="card" style="margin-top: 1.25rem;">
-        <strong>Manager Notes:</strong> <%= invoice.notes %>
+      <div style="margin-top:1.5rem; font-size:0.88rem; color:#555;">
+        <strong style="color:#1b2a5e;">Notes:</strong> <%= invoice.notes %>
       </div>
     <% } %>
+  </div>
 
-    <div style="margin-top: 1.5rem; display: flex; gap: 10px;">
-      <a href="/operation-manager/invoices" class="btn" style="padding: 6px 16px;">&larr; Back to Invoices</a>
-      <a href="/operation-manager/invoices/<%= invoice.id %>/download" class="btn" style="padding: 6px 16px; background: linear-gradient(180deg, var(--green), #388E3C); color: white;">⬇ Download CSV</a>
-    </div>
+  <div class="inv-actions">
+    <a href="/operation-manager/invoices" class="btn" style="padding:8px 18px;">&larr; Back</a>
+    <button onclick="window.print()" class="btn" style="padding:8px 18px; background:linear-gradient(135deg,#1b2a5e,#2a3a7e); color:#fff;">🖨 Print</button>
+    <a href="/operation-manager/invoices/<%= invoice.id %>/download" class="btn" style="padding:8px 18px; background:linear-gradient(135deg, var(--green), #388E3C); color:#fff;">⬇ Download PDF</a>
+  </div>
+
   <% } %>
 
 <%- include('../partials/footer') %>

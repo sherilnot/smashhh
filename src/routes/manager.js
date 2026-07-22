@@ -11,6 +11,7 @@ const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = req
 const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotificationLogs, getDeliveryRate } = require('../services/notificationTrackerService');
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
+const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
 
 // Multer config for cash photo uploads
 const cashStorage = multer.diskStorage({
@@ -239,7 +240,7 @@ router.get('/roster', async (req, res) => {
     }
     const storeId = storeRes.rows[0].store_id;
 
-    // Get all confirmed bookings for the week (or include cancelled if in edit mode)
+    // Get all confirmed bookings for the week
     const bookingsRes = await pool.query(
       `SELECT
          sb.id AS booking_id, sb.employee_id, sb.actual_clock_in, sb.booking_status,
@@ -249,7 +250,7 @@ router.get('/roster', async (req, res) => {
        JOIN shifts s ON s.id = sb.shift_id
        JOIN users u ON u.id = sb.employee_id
        WHERE s.store_id = $1
-         AND sb.booking_status IN ('confirmed', 'cancelled')
+         AND sb.booking_status = 'confirmed'
          AND s.start_time >= $2
          AND s.start_time <= $3
        ORDER BY u.last_name, u.first_name`,
@@ -347,6 +348,125 @@ router.get('/roster', async (req, res) => {
 // ─── Roster Editing ────────────────────────────────────────────────────────────
 
 const { recalculatePriority, getEmployeesByPriority, autoFillRoster } = require('../services/priorityService');
+const { publishRoster } = require('../services/publishedRosterService');
+
+// Publish roster to employees
+router.post('/roster/publish', async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+
+    const toLocalDateString = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    // Get manager's store
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
+    );
+    if (storeRes.rows.length === 0) {
+      return res.redirect(`/manager/roster?date=${weekStart || ''}&error=${encodeURIComponent('No store assignment')}`);
+    }
+    const storeId = storeRes.rows[0].store_id;
+
+    // Parse week bounds
+    const [y, m, d2] = weekStart.split('-').map(Number);
+    const wsDate = new Date(y, m - 1, d2);
+    wsDate.setHours(0, 0, 0, 0);
+    const weDate = new Date(wsDate);
+    weDate.setDate(wsDate.getDate() + 6);
+    weDate.setHours(23, 59, 59, 999);
+
+    // Build day labels and dates
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayDates = [];
+    for (let i = 0; i < 7; i++) {
+      const dd = new Date(wsDate);
+      dd.setDate(wsDate.getDate() + i);
+      dayDates.push(toLocalDateString(dd));
+    }
+
+    // Get confirmed bookings for the week
+    const bookingsRes = await pool.query(
+      `SELECT sb.employee_id, u.first_name, u.last_name, u.employment_type,
+              s.start_time, s.end_time
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN users u ON u.id = sb.employee_id
+       WHERE s.store_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time >= $2
+         AND s.start_time <= $3
+       ORDER BY u.last_name, u.first_name, s.start_time`,
+      [storeId, wsDate, weDate]
+    );
+
+    // Build roster rows
+    const employeeMap = new Map();
+    for (const row of bookingsRes.rows) {
+      const key = row.employee_id;
+      if (!employeeMap.has(key)) {
+        employeeMap.set(key, {
+          name: row.last_name ? (row.first_name + ' ' + row.last_name) : row.first_name,
+          employmentType: row.employment_type,
+          byDay: Array(7).fill(null)
+        });
+      }
+      const emp = employeeMap.get(key);
+      const bStart = new Date(row.start_time);
+      const bEnd = new Date(row.end_time);
+      const dateStr = toLocalDateString(bStart);
+      const dayIdx = dayDates.indexOf(dateStr);
+
+      if (dayIdx !== -1) {
+        let label = bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) +
+                    ' – ' + bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+        let color = '#F8BBD0';
+
+        SHIFT_TYPES.forEach(st => {
+          if (bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
+              bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM) {
+            color = st.color;
+            label = st.label;
+          }
+        });
+
+        emp.byDay[dayIdx] = { label, color };
+      }
+    }
+
+    const rosterData = {
+      dayLabels,
+      dayDates,
+      rows: Array.from(employeeMap.values())
+    };
+
+    const weekEndStr = toLocalDateString(weDate);
+    const result = await publishRoster(req.user.userId, storeId, weekStart, weekEndStr, rosterData);
+
+    if (!result.success) {
+      return res.redirect(`/manager/roster?date=${weekStart}&error=${encodeURIComponent(result.error)}`);
+    }
+
+    // Send push notifications to all employees in the store
+    const { sendPushNotification } = require('../services/webPushService');
+    const empIds = await pool.query(
+      `SELECT employee_id FROM store_employee_assignments WHERE store_id = $1`,
+      [storeId]
+    );
+    for (const row of empIds.rows) {
+      sendPushNotification(row.employee_id, {
+        title: '📋 Roster Published',
+        message: `Your roster for ${weekStart} is ready. Check your shifts!`,
+        data: { url: '/employee/my-roster' }
+      }).catch(() => {}); // Fire and forget
+    }
+
+    res.redirect(`/manager/roster?date=${weekStart}&success=roster_published`);
+  } catch (e) {
+    console.error('[Manager] roster/publish error', e);
+    res.redirect(`/manager/roster?date=${req.body.weekStart || ''}&error=${encodeURIComponent('Failed to publish roster')}`);
+  }
+});
 
 // Get available employees for assignment (JSON endpoint for the edit UI)
 router.get('/roster/employees', async (req, res) => {
@@ -492,7 +612,7 @@ router.post('/roster/unassign', async (req, res) => {
 
     // Verify booking belongs to manager's store
     const verifyRes = await pool.query(
-      `SELECT sb.id, sb.booking_status FROM shift_bookings sb
+      `SELECT sb.id FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN store_manager_assignments sma ON sma.store_id = s.store_id
        WHERE sb.id = $1 AND sma.manager_id = $2`,
@@ -502,20 +622,8 @@ router.post('/roster/unassign', async (req, res) => {
       return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
-    const currentStatus = verifyRes.rows[0].booking_status;
-    
-    // Toggle: if cancelled, restore to confirmed; otherwise cancel it
-    if (currentStatus === 'cancelled') {
-      await pool.query(
-        `UPDATE shift_bookings SET booking_status = 'confirmed', cancelled_at = NULL WHERE id = $1`,
-        [bookingId]
-      );
-    } else {
-      await pool.query(
-        `UPDATE shift_bookings SET booking_status = 'cancelled', cancelled_at = NOW() WHERE id = $1`,
-        [bookingId]
-      );
-    }
+    // Delete the booking entirely so it disappears from the roster
+    await pool.query(`DELETE FROM shift_bookings WHERE id = $1`, [bookingId]);
     
     res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
   } catch (e) {
@@ -1388,6 +1496,57 @@ router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
   } catch (e) {
     console.error('[Manager] cash submit error', e);
     res.redirect('/manager/cash?error=' + encodeURIComponent('Failed to submit'));
+  }
+});
+
+// ─── Maintenance Reports ────────────────────────────────────────────────────────
+
+const maintenanceStorage = multer.diskStorage({
+  destination: path.join(__dirname, '../../public/uploads/maintenance'),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'maint-' + uniqueSuffix + ext);
+  }
+});
+const maintenanceUpload = multer({
+  storage: maintenanceStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'), false);
+  }
+});
+
+router.get('/maintenance', async (req, res) => {
+  try {
+    const result = await getManagerMaintenanceReports(req.user.userId);
+    res.render('manager/maintenance', {
+      user: req.user,
+      reports: result.success ? result.reports : [],
+      error: result.success ? (req.query.error || null) : result.error,
+      success: req.query.success === '1'
+    });
+  } catch (e) {
+    console.error('[Manager] maintenance page error', e);
+    res.render('manager/maintenance', { user: req.user, reports: [], error: 'Failed to load page', success: false });
+  }
+});
+
+router.post('/maintenance/submit', maintenanceUpload.array('photos', 5), async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description || !description.trim()) {
+      return res.redirect('/manager/maintenance?error=' + encodeURIComponent('Please enter a description'));
+    }
+    const result = await createMaintenanceReport(req.user.userId, description.trim(), req.files || []);
+    if (!result.success) {
+      return res.redirect('/manager/maintenance?error=' + encodeURIComponent(result.error));
+    }
+    res.redirect('/manager/maintenance?success=1');
+  } catch (e) {
+    console.error('[Manager] maintenance submit error', e);
+    res.redirect('/manager/maintenance?error=' + encodeURIComponent('Failed to submit'));
   }
 });
 

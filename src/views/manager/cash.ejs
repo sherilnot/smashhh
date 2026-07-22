@@ -61,7 +61,7 @@
       <tbody>
         <% submissions.forEach(function(sub) { %>
           <tr>
-            <td><%= new Date(sub.submitted_at).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) %></td>
+            <td><%= formatDateTime(sub.submitted_at) %></td>
             <td style="font-weight: 600;">$<%= parseFloat(sub.amount).toFixed(2) %></td>
             <td><%= sub.image_count %> image<%= sub.image_count > 1 ? 's' : '' %></td>
             <td style="color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= sub.notes || '-' %></td>

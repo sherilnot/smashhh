@@ -23,7 +23,7 @@
         <% checklists.forEach(cl => { %>
           <tr>
             <td><strong><%= cl.store_name %></strong></td>
-            <td><%= new Date(cl.check_date).toLocaleDateString('en-CA') %></td>
+            <td><%= formatDate(cl.check_date) %></td>
             <td><%= cl.first_name %> <%= cl.last_name %></td>
             <td>
               <span class="badge" style="background: <%= cl.status === 'reviewed' ? 'var(--lettuce)' : 'var(--mustard)' %>; color: <%= cl.status === 'reviewed' ? '#fff' : 'var(--bun-dark)' %>;">

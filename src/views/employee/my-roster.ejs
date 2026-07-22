@@ -1,0 +1,81 @@
+<%- include('../partials/header', { title: 'My Roster', role: 'employee', active: 'my-roster' }) %>
+
+  <h1>My Roster</h1>
+
+  <% if (error) { %>
+    <div style="text-align: center; padding: 3rem 1rem;">
+      <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+      <p style="color: var(--text-muted); font-size: 1.1rem;"><%= error %></p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem;">Your manager will publish the roster once it's ready.</p>
+    </div>
+  <% } else if (roster) { %>
+    <%
+      var data = roster.roster_data;
+      var empName = roster.employee_name;
+      var publishedDate = formatDateTime(roster.published_at);
+    %>
+
+    <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">
+          <strong><%= roster.store_name %></strong> · Published <%= publishedDate %>
+        </span>
+      </div>
+      <div style="font-size: 0.8rem; padding: 0.3rem 0.8rem; background: linear-gradient(135deg, #e8f5e9, #c8e6c9); color: #2e7d32; border-radius: 20px; font-weight: 600;">
+        Week: <%= formatDate(roster.week_start) %> → <%= formatDate(roster.week_end) %>
+      </div>
+    </div>
+
+    <!-- Employee's own shifts highlighted at the top -->
+    <%
+      var myRow = data.rows.find(function(r) { return r.name === empName; });
+      var myShifts = [];
+      if (myRow) {
+        data.dayLabels.forEach(function(day, i) {
+          if (myRow.byDay[i]) {
+            myShifts.push({ day: day, date: data.dayDates[i], shift: myRow.byDay[i] });
+          }
+        });
+      }
+    %>
+
+    <% if (myShifts.length > 0) { %>
+      <!-- My shifts card -->
+      <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 16px; padding: 1.25rem; margin-bottom: 1.5rem; color: white;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+          <span style="font-size: 1.3rem;">🍔</span>
+          <h2 style="margin: 0; font-size: 1.1rem; color: #f4a300;">Your Shifts This Week</h2>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75rem;">
+          <% myShifts.forEach(function(s) { %>
+            <div style="background: rgba(255,255,255,0.08); border-radius: 12px; padding: 0.75rem; text-align: center; border: 1px solid rgba(244,163,0,0.2);">
+              <div style="font-weight: 700; font-size: 1rem; color: #f4a300;"><%= s.day %></div>
+              <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem;"><%= formatDateShort(s.date) %></div>
+              <div style="font-size: 0.85rem; font-weight: 600; color: white;"><%= s.shift.label %></div>
+            </div>
+          <% }); %>
+        </div>
+
+        <% 
+          var offDays = [];
+          data.dayLabels.forEach(function(day, i) {
+            if (!myRow.byDay[i]) offDays.push(day);
+          });
+        %>
+        <% if (offDays.length > 0) { %>
+          <div style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.4);">
+            Days off: <%= offDays.join(', ') %>
+          </div>
+        <% } %>
+      </div>
+    <% } else { %>
+      <div style="background: linear-gradient(135deg, #fff3cd, #ffeaa7); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; text-align: center;">
+        <p style="margin: 0; color: #856404; font-weight: 600;">No shifts assigned to you this week</p>
+        <p style="margin: 0.5rem 0 0; color: #856404; font-size: 0.85rem;">Check with your manager or book shifts from Available Shifts.</p>
+      </div>
+    <% } %>
+
+  <% } %>
+
+<%- include('../partials/footer') %>

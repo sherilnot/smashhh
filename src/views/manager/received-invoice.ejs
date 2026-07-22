@@ -25,7 +25,7 @@
   <% } else { %>
     <div class="card" style="margin-bottom: 1.25rem;">
       <strong><%= invoice.storeName %></strong> &nbsp;—&nbsp; 
-      <%= new Date(invoice.invoiceDate).toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %>
+      <%= formatDate(invoice.invoiceDate) %>
       <% if (invoice.checklistId) { %>
         &nbsp;<span style="color: var(--text-muted); font-size: 0.8rem;">✓ Linked to today's checklist</span>
       <% } %>
@@ -141,62 +141,126 @@
       </div>
 
     <% } else { %>
-      <!-- Submitted view — with option to edit & resubmit -->
+      <!-- Submitted view — formal Flavio PTY LTD invoice -->
       <div class="info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <span>✓ Invoice submitted to OM001.</span>
+        <span>✓ Invoice submitted to Operations.</span>
         <form method="POST" action="/manager/received-invoice/reopen" style="margin: 0;">
           <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
           <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--mustard, #F4A300), #E09500); color: #333; font-size: 0.85rem;">✏️ Edit & Resubmit</button>
         </form>
       </div>
 
-      <div style="overflow-x: auto;">
-        <table>
+      <style>
+        .inv-sheet { background:#fff; padding:3rem 3.5rem; max-width:860px; margin:0 auto; font-family:'Aptos','Calibri','Segoe UI',Arial,sans-serif; color:#1a1a2e; border:1px solid #ddd; }
+        .inv-row1 { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem; }
+        .inv-row1 .company-name { font-size:1.5rem; font-weight:700; color:#1b2a5e; }
+        .inv-row1 .invoice-word { font-size:2.2rem; font-weight:700; color:#1b2a5e; letter-spacing:1px; }
+        .inv-address { font-size:0.88rem; color:#333; line-height:1.6; margin-bottom:1.5rem; }
+        .inv-meta-row { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem; gap:1rem; }
+        .inv-meta-row .bill-label { font-weight:700; color:#1b2a5e; font-size:0.88rem; }
+        .inv-meta-row .bill-value { font-size:0.88rem; color:#333; line-height:1.5; }
+        .inv-meta-right { display:flex; gap:2.5rem; align-items:flex-start; }
+        .inv-meta-right .meta-block .meta-label { font-weight:700; color:#1b2a5e; font-size:0.82rem; }
+        .inv-meta-right .meta-block .meta-value { font-size:0.88rem; color:#333; }
+        .inv-items { width:100%; border-collapse:collapse; margin-top:1.5rem; font-size:0.88rem; border:none; box-shadow:none; border-radius:0; background:transparent; }
+        .inv-items thead th { background:#1b2a5e; color:#fff; font-weight:700; font-size:0.78rem; text-transform:uppercase; padding:0.6rem 0.7rem; border:none; letter-spacing:0.3px; }
+        .inv-items thead th.al-c { text-align:center; }
+        .inv-items thead th.al-r { text-align:right; }
+        .inv-items tbody tr { border-bottom:1px solid #e0e4ef; }
+        .inv-items tbody tr:nth-child(odd) { background:#f4f6fb; }
+        .inv-items tbody tr:nth-child(even) { background:#fff; }
+        .inv-items tbody td { padding:0.5rem 0.7rem; border:none; font-size:0.86rem; color:#222; vertical-align:middle; }
+        .inv-items tbody td.al-c { text-align:center; }
+        .inv-items tbody td.al-r { text-align:right; }
+        .inv-items tbody td.price::before { content:'$ '; }
+        .inv-items tfoot td { padding:0.7rem 0.7rem; font-weight:700; font-size:0.95rem; border-top:2px solid #1b2a5e; color:#1b2a5e; background:transparent; border-bottom:none; }
+        @media print { .topbar,.sidebar,.sidebar-overlay,.info,.menu-toggle{display:none!important;} .layout{display:block!important;} .content{padding:0!important;max-width:100%!important;} .inv-sheet{box-shadow:none;border:none;padding:1.5rem;} }
+        @media (max-width:600px) { .inv-sheet{padding:1.5rem 1rem;} .inv-row1 .company-name{font-size:1.2rem;} .inv-row1 .invoice-word{font-size:1.5rem;} .inv-meta-row{flex-direction:column;} .inv-meta-right{gap:1.5rem;} }
+      </style>
+
+      <div class="inv-sheet">
+        <div class="inv-row1">
+          <div class="company-name">FLAVIO PTY LTD</div>
+          <div class="invoice-word">INVOICE</div>
+        </div>
+        <div class="inv-address">16 Adelaide st<br>Dandenong VIC 3175</div>
+        <div class="inv-meta-row">
+          <div>
+            <div class="bill-label">BILL TO</div>
+            <div class="bill-value">
+              Rizins Burgers <%= invoice.storeName %><br>
+              <% if (invoice.storeName === 'Seaford') { %>
+                6/366 Frankston-Dandenong Rd, Seaford VIC 3198
+              <% } else if (invoice.storeName === 'Dandenong') { %>
+                16 Adelaide St, Dandenong VIC 3175
+              <% } else if (invoice.storeName === 'Mitcham') { %>
+                454 Whitehorse Rd, Mitcham VIC 3132
+              <% } else if (invoice.storeName === 'Frankston') { %>
+                123 Wells St, Frankston VIC 3199
+              <% } %>
+            </div>
+          </div>
+          <div class="inv-meta-right">
+            <div class="meta-block">
+              <div class="meta-label">INVOICE #</div>
+              <div class="meta-value"><%= invoice.id.substring(0,8).toUpperCase() %></div>
+            </div>
+            <div class="meta-block">
+              <div class="meta-label">DATE</div>
+              <div class="meta-value"><%= formatDate(invoice.invoiceDate) %></div>
+            </div>
+          </div>
+        </div>
+
+        <table class="inv-items">
           <thead>
             <tr>
-              <th style="width: 4%;">#</th>
-              <th style="width: 28%;">Product</th>
-              <th style="width: 12%;">Qty</th>
-              <th style="width: 12%;">Unit Price</th>
-              <th style="width: 14%;">Total</th>
-              <th style="width: 30%;">Notes</th>
+              <th style="width:35%;">DESCRIPTION</th>
+              <th class="al-c" style="width:12%;">QTY</th>
+              <th class="al-c" style="width:18%;">UNIT PRICE</th>
+              <th class="al-c" style="width:12%;">GST</th>
+              <th class="al-r" style="width:18%;">AMOUNT</th>
             </tr>
           </thead>
           <tbody>
             <% if (invoice.items && invoice.items.length > 0) { %>
               <% var grandTotal = 0; %>
-              <% var displayIdx = 0; %>
               <% invoice.items.forEach(function(item) { %>
                 <% var price = parseFloat(item.unit_price) || 0; %>
                 <% var qty = parseFloat(item.quantity_received) || 0; %>
                 <% if (qty === 0 || item.item_notes === 'NOT SELECTED') return; %>
                 <% var lineTotal = price * qty; %>
                 <% grandTotal += lineTotal; %>
-                <% displayIdx++; %>
                 <tr>
-                  <td><%= displayIdx %></td>
-                  <td><strong><%= item.product_name %></strong></td>
-                  <td style="text-align: center; font-weight: 600;"><%= item.quantity_received %></td>
-                  <td style="text-align: center;">$<%= price.toFixed(2) %></td>
-                  <td style="text-align: center; font-weight: 600;">$<%= lineTotal.toFixed(2) %></td>
-                  <td style="color: var(--text-muted);"><%= item.item_notes || '-' %></td>
+                  <td><%= item.product_name %></td>
+                  <td class="al-c"><%= qty || '' %></td>
+                  <td class="al-c price"><%= price.toFixed(2) %></td>
+                  <td class="al-c" style="color:#999;">-</td>
+                  <td class="al-r" style="font-weight:600;"><%= lineTotal > 0 ? lineTotal.toFixed(2) : '-' %></td>
                 </tr>
               <% }); %>
-              <tr style="background: var(--surface-alt); font-weight: 700;">
-                <td colspan="4" style="text-align: right;">Grand Total:</td>
-                <td style="text-align: center;">$<%= grandTotal.toFixed(2) %></td>
-                <td></td>
-              </tr>
             <% } %>
           </tbody>
+          <% if (typeof grandTotal !== 'undefined' && grandTotal > 0) { %>
+          <tfoot>
+            <tr>
+              <td colspan="4" style="text-align:right;">TOTAL</td>
+              <td style="text-align:right;">$ <%= grandTotal.toFixed(2) %></td>
+            </tr>
+          </tfoot>
+          <% } %>
         </table>
+
+        <% if (invoice.notes) { %>
+          <div style="margin-top:1.5rem; font-size:0.88rem; color:#555;">
+            <strong style="color:#1b2a5e;">Notes:</strong> <%= invoice.notes %>
+          </div>
+        <% } %>
       </div>
 
-      <% if (invoice.notes) { %>
-        <div class="card" style="margin-top: 1.25rem;">
-          <strong>Notes:</strong> <%= invoice.notes %>
-        </div>
-      <% } %>
+      <div style="margin-top:1.5rem; text-align:center;">
+        <button onclick="window.print()" class="btn" style="padding:8px 18px; background:linear-gradient(135deg,#1b2a5e,#2a3a7e); color:#fff;">🖨 Print Invoice</button>
+      </div>
     <% } %>
   <% } %>
 

@@ -10,9 +10,9 @@
     <div class="card" style="margin-bottom: 1.25rem;">
       <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
         <div><strong>Store:</strong> <%= timesheet.store_name %></div>
-        <div><strong>Week:</strong> <%= new Date(timesheet.week_start).toISOString().split('T')[0] %> — <%= new Date(timesheet.week_end).toISOString().split('T')[0] %></div>
+        <div><strong>Week:</strong> <%= formatDate(timesheet.week_start) %> — <%= formatDate(timesheet.week_end) %></div>
         <div><strong>By:</strong> <%= timesheet.submitted_first %> <%= timesheet.submitted_last %></div>
-        <div><strong>Submitted:</strong> <%= new Date(timesheet.submitted_at).toLocaleString('en-AU') %></div>
+        <div><strong>Submitted:</strong> <%= formatDateTime(timesheet.submitted_at) %></div>
       </div>
     </div>
 
@@ -40,7 +40,7 @@
             <th>Type</th>
             <th>Rate</th>
             <% timesheet.dayLabels.forEach(function(label, i) { %>
-              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= timesheet.dayDates[i].slice(5) %></span></th>
+              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= formatDateShort(timesheet.dayDates[i]) %></span></th>
             <% }) %>
             <th class="amount">Weekday</th>
             <th class="amount">Weekend</th>

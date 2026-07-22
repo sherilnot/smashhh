@@ -22,7 +22,7 @@ const app = express();
 // Security headers (Req 17.4)
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   next();
@@ -37,6 +37,27 @@ app.use(express.static(path.join(__dirname, '../public')));
 // View engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// Global date formatter available in all EJS templates
+app.locals.formatDate = function(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return String(date);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+};
+app.locals.formatDateTime = function(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return String(date);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+app.locals.formatDateShort = function(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return String(date);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d.getDate()} ${months[d.getMonth()]}`;
+};
 
 // Routes
 app.use('/', authRoutes);
@@ -71,11 +92,11 @@ app.use((err, req, res, next) => {
 // Start nightly scheduler at 10 PM (Req 9.1)
 scheduleNightlyJob('generate-inventory-checklists', '0 22 * * *', generateNightlyChecklists);
 
-// Send shift booking reminders during booking window (Wed-Sat)
-// Runs at 9 AM, 2 PM, and 6 PM on Wednesday through Saturday
-scheduleNightlyJob('send-shift-reminders-morning', '0 9 * * 3-6', sendShiftBookingReminders);
-scheduleNightlyJob('send-shift-reminders-afternoon', '0 14 * * 3-6', sendShiftBookingReminders);
-scheduleNightlyJob('send-shift-reminders-evening', '0 18 * * 3-6', sendShiftBookingReminders);
+// Send shift booking reminders during booking window (Wed-Sun)
+// Runs at 9 AM, 2 PM, and 6 PM on Wednesday through Sunday
+scheduleNightlyJob('send-shift-reminders-morning', '0 9 * * 3-0', sendShiftBookingReminders);
+scheduleNightlyJob('send-shift-reminders-afternoon', '0 14 * * 3-0', sendShiftBookingReminders);
+scheduleNightlyJob('send-shift-reminders-evening', '0 18 * * 3-0', sendShiftBookingReminders);
 
 // Auto-complete shifts whose end time has passed, every 15 minutes. This is
 // purely a safety net — managers can still manually end a shift early via

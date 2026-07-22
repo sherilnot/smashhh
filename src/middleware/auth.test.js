@@ -119,7 +119,7 @@ describe('roleGuard', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('returns 403 when the role does not match (Req 3.2, 3.4, 3.6)', () => {
+  test('redirects to correct dashboard when the role does not match (Req 3.2, 3.4, 3.6)', () => {
     const guard = roleGuard('warehouse_manager');
     const req = { user: { userId: 'u1', userRole: 'employee' } };
     const res = makeRes();
@@ -127,19 +127,18 @@ describe('roleGuard', () => {
 
     guard(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.send).toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith('/employee/dashboard');
     expect(next).not.toHaveBeenCalled();
   });
 
   test.each([
-    ['employee', 'store_manager'],
-    ['employee', 'warehouse_manager'],
-    ['store_manager', 'employee'],
-    ['store_manager', 'warehouse_manager'],
-    ['warehouse_manager', 'employee'],
-    ['warehouse_manager', 'store_manager']
-  ])('denies %s accessing a %s-guarded route with 403', (userRole, requiredRole) => {
+    ['employee', 'store_manager', '/employee/dashboard'],
+    ['employee', 'warehouse_manager', '/employee/dashboard'],
+    ['store_manager', 'employee', '/manager/dashboard'],
+    ['store_manager', 'warehouse_manager', '/manager/dashboard'],
+    ['warehouse_manager', 'employee', '/warehouse/dashboard'],
+    ['warehouse_manager', 'store_manager', '/warehouse/dashboard']
+  ])('denies %s accessing a %s-guarded route with redirect to %s', (userRole, requiredRole, expectedRedirect) => {
     const guard = roleGuard(requiredRole);
     const req = { user: { userId: 'u1', userRole } };
     const res = makeRes();
@@ -147,7 +146,7 @@ describe('roleGuard', () => {
 
     guard(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.redirect).toHaveBeenCalledWith(expectedRedirect);
     expect(next).not.toHaveBeenCalled();
   });
 });

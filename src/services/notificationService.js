@@ -91,9 +91,9 @@ async function checkShiftBookingReminder(employeeId) {
     const now = new Date();
     const currentDay = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     
-    // Only remind Wed-Sat (3-6)
-    if (currentDay < 3 || currentDay > 6) {
-      return { needsReminder: false, message: 'Outside booking window' };
+    // Only remind Wed-Sun (3-6, 0)
+    if (currentDay >= 1 && currentDay <= 2) {
+      return { needsReminder: false, message: 'Outside notification window' };
     }
 
     // Calculate next week Monday-Sunday

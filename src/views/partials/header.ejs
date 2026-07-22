@@ -4,6 +4,7 @@
   var menus = {
     employee: [
       { key: 'dashboard', href: '/employee/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'my-roster', href: '/employee/my-roster', icon: 'calendar-range',   label: 'My Roster' },
       { key: 'shifts',    href: '/employee/shifts',    icon: 'calendar-plus',    label: 'Available Shifts' },
       { key: 'my-shifts', href: '/employee/my-shifts', icon: 'calendar-check',   label: 'My Shifts' }
     ],
@@ -12,6 +13,7 @@
       { key: 'checklist', href: '/manager/store-checklist',  icon: 'clipboard-list',   label: 'Daily Checklist' },
       { key: 'invoice',   href: '/manager/received-invoice', icon: 'package-check',    label: 'Received Invoice' },
       { key: 'cash',      href: '/manager/cash',             icon: 'banknote',         label: 'Cash Report' },
+      { key: 'maintenance', href: '/manager/maintenance',    icon: 'wrench',           label: 'Maintenance' },
       { key: 'roster',    href: '/manager/roster',           icon: 'users',            label: 'Weekly Roster' },
       { key: 'timesheet', href: '/manager/timesheet',        icon: 'clock',            label: 'Timesheet' },
       { key: 'pending',   href: '/manager/pending',          icon: 'bell-dot',         label: 'Pending' },
@@ -24,14 +26,13 @@
     receiving_manager: [
       { key: 'dashboard',  href: '/receiving-manager/timesheets', icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
-      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' },
-      { key: 'invoices',   href: '/receiving-manager/received-invoices', icon: 'package-check', label: 'Received Invoices' }
+      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' }
     ],
     operation_manager: [
       { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'invoices',  href: '/operation-manager/invoices',  icon: 'package-check',    label: 'Invoices' },
-      { key: 'timesheets', href: '/operation-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
-      { key: 'cash',      href: '/operation-manager/cash',      icon: 'banknote',         label: 'Cash Reports' }
+      { key: 'cash',      href: '/operation-manager/cash',      icon: 'banknote',         label: 'Cash Reports' },
+      { key: 'maintenance', href: '/operation-manager/maintenance', icon: 'tool',          label: 'Maintenance' }
     ]
   };
   var items = menus[navRole] || [];
@@ -41,8 +42,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title><%= typeof title !== 'undefined' ? title : 'Rizins' %></title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Rizins" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
   <link rel="stylesheet" href="/css/theme.css" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <% if (navRole === 'employee') { %>
@@ -51,6 +62,11 @@
 </head>
 <body>
   <header class="topbar">
+    <% if (items.length) { %>
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <i data-lucide="menu" class="nav-icon"></i>
+    </button>
+    <% } %>
     <span class="brand">
       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" x2="18" y1="17" y2="17"/></svg>
       Rizins <span class="accent">Smash</span>
@@ -58,6 +74,8 @@
     <span class="spacer"></span>
     <% if (roleLabel) { %><span class="who"><%= roleLabel %></span><% } %>
   </header>
+  <!-- Overlay for mobile sidebar -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <div class="layout">
     <% if (items.length) { %>
     <aside class="sidebar">

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="90" fill="#1a1a1a"/>
+  <g transform="translate(102, 80) scale(12.83)">
+    <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z" fill="none" stroke="#f4a300" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="6" x2="18" y1="17" y2="17" stroke="#f4a300" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+  <text x="256" y="440" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="72" font-weight="800" fill="#ffffff">RIZINS</text>
+</svg>

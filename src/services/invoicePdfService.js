@@ -49,7 +49,7 @@ function generateInvoicePdf(invoice, options = {}) {
     'Frankston': '123 Wells St, Frankston VIC 3199'
   };
 
-  const storeName = invoice.store_name || '';
+  const storeName = invoice.store_name || invoice.storeName || '';
   const billTo = `Rizins Burgers ${storeName}`;
   const address = storeAddresses[storeName] || '';
 
@@ -59,9 +59,13 @@ function generateInvoicePdf(invoice, options = {}) {
 
   // Invoice # and Date on the right
   const invoiceNum = invoice.invoice_number || invoice.id.substring(0, 8).toUpperCase();
-  const invoiceDate = new Date(invoice.invoice_date).toLocaleDateString('en-AU', {
-    day: '2-digit', month: '2-digit', year: 'numeric'
-  });
+  const invoiceDate = (() => {
+    const d = invoice.invoice_date;
+    if (!d) return '';
+    // Handle both Date object and ISO string (YYYY-MM-DD)
+    const parsed = typeof d === 'string' ? new Date(d + 'T00:00:00') : new Date(d);
+    return parsed.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  })();
 
   const metaRightX = 380;
   doc.font('Helvetica-Bold').fontSize(9).fillColor(navy)
@@ -108,8 +112,8 @@ function generateInvoicePdf(invoice, options = {}) {
   let rowIdx = 0;
 
   const items = (invoice.items || []).filter(item => {
-    const qty = parseFloat(item.quantity_received) || 0;
-    return item.item_notes !== 'NOT SELECTED' && qty > 0;
+    // Include all items — even qty=0 ones (manager may not have filled them yet)
+    return item.item_notes !== 'NOT SELECTED';
   });
 
   items.forEach((item) => {

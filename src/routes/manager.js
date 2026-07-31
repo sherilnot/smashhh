@@ -1541,7 +1541,10 @@ router.get('/received-invoice/download-draft', async (req, res) => {
     );
     invoice.items = itemsRes.rows;
 
-    const filename = `invoice_draft_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoice.invoice_date}.pdf`;
+    const invoiceDate = typeof invoice.invoice_date === 'string'
+      ? invoice.invoice_date.substring(0, 10)
+      : new Date(invoice.invoice_date).toISOString().substring(0, 10);
+    const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoiceDate}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

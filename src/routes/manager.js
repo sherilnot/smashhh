@@ -1546,7 +1546,7 @@ router.get('/received-invoice/download-draft', async (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const pdfStream = generateInvoicePdf(invoice, { watermark: 'DRAFT' });
+    const pdfStream = generateInvoicePdf(invoice);
     pdfStream.pipe(res);
   } catch (e) {
     console.error('[Manager] invoice draft PDF download error', e);

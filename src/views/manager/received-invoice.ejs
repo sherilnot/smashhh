@@ -30,7 +30,7 @@
       .inv-meta { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
       .inv-bill-label { font-weight:700; color:#1b2a5e; font-size:0.82rem; }
       .inv-bill-value { font-size:0.85rem; color:#333; line-height:1.5; }
-      .inv-meta-right { display:flex; gap:2rem; }
+      .inv-meta-right { display:flex; gap:2rem; flex-wrap:wrap; }
       .meta-label { font-weight:700; color:#1b2a5e; font-size:0.78rem; }
       .meta-value { font-size:0.85rem; color:#333; }
       .inv-table { width:100%; border-collapse:collapse; margin-top:1rem; font-size:0.85rem; }
@@ -45,10 +45,22 @@
       .inv-table tbody td.ac { text-align:center; }
       .inv-table tbody td.ar { text-align:right; }
       .inv-table tfoot td { padding:0.65rem 0.6rem; font-weight:700; font-size:0.95rem; border-top:2px solid #1b2a5e; color:#1b2a5e; }
-      .qty-edit-input { width:70px; text-align:center; padding:0.3rem; border:2px solid #f4a300; border-radius:6px; font-size:0.85rem; font-weight:700; background:#fffbf0; }
+      .qty-edit-input { width:60px; text-align:center; padding:0.3rem; border:2px solid #f4a300; border-radius:6px; font-size:0.85rem; font-weight:700; background:#fffbf0; }
       .badge-emergency { font-size:0.65rem; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px; padding:1px 4px; margin-left:4px; font-weight:600; }
       @media print { .topbar,.sidebar,.sidebar-overlay,.inv-actions,.menu-toggle{display:none!important;} .layout{display:block!important;} .content{padding:0!important;} .inv-sheet{border:none;padding:1rem;border-radius:0;} .inv-table tbody tr{cursor:default;} }
-      @media (max-width:600px) { .inv-sheet{padding:1rem 0.75rem;} .inv-word{font-size:1.4rem;} .inv-meta{flex-direction:column;} .inv-meta-right{gap:1rem;} }
+      /* Mobile: hide GST and Ordered columns, tighten padding */
+      @media (max-width:600px) {
+        .inv-sheet { padding:1rem 0.5rem; border-radius:8px; }
+        .inv-word { font-size:1.3rem; }
+        .inv-company { font-size:1.1rem; }
+        .inv-meta { flex-direction:column; gap:0.5rem; }
+        .inv-meta-right { gap:0.75rem; }
+        .inv-address { display:none; }
+        .col-ordered, .col-gst { display:none; }
+        .inv-table thead th { font-size:0.65rem; padding:0.4rem 0.35rem; }
+        .inv-table tbody td { font-size:0.8rem; padding:0.45rem 0.35rem; }
+        .inv-table tfoot td { font-size:0.85rem; padding:0.5rem 0.35rem; }
+      }
     </style>
 
     <div class="inv-sheet">
@@ -101,10 +113,10 @@
           <tr>
             <th style="width:4%;">#</th>
             <th style="width:36%;">Description</th>
-            <th class="ac" style="width:11%;">Ordered</th>
+            <th class="ac col-ordered" style="width:11%;">Ordered</th>
             <th class="ac" style="width:13%;">Received</th>
             <th class="ac" style="width:14%;">Unit Price</th>
-            <th class="ac" style="width:10%;">GST</th>
+            <th class="ac col-gst" style="width:10%;">GST</th>
             <th class="ar" style="width:12%;">Amount</th>
           </tr>
         </thead>
@@ -124,7 +136,7 @@
                   <%= item.product_name %>
                   <% if (item.is_emergency) { %><span class="badge-emergency">🚨 Emergency</span><% } %>
                 </td>
-                <td class="ac" style="color:#999;"><%= item.quantity_ordered || '—' %></td>
+                <td class="ac col-ordered" style="color:#999;"><%= item.quantity_ordered || '—' %></td>
                 <td class="ac">
                   <span class="qty-display" style="font-weight:700; color:<%= qty > 0 ? '#1b2a5e' : '#aaa' %>;">
                     <%= qty > 0 ? qty : '0' %>
@@ -138,7 +150,7 @@
                          onblur="commitInvoiceEdit(this)">
                 </td>
                 <td class="ac">$ <%= price.toFixed(2) %></td>
-                <td class="ac" style="color:#aaa;">—</td>
+                <td class="ac col-gst" style="color:#aaa;">—</td>
                 <td class="ar inv-line-total" style="font-weight:600;">
                   <%= lineTotal > 0 ? lineTotal.toFixed(2) : '—' %>
                 </td>

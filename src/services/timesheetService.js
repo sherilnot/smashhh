@@ -10,16 +10,24 @@ const { getRosterWeek } = require('./rosterService');
 
 /**
  * Compute hours between two timestamps, rounded to 2 decimal places.
+ * Full-day shifts (11:00–21:00) get 30 minutes deducted for lunch break.
  * @param {Date} startTime
  * @param {Date} endTime
  * @returns {number}
  */
 function computeHours(startTime, endTime) {
-  const ms = new Date(endTime).getTime() - new Date(startTime).getTime();
-  // Defensive floor: hours worked can never be negative. This guards the
-  // timesheet/wage calculation even if bad clock-in/out data somehow reaches
-  // this function (e.g. from data created before validation was added).
-  return Math.max(0, Math.round((ms / 3600000) * 100) / 100);
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const ms = end.getTime() - start.getTime();
+  let hours = Math.max(0, ms / 3600000);
+
+  // Deduct 30-min lunch break for full-day shifts (11:00–21:00)
+  if (start.getHours() === 11 && start.getMinutes() === 0 &&
+      end.getHours() === 21 && end.getMinutes() === 0) {
+    hours -= 0.5;
+  }
+
+  return Math.round(Math.max(0, hours) * 100) / 100;
 }
 
 /**
@@ -38,13 +46,14 @@ function validateTimesheetSubmission(facts) {
     return { valid: false, error: 'Timesheet already submitted for this week' };
   }
   
-  // Allow submission on Sunday for current week
+  // Only block truly future weeks (week hasn't started yet)
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const isSunday = now.getDay() === 0;
-  const weekEndDate = new Date(facts.weekEnd);
-  weekEndDate.setHours(0, 0, 0, 0);
-  const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+  // weekEnd's Monday = weekEnd - 6 days
+  const weekStartDate = new Date(facts.weekEnd);
+  weekStartDate.setDate(weekStartDate.getDate() - 6);
+  weekStartDate.setHours(0, 0, 0, 0);
+  const isFutureWeek = weekStartDate > today;
   
   if (isFutureWeek) {
     return { valid: false, error: 'Cannot submit timesheet for future weeks' };
@@ -134,9 +143,9 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
   const bookingsRes = await pool.query(
     `SELECT
        sb.id AS booking_id, sb.no_show, sb.adjusted_hours,
-       sb.actual_clock_in, sb.actual_clock_out,
+       sb.actual_clock_in, sb.actual_clock_out, sb.completed_at,
        u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
-       s.start_time AS shift_start, s.end_time AS shift_end,
+       s.start_time AS shift_start, CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time THEN sb.completed_at ELSE s.end_time END AS shift_end,
        s.start_time::date AS shift_date,
        s.updated_at AS shift_updated_at
      FROM shift_bookings sb
@@ -150,7 +159,7 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
     [storeId, weekStart, weekEnd]
   );
 
-  // Compute hours for each entry (respecting no_show, adjusted_hours, and actual clock times)
+  // Compute hours for each entry (respecting no_show, adjusted_hours, actual clock times, and early end)
   const entries = bookingsRes.rows.map(row => {
     let hours;
     if (row.no_show) {
@@ -158,20 +167,15 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
     } else if (row.adjusted_hours !== null && row.adjusted_hours !== undefined) {
       hours = parseFloat(row.adjusted_hours);
     } else if (row.actual_clock_in && row.actual_clock_out) {
-      // Check if shift was edited AFTER actual times were recorded
       const shiftUpdated = new Date(row.shift_updated_at || 0);
       const actualClockIn = new Date(row.actual_clock_in);
-      
-      // If shift was edited after clock times were set, use the new shift times
       if (shiftUpdated > actualClockIn) {
-        console.log(`[Timesheet] Shift ${row.booking_id} was edited after clock-in, using new shift times`);
         hours = computeHours(row.shift_start, row.shift_end);
       } else {
-        // Use actual clock in/out times if they're more recent
         hours = computeHours(row.actual_clock_in, row.actual_clock_out);
       }
     } else {
-      // Fall back to scheduled shift times
+      // shift_end already uses completed_at if shift was ended early (via SQL CASE)
       hours = computeHours(row.shift_start, row.shift_end);
     }
     return {
@@ -232,7 +236,7 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
       `SELECT
          sb.id AS booking_id, sb.no_show, sb.adjusted_hours, sb.actual_clock_in, sb.actual_clock_out,
          u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
-         s.start_time AS shift_start, s.end_time AS shift_end,
+         s.start_time AS shift_start, CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time THEN sb.completed_at ELSE s.end_time END AS shift_end,
          s.start_time::date AS shift_date,
          s.updated_at AS shift_updated_at
        FROM shift_bookings sb

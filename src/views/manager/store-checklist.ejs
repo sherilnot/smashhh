@@ -1,92 +1,86 @@
-<%- include('../partials/header', { title: 'Daily Store Checklist', role: 'store_manager', active: 'checklist' }) %>
+<%- include('../partials/header', { title: 'Daily Checklist', role: 'store_manager', active: 'checklist' }) %>
 
   <h1>Daily Checklist</h1>
 
   <% if (checklist) { %>
-    <div class="card" style="margin-bottom: 1.25rem;">
-      <strong><%= checklist.storeName %></strong> &nbsp;—&nbsp; <%= checklist.checkDate %>
+    <%
+      var now = new Date();
+      var isBeforeTenAm = now.getHours() < 10;
+      var dateLabel = isBeforeTenAm ? "Today's delivery" : "Tomorrow's delivery";
+    %>
+    <div style="background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+      <span style="font-weight: 600; color: var(--bun-dark);"><%= checklist.storeName %></span>
+      <span style="color: var(--muted);"> — <%= formatDate(checklist.checkDate) %></span>
+      <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem;"><%= dateLabel %> · <%= isBeforeTenAm ? 'Editable until 10:00 AM' : 'Preparing for tomorrow' %></div>
     </div>
   <% } %>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
-
-  <% if (success) { %>
-    <div class="msg">✅ Checklist submitted to warehouse manager successfully!</div>
-  <% } %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success) { %><div class="msg">✅ Checklist submitted to warehouse manager!</div><% } %>
 
   <% if (!checklist) { %>
     <div class="empty">Unable to load checklist.</div>
   <% } else if (checklist.status === 'submitted' && !edit) { %>
-    <div class="info" style="display: flex; justify-content: space-between; align-items: center;">
-      <span>✓ Submitted to warehouse manager.</span>
-      <a href="/manager/store-checklist?edit=1" class="btn" style="background: linear-gradient(180deg, var(--mustard), var(--mustard-dark)); color: var(--bun-dark); font-size: 0.85rem;">✏️ Edit & Resubmit</a>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--green-bg); border: 1px solid rgba(45,156,90,0.15); border-radius: 10px; margin-bottom: 1rem;">
+      <span style="color: var(--green); font-weight: 600; font-size: 0.9rem;">✓ Submitted to warehouse</span>
+      <a href="/manager/store-checklist?edit=1" style="padding: 0.4rem 0.9rem; font-size: 0.8rem; background: linear-gradient(135deg, #f4a300, #e8950a); color: var(--bun-dark); border-radius: 8px; font-weight: 700; text-decoration: none;">Edit</a>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th style="width:5%">#</th>
-          <th style="width:55%">Product</th>
-          <th style="width:20%">Qty To Bring</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% var displayIdx = 0; %>
-        <% checklist.items.forEach((item) => { %>
-          <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || item.quantity_to_bring.trim() === '') return; %>
-          <% displayIdx++; %>
-          <tr>
-            <td style="color: var(--muted);"><%= displayIdx %></td>
-            <td><%= item.product_name %></td>
-            <td><strong><%= item.quantity_to_bring %></strong></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <% var displayIdx = 0; %>
+      <% checklist.items.forEach((item) => { %>
+        <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || item.quantity_to_bring.trim() === '') return; %>
+        <% displayIdx++; %>
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+          <span style="width: 22px; font-size: 0.8rem; color: var(--muted); font-weight: 600;"><%= displayIdx %></span>
+          <span style="flex: 1; font-weight: 600; font-size: 0.9rem;"><%= item.product_name %></span>
+          <span style="padding: 0.25rem 0.7rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.8rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_to_bring %></span>
+        </div>
+      <% }) %>
+    </div>
 
   <% } else { %>
-    <form method="POST" action="/manager/store-checklist/submit">
+    <form method="POST" action="/manager/store-checklist/submit" id="checklistForm">
       <input type="hidden" name="checklistId" value="<%= checklist.id %>">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:5%"><input type="checkbox" id="selectAllChecklist" checked title="Select/Deselect All"></th>
-            <th style="width:5%">#</th>
-            <th style="width:35%">Product</th>
-            <th style="width:25%">Qty Needed</th>
-            <th style="width:30%">Qty To Bring</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% checklist.items.forEach((item, idx) => { %>
-            <tr>
-              <td style="text-align:center;">
-                <input type="checkbox" name="selected_<%= item.id %>" value="1" checked class="item-check-cl">
-              </td>
-              <td style="color: var(--muted);"><%= idx + 1 %></td>
-              <td><strong><%= item.product_name %></strong></td>
-              <td><span class="badge"><%= item.quantity_needed %></span></td>
-              <td>
-                <input type="text" name="qty_<%= item.id %>" value="<%= item.quantity_to_bring || '' %>"
-                  placeholder="—" style="width: 100%;">
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
 
-      <div style="margin-top: 1.25rem;">
-        <button type="submit" class="btn" style="padding: 0.75rem 2rem; font-size: 1rem;">
-          📤 Send to Warehouse Manager
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        <!-- Header row -->
+        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.85rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700;">
+          <span style="width: 28px;"></span>
+          <span style="width: 22px;">#</span>
+          <span style="flex: 1;">Product</span>
+          <span style="width: 80px; text-align: center;">Qty Needed</span>
+          <span style="width: 80px; text-align: center;">Qty To Bring</span>
+        </div>
+
+        <% checklist.items.forEach((item, idx) => { %>
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+            <input type="checkbox" name="selected_<%= item.id %>" value="1" class="item-check-cl"
+              style="width: 20px; height: 20px; accent-color: var(--charcoal); flex-shrink: 0;">
+            <span style="width: 22px; font-size: 0.8rem; color: var(--muted); font-weight: 600;"><%= idx + 1 %></span>
+            <span style="flex: 1; font-weight: 600; font-size: 0.88rem;"><%= item.product_name %></span>
+            <span style="width: 80px; text-align: center; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_needed %></span>
+            <input type="text" name="qty_<%= item.id %>" value="<%= item.quantity_to_bring || '' %>"
+              placeholder="0" style="width: 80px; text-align: center; padding: 0.4rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: var(--cream);">
+          </div>
+        <% }) %>
+      </div>
+
+      <!-- Sticky submit button -->
+      <div style="position: sticky; bottom: 0; padding: 1rem 0; margin-top: 1rem; background: var(--cream);">
+        <button type="submit" style="width: 100%; padding: 0.9rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(139,105,20,0.3); display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          Submit Inventory Report
         </button>
       </div>
     </form>
 
     <script>
-      document.getElementById('selectAllChecklist').addEventListener('change', function() {
-        document.querySelectorAll('.item-check-cl').forEach(function(cb) { cb.checked = this.checked; }.bind(this));
+      // Select all toggle
+      var allChecked = true;
+      document.querySelector('h1').addEventListener('dblclick', function() {
+        allChecked = !allChecked;
+        document.querySelectorAll('.item-check-cl').forEach(function(cb) { cb.checked = allChecked; });
       });
     </script>
   <% } %>

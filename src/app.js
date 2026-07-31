@@ -1,4 +1,8 @@
 require('dotenv').config();
+
+// Set timezone to Australia/Melbourne for all date operations
+process.env.TZ = 'Australia/Melbourne';
+
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');

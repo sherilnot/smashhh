@@ -131,7 +131,8 @@ async function getSubmissionStatus(employeeId) {
   const { hasSubmitted, submittedAt } = await hasSubmittedThisWeek(employeeId);
   const { start: nextMonday, end: nextSunday } = getNextRosterWeek();
   
-  let canSubmit = inBookingWindow && !hasSubmitted;
+  // Always allow submission — employees can update their shifts anytime
+  let canSubmit = inBookingWindow;
   let message = '';
   
   if (!inBookingWindow) {
@@ -139,8 +140,8 @@ async function getSubmissionStatus(employeeId) {
     message = `Booking opens on ${nextWindow.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
     canSubmit = false;
   } else if (hasSubmitted) {
-    message = `You've already submitted shifts for the week of ${nextMonday.toLocaleDateString()}. You can submit again next week.`;
-    canSubmit = false;
+    message = `Update your shifts for ${nextMonday.toLocaleDateString()} - ${nextSunday.toLocaleDateString()}. Previously submitted — you can change anytime.`;
+    canSubmit = true;
   } else {
     message = `Book your shifts for ${nextMonday.toLocaleDateString()} - ${nextSunday.toLocaleDateString()}`;
     canSubmit = true;

@@ -6,10 +6,10 @@ const { pool } = require('../config/database');
  */
 
 /**
- * Get or create today's checklist for a manager's store.
- * If no checklist exists for today, creates one from the store's template.
+ * Get or create checklist for a manager's store.
+ * Checklist is prepared for TOMORROW. Editable until 10am the next day (the actual date).
  * @param {string} managerId
- * @returns {Promise<{ success: boolean, checklist?: object, error?: string }>}
+ * @returns {Promise<{ success: boolean, checklist?: object, checklistPending?: boolean, error?: string }>}
  */
 async function getOrCreateTodayChecklist(managerId) {
   const client = await pool.connect();
@@ -28,12 +28,27 @@ async function getOrCreateTodayChecklist(managerId) {
     }
 
     const { store_id, store_name } = storeRes.rows[0];
-    const today = new Date().toISOString().split('T')[0];
+    
+    // Target date = tomorrow. But if it's before 10am, we can still edit today's list.
+    const now = new Date();
+    const hour = now.getHours();
+    
+    let targetDate;
+    if (hour < 10) {
+      // Before 10am: show today's checklist (prepared yesterday, still editable)
+      targetDate = new Date(now);
+    } else {
+      // After 10am: prepare tomorrow's checklist
+      targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    
+    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
 
-    // Check if checklist already exists for today
+    // Check if checklist already exists for this date
     let checklistRes = await client.query(
       `SELECT * FROM store_checklists WHERE store_id = $1 AND check_date = $2`,
-      [store_id, today]
+      [store_id, dateStr]
     );
 
     let checklistId;
@@ -46,7 +61,7 @@ async function getOrCreateTodayChecklist(managerId) {
       const insertRes = await client.query(
         `INSERT INTO store_checklists (store_id, submitted_by, check_date, status)
          VALUES ($1, $2, $3, 'draft') RETURNING id, status`,
-        [store_id, managerId, today]
+        [store_id, managerId, dateStr]
       );
       checklistId = insertRes.rows[0].id;
       status = 'draft';
@@ -89,7 +104,7 @@ async function getOrCreateTodayChecklist(managerId) {
         id: checklistId,
         storeId: store_id,
         storeName: store_name,
-        checkDate: today,
+        checkDate: dateStr,
         status,
         items: itemsRes.rows
       }
@@ -165,10 +180,10 @@ async function submitChecklist(managerId, checklistId, quantities) {
 }
 
 /**
- * Get all submitted checklists (for warehouse manager).
+ * Get all submitted checklists grouped by store (for warehouse manager).
  * @param {number} page
  * @param {number} limit
- * @returns {Promise<{ checklists: Array, total: number }>}
+ * @returns {Promise<{ checklists: Array, total: number, byStore: Object }>}
  */
 async function getSubmittedChecklists(page = 1, limit = 50) {
   limit = Math.min(limit, 50);
@@ -187,12 +202,19 @@ async function getSubmittedChecklists(page = 1, limit = 50) {
      JOIN stores s ON s.id = sc.store_id
      JOIN users u ON u.id = sc.submitted_by
      WHERE sc.status IN ('submitted', 'reviewed')
-     ORDER BY sc.submitted_at DESC
+     ORDER BY s.name ASC, sc.check_date DESC
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   );
 
-  return { checklists: res.rows, total };
+  // Group by store
+  const byStore = {};
+  res.rows.forEach(cl => {
+    if (!byStore[cl.store_name]) byStore[cl.store_name] = [];
+    byStore[cl.store_name].push(cl);
+  });
+
+  return { checklists: res.rows, total, byStore };
 }
 
 /**

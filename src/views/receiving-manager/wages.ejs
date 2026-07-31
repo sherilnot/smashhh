@@ -1,157 +1,107 @@
 <%- include('../partials/header', { title: 'Employee Wages', role: 'receiving_manager', active: 'wages' }) %>
 
-  <h1>Employee Wages</h1>
+  <h1>Wages</h1>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
   <div id="msg"></div>
 
-  <% if (employees.length === 0) { %>
+  <% var stores = (typeof byStore !== 'undefined') ? byStore : {}; %>
+  <% var storeNames = Object.keys(stores); %>
+
+  <% if (storeNames.length === 0) { %>
     <div class="empty">No employees found.</div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>User ID</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Hourly Rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% employees.forEach(emp => { %>
-        <tr>
-          <td><%= emp.user_id %></td>
-          <td><%= emp.last_name ? (emp.first_name + ' ' + emp.last_name) : emp.first_name %></td>
-          <td>
-            <% if (emp.employment_type === 'permanent') { %>
-              <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2);">Permanent</span>
-            <% } else if (emp.employment_type === 'casual') { %>
-              <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2);">Casual</span>
-            <% } else { %>
-              <span style="color: var(--muted);">—</span>
-            <% } %>
-          </td>
-          <td>
-            <% if (emp.is_active) { %>
-              <span style="color: var(--green);">Active</span>
-            <% } else { %>
-              <span style="color: var(--muted);">Inactive</span>
-            <% } %>
-          </td>
-          <td>
-            <span class="wage-display" id="display-<%= emp.id %>">
-              $<span class="wage-value"><%= parseFloat(emp.hourly_wage || 0).toFixed(2) %></span>
-              <button type="button" class="edit-icon-btn" onclick="startEdit('<%= emp.id %>')" title="Edit rate" aria-label="Edit hourly rate">
-                ✎
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <% storeNames.forEach(function(storeName) { %>
+        <% var employees = stores[storeName]; %>
+        <details style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+          <summary style="padding: 0.75rem 1rem; font-weight: 700; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--bun-dark);">
+            🏪 <%= storeName %>
+            <span style="margin-left: auto; font-size: 0.7rem; padding: 0.15rem 0.5rem; background: var(--charcoal); color: white; border-radius: 8px;"><%= employees.length %></span>
+          </summary>
+          <div style="padding: 0.5rem;">
+            <!-- Set all default button -->
+            <div style="padding: 0.4rem 0.5rem; margin-bottom: 0.4rem; display: flex; justify-content: flex-end;">
+              <button onclick="setStoreDefault('<%= storeName %>')" style="padding: 0.3rem 0.7rem; font-size: 0.7rem; background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                Set all to $23
               </button>
-              <button type="button" class="default-btn" onclick="setDefault('<%= emp.id %>')" title="Set to default ($23.00)" aria-label="Set default rate">
-                Default
-              </button>
-            </span>
-            <form class="wage-edit-form" id="edit-<%= emp.id %>" onsubmit="updateRate(event, '<%= emp.id %>', this)" style="display:none;">
-              <input type="number" name="rate" step="0.01" min="0.01" value="<%= parseFloat(emp.hourly_wage || 0).toFixed(2) %>" required />
-              <button type="submit" class="save-icon-btn" title="Save" aria-label="Save">✓</button>
-              <button type="button" class="cancel-icon-btn" title="Cancel" aria-label="Cancel" onclick="cancelEdit('<%= emp.id %>')">✕</button>
-              <button type="button" class="default-btn" onclick="setDefault('<%= emp.id %>')" title="Set to default ($23.00)">Default</button>
-            </form>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
+            </div>
+            
+            <% employees.forEach(function(emp) { %>
+              <div class="emp-row" data-store="<%= storeName %>" data-id="<%= emp.id %>" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border);">
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-weight: 600; font-size: 0.85rem;"><%= emp.first_name %> <%= emp.last_name || '' %></div>
+                  <% if (emp.employment_type === 'permanent') { %>
+                    <span style="font-size: 0.6rem; color: var(--green);">Perm</span>
+                  <% } else if (emp.employment_type === 'casual') { %>
+                    <span style="font-size: 0.6rem; color: var(--mustard);">Casual</span>
+                  <% } %>
+                </div>
+                <div id="display-<%= emp.id %>" style="display: flex; align-items: center; gap: 0.3rem;">
+                  <strong style="font-size: 0.95rem;">$<span class="wage-val"><%= parseFloat(emp.hourly_wage || 0).toFixed(0) %></span></strong>
+                  <span style="font-size: 0.75rem; color: var(--muted);">/hr</span>
+                  <button onclick="setDefault('<%= emp.id %>')" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; border-radius: 4px; cursor: pointer; font-weight: 600;">$23</button>
+                  <button onclick="startEdit('<%= emp.id %>')" style="width: 24px; height: 24px; border: 1px solid #90caf9; border-radius: 5px; background: #e3f2fd; color: #1565c0; cursor: pointer; font-size: 0.8rem;">✎</button>
+                </div>
+                <form id="edit-<%= emp.id %>" onsubmit="saveRate(event, '<%= emp.id %>')" style="display: none; align-items: center; gap: 0.2rem;">
+                  $<input type="number" name="rate" step="0.5" min="0" value="<%= parseFloat(emp.hourly_wage || 0).toFixed(2) %>" style="width: 60px; padding: 0.3rem; border: 1px solid var(--border); border-radius: 5px; font-size: 0.85rem;">
+                  <button type="submit" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid #c8e6c9; background: #e8f5e9; color: #2e7d32; cursor: pointer;">✓</button>
+                  <button type="button" onclick="cancelEdit('<%= emp.id %>')" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid #f3c6c6; background: #fef2f2; color: #c62828; cursor: pointer;">✕</button>
+                </form>
+              </div>
+            <% }); %>
+          </div>
+        </details>
+      <% }); %>
+    </div>
   <% } %>
 
-  <style>
-    .wage-display { display: inline-flex; align-items: center; gap: 0.5rem; }
-    .edit-icon-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 26px; height: 26px; padding: 0;
-      border: 1px solid var(--line, #ddd); border-radius: 6px;
-      background: #fff; color: #555; cursor: pointer; font-size: 0.85rem;
-      line-height: 1;
-    }
-    .edit-icon-btn:hover { background: #f5f5f5; border-color: #bbb; }
-    .wage-edit-form { display: flex; align-items: center; gap: 0.4rem; }
-    .wage-edit-form input[type=number] {
-      width: 80px; padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem;
-    }
-    .save-icon-btn, .cancel-icon-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 26px; height: 26px; padding: 0; border-radius: 6px; border: 1px solid transparent;
-      cursor: pointer; font-size: 0.85rem; line-height: 1;
-    }
-    .save-icon-btn { background: #ecfdf3; color: #15803d; border-color: #b8e6c9; }
-    .save-icon-btn:hover { background: #d8f6e3; }
-    .cancel-icon-btn { background: #fef2f2; color: #b91c1c; border-color: #f3c6c6; }
-    .cancel-icon-btn:hover { background: #fde3e3; }
-    .default-btn {
-      padding: 3px 8px; font-size: 0.7rem; border-radius: 4px;
-      border: 1px solid #90caf9; background: #e3f2fd; color: #1565c0;
-      cursor: pointer; font-weight: 600;
-    }
-    .default-btn:hover { background: #bbdefb; }
-  </style>
-
   <script>
-    var DEFAULT_RATE = 23.00;
-
-    function startEdit(employeeId) {
-      document.getElementById('display-' + employeeId).style.display = 'none';
-      document.getElementById('edit-' + employeeId).style.display = 'flex';
-      document.querySelector('#edit-' + employeeId + ' input[name=rate]').focus();
+    function startEdit(id) {
+      document.getElementById('display-' + id).style.display = 'none';
+      document.getElementById('edit-' + id).style.display = 'flex';
+      document.querySelector('#edit-' + id + ' input').focus();
     }
-
-    function cancelEdit(employeeId) {
-      document.getElementById('edit-' + employeeId).style.display = 'none';
-      document.getElementById('display-' + employeeId).style.display = 'inline-flex';
+    function cancelEdit(id) {
+      document.getElementById('edit-' + id).style.display = 'none';
+      document.getElementById('display-' + id).style.display = 'flex';
     }
-
-    async function setDefault(employeeId) {
-      const res = await fetch('/receiving-manager/update-wage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, newRate: DEFAULT_RATE })
-      });
-      const data = await res.json();
-      const msg = document.getElementById('msg');
-      if (data.success) {
-        const display = document.getElementById('display-' + employeeId);
-        display.querySelector('.wage-value').textContent = DEFAULT_RATE.toFixed(2);
-        // Also update the edit form input value
-        var editForm = document.getElementById('edit-' + employeeId);
-        if (editForm) editForm.querySelector('input[name=rate]').value = DEFAULT_RATE.toFixed(2);
-        cancelEdit(employeeId);
-        msg.className = 'msg';
-        msg.textContent = 'Rate set to default ($' + DEFAULT_RATE.toFixed(2) + ').';
-      } else {
-        msg.className = 'error';
-        msg.textContent = data.error || 'Update failed.';
-      }
-    }
-
-    async function updateRate(e, employeeId, form) {
+    async function saveRate(e, id) {
       e.preventDefault();
-      const rate = form.querySelector('input[name=rate]').value;
-      const res = await fetch('/receiving-manager/update-wage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, newRate: parseFloat(rate) })
+      var rate = e.target.querySelector('input').value;
+      var res = await fetch('/receiving-manager/update-wage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: id, newRate: parseFloat(rate) })
       });
-      const data = await res.json();
-      const msg = document.getElementById('msg');
+      var data = await res.json();
       if (data.success) {
-        const display = document.getElementById('display-' + employeeId);
-        display.querySelector('.wage-value').textContent = parseFloat(rate).toFixed(2);
-        cancelEdit(employeeId);
-        msg.className = 'msg';
-        msg.textContent = 'Rate updated successfully.';
-      } else {
-        msg.className = 'error';
-        msg.textContent = data.error || 'Update failed.';
+        document.getElementById('display-' + id).querySelector('.wage-val').textContent = parseFloat(rate).toFixed(0);
+        cancelEdit(id);
       }
+    }
+    async function setDefault(id) {
+      var res = await fetch('/receiving-manager/update-wage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: id, newRate: 23 })
+      });
+      var data = await res.json();
+      if (data.success) {
+        document.getElementById('display-' + id).querySelector('.wage-val').textContent = '23';
+      }
+    }
+    async function setStoreDefault(storeName) {
+      if (!confirm('Set all employees in ' + storeName + ' to $23/hr?')) return;
+      var rows = document.querySelectorAll('.emp-row[data-store="' + storeName + '"]');
+      for (var row of rows) {
+        var id = row.dataset.id;
+        await fetch('/receiving-manager/update-wage', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: id, newRate: 23 })
+        });
+        row.querySelector('.wage-val').textContent = '23';
+      }
+      document.getElementById('msg').className = 'msg';
+      document.getElementById('msg').textContent = storeName + ': all set to $23/hr';
     }
   </script>
 

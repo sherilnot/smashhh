@@ -7,11 +7,11 @@ router.use(requireAuth, roleGuard('warehouse_manager'));
 
 router.get('/dashboard', async (req, res) => {
   try {
-    const { checklists, total } = await getSubmittedChecklists(1, 10);
-    res.render('warehouse/dashboard', { user: req.user, checklists, total });
+    const { checklists, total, byStore } = await getSubmittedChecklists(1, 50);
+    res.render('warehouse/dashboard', { user: req.user, checklists, total, byStore });
   } catch (e) {
     console.error('[Warehouse] dashboard error', e);
-    res.render('warehouse/dashboard', { user: req.user, checklists: [], total: 0 });
+    res.render('warehouse/dashboard', { user: req.user, checklists: [], total: 0, byStore: {} });
   }
 });
 
@@ -19,12 +19,12 @@ router.get('/dashboard', async (req, res) => {
 router.get('/store-checklists', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const { checklists, total } = await getSubmittedChecklists(page, 50);
+    const { checklists, total, byStore } = await getSubmittedChecklists(page, 50);
     const totalPages = Math.ceil(total / 50);
-    res.render('warehouse/store-checklists', { user: req.user, checklists, total, page, totalPages });
+    res.render('warehouse/store-checklists', { user: req.user, checklists, total, page, totalPages, byStore });
   } catch (e) {
     console.error('[Warehouse] store-checklists error', e);
-    res.render('warehouse/store-checklists', { user: req.user, checklists: [], total: 0, page: 1, totalPages: 0 });
+    res.render('warehouse/store-checklists', { user: req.user, checklists: [], total: 0, page: 1, totalPages: 0, byStore: {} });
   }
 });
 

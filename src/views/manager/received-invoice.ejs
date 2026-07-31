@@ -65,7 +65,12 @@
                       <input type="checkbox" name="selected_<%= item.id %>" value="1" checked class="item-check-inv">
                     </td>
                     <td><%= idx + 1 %></td>
-                    <td><strong><%= item.product_name %></strong></td>
+                    <td>
+                      <strong><%= item.product_name %></strong>
+                      <% if (item.is_emergency) { %>
+                        <span title="Emergency item added manually" style="font-size:0.7rem; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px; padding:1px 5px; margin-left:4px; font-weight:600;">🚨 Emergency</span>
+                      <% } %>
+                    </td>
                     <td style="text-align: center; color: var(--text-muted);">
                       <%= item.quantity_ordered || '-' %>
                     </td>
@@ -119,35 +124,38 @@
                     style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; min-height: 80px; resize: vertical;"></textarea>
         </div>
 
-        <div style="margin-top: 1.25rem; display: flex; gap: 10px;">
-          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--green), #388E3C); color: white;">
-            Submit Invoice to OM001
+        <div style="margin-top: 1.25rem; display: flex; gap: 10px; flex-wrap: wrap;">
+          <button type="submit" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            Submit Invoice
           </button>
-          <button type="button" class="btn" onclick="toggleAddItem()" style="background: var(--surface-alt);">
-            + Add Item
-          </button>
+          <a href="/manager/received-invoice/download-draft?invoiceId=<%= invoice.id %>" style="padding: 0.75rem 1rem; font-size: 0.85rem; font-weight: 600; background: linear-gradient(135deg, #1565c0, #1976d2); color: white; border-radius: 10px; text-decoration: none;">📥 Draft Copy</a>
         </div>
       </form>
 
-      <div id="addItemForm" style="display: none; margin-top: 1.25rem; padding: 15px; background: var(--surface-alt); border-radius: 8px;">
-        <h3 style="margin-top: 0;">Add Custom Item</h3>
-        <form method="POST" action="/manager/received-invoice/add-item" style="display: flex; gap: 10px; align-items: center;">
+      <!-- Add Emergency Item — always visible -->
+      <div style="margin-top: 1.25rem; padding: 1rem 1.1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+        <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.6rem; color: var(--ink);">🚨 Add Emergency Item</div>
+        <form method="POST" action="/manager/received-invoice/add-item" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
           <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
           <input type="text" name="productName" placeholder="Product name" required
-                 style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
-          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--accent), var(--accent-dark)); color: white;">Add</button>
-          <button type="button" class="btn" onclick="toggleAddItem()" style="background: var(--surface);">Cancel</button>
+                 style="flex: 1; min-width: 160px; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;">
+          <button type="submit" style="padding: 0.55rem 1.1rem; font-size: 0.88rem; font-weight: 700; background: linear-gradient(135deg, #f4a300, #e8950a); color: #1a1400; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap;">+ Add Item</button>
         </form>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.4rem 0 0;">Added with quantity 0. Update the received qty in the table above before submitting.</p>
       </div>
 
     <% } else { %>
       <!-- Submitted view — formal Flavio PTY LTD invoice -->
-      <div class="info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
         <span>✓ Invoice submitted to Operations.</span>
-        <form method="POST" action="/manager/received-invoice/reopen" style="margin: 0;">
-          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
-          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--mustard, #F4A300), #E09500); color: #333; font-size: 0.85rem;">✏️ Edit & Resubmit</button>
-        </form>
+        <div style="display: flex; gap: 0.4rem;">
+          <a href="/manager/received-invoice/download" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: linear-gradient(135deg, #1565c0, #1976d2); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">📥 Download PDF</a>
+          <form method="POST" action="/manager/received-invoice/reopen" style="margin: 0;">
+            <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+            <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--mustard, #F4A300), #E09500); color: #333; font-size: 0.85rem;">✏️ Edit</button>
+          </form>
+        </div>
       </div>
 
       <style>
@@ -265,11 +273,6 @@
   <% } %>
 
   <script>
-    function toggleAddItem() {
-      var form = document.getElementById('addItemForm');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    }
-
     // Select all checkbox for invoice items
     var selectAll = document.getElementById('selectAllInvoice');
     if (selectAll) {

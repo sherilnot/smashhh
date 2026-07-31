@@ -47,7 +47,7 @@ const SHIFT_TYPES = [
 // Manager dashboard: active (confirmed, started) bookings
 router.get('/dashboard', async (req, res) => {
   try {
-    // Fetch confirmed bookings on shifts that have already started (eligible to end).
+    // Fetch confirmed bookings on shifts that have already started (in Australian time).
     const activeRes = await pool.query(
       `SELECT sb.id AS booking_id, u.first_name, u.last_name,
               s.start_time, s.end_time, s.store_location
@@ -58,6 +58,7 @@ router.get('/dashboard', async (req, res) => {
        WHERE sma.manager_id = $1
          AND sb.booking_status = 'confirmed'
          AND s.start_time <= NOW()
+         AND s.end_time >= NOW()
        ORDER BY s.start_time ASC`,
       [req.user.userId]
     );
@@ -103,6 +104,17 @@ router.post('/confirm', async (req, res) => {
     requests,
     error: result.error
   });
+});
+
+// Confirm all pending bookings for an employee at once
+router.post('/confirm-all', async (req, res) => {
+  let bookingIds = req.body['bookingIds[]'] || req.body.bookingIds || [];
+  if (!Array.isArray(bookingIds)) bookingIds = [bookingIds];
+  
+  for (const id of bookingIds) {
+    await confirmBooking(req.user.userId, req.user.userRole, id);
+  }
+  return res.redirect('/manager/pending');
 });
 
 // Reject a pending booking (Req 6.1, 12.1, 12.2).
@@ -177,16 +189,16 @@ router.get('/employees', async (req, res) => {
 
 router.get('/roster', async (req, res) => {
   try {
-    // Roster always defaults to NEXT week
+    // Roster defaults to THIS week
     const toLocalDateString = (d) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     const now = new Date();
     const day = now.getDay();
-    const diffToMonday = day === 0 ? 1 : 8 - day; // next Monday
-    const nextMonday = new Date(now);
-    nextMonday.setDate(now.getDate() + diffToMonday);
-    nextMonday.setHours(0, 0, 0, 0);
+    const diffToMonday = day === 0 ? -6 : 1 - day; // this week's Monday
+    const thisMonday = new Date(now);
+    thisMonday.setDate(now.getDate() + diffToMonday);
+    thisMonday.setHours(0, 0, 0, 0);
 
     // Allow navigation via ?date= param
     let weekStart;
@@ -199,7 +211,7 @@ router.get('/roster', async (req, res) => {
       weekStart.setDate(parsed.getDate() + diff);
       weekStart.setHours(0, 0, 0, 0);
     } else {
-      weekStart = nextMonday;
+      weekStart = thisMonday;
     }
 
     const weekEnd = new Date(weekStart);
@@ -240,7 +252,7 @@ router.get('/roster', async (req, res) => {
     }
     const storeId = storeRes.rows[0].store_id;
 
-    // Get all confirmed bookings for the week
+    // Get all confirmed + completed bookings for the week (roster doesn't change after ending)
     const bookingsRes = await pool.query(
       `SELECT
          sb.id AS booking_id, sb.employee_id, sb.actual_clock_in, sb.booking_status,
@@ -250,7 +262,7 @@ router.get('/roster', async (req, res) => {
        JOIN shifts s ON s.id = sb.shift_id
        JOIN users u ON u.id = sb.employee_id
        WHERE s.store_id = $1
-         AND sb.booking_status = 'confirmed'
+         AND sb.booking_status IN ('confirmed', 'completed')
          AND s.start_time >= $2
          AND s.start_time <= $3
        ORDER BY u.last_name, u.first_name`,
@@ -773,15 +785,15 @@ router.post('/roster/auto-fill', async (req, res) => {
 
 router.get('/timesheet', async (req, res) => {
   try {
-    // Default to LAST week if no date provided
+    // Default to THIS week if no date provided
     let dateParam = req.query.date || null;
     if (!dateParam) {
       const now = new Date();
       const day = now.getDay();
-      const diffToLastMonday = day === 0 ? -13 : -6 - day; // last week's Monday
-      const lastMonday = new Date(now);
-      lastMonday.setDate(now.getDate() + diffToLastMonday);
-      dateParam = `${lastMonday.getFullYear()}-${String(lastMonday.getMonth() + 1).padStart(2, '0')}-${String(lastMonday.getDate()).padStart(2, '0')}`;
+      const diffToMonday = day === 0 ? -6 : 1 - day; // this week's Monday
+      const thisMonday = new Date(now);
+      thisMonday.setDate(now.getDate() + diffToMonday);
+      dateParam = `${thisMonday.getFullYear()}-${String(thisMonday.getMonth() + 1).padStart(2, '0')}-${String(thisMonday.getDate()).padStart(2, '0')}`;
     }
     const validation = validateRosterRequest({ date: dateParam });
 
@@ -801,12 +813,11 @@ router.get('/timesheet', async (req, res) => {
     const result = await generateTimesheet(req.user.userId, weekStart, weekEnd);
     const bounds = isWithinNavigationBounds(weekStart, new Date());
     
-    // Allow submission/editing until confirmed
+    // Allow editing for current and past weeks (not future weeks that haven't started)
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const isSunday = now.getDay() === 0;
-    const weekEndDate = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
-    const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+    const weekStartDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+    const isFutureWeek = weekStartDate > today;
 
     const isConfirmed = result.timesheet && result.timesheet.alreadySubmitted && 
                         result.timesheet.status === 'confirmed';
@@ -1158,12 +1169,10 @@ router.post('/timesheet/submit', async (req, res) => {
     if (!result.success) {
       const bounds = isWithinNavigationBounds(wsDate, new Date());
       
-      // Allow submission on Sunday for current week
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const isSunday = now.getDay() === 0;
-      const weekEndDate = new Date(weDate.getFullYear(), weDate.getMonth(), weDate.getDate());
-      const isFutureWeek = weekEndDate > today && !(isSunday && weekEndDate.getTime() === today.getTime());
+      const weekStartDate = new Date(wsDate.getFullYear(), wsDate.getMonth(), wsDate.getDate());
+      const isFutureWeek = weekStartDate > today;
       
       const tsResult = await generateTimesheet(req.user.userId, wsDate, weDate);
 
@@ -1452,6 +1461,90 @@ router.post('/received-invoice/reopen', async (req, res) => {
   }
 });
 
+// Download draft invoice as PDF — works for both draft and submitted invoices
+router.get('/received-invoice/download-draft', async (req, res) => {
+  try {
+    const { invoiceId } = req.query;
+    if (!invoiceId) return res.status(400).send('Missing invoiceId');
+
+    const { generateInvoicePdf } = require('../services/invoicePdfService');
+
+    // Verify the invoice belongs to this manager's store
+    const checkRes = await pool.query(
+      `SELECT ri.id, ri.invoice_date, ri.status, ri.notes,
+              s.name AS store_name,
+              u.first_name, u.last_name
+       FROM received_invoices ri
+       JOIN stores s ON s.id = ri.store_id
+       JOIN users u ON u.id = ri.submitted_by
+       JOIN store_manager_assignments sma ON sma.store_id = ri.store_id
+       WHERE ri.id = $1 AND sma.manager_id = $2`,
+      [invoiceId, req.user.userId]
+    );
+
+    if (checkRes.rows.length === 0) return res.status(404).send('Invoice not found');
+
+    const invoice = checkRes.rows[0];
+
+    // Fetch all items — include emergency items even at qty=0
+    const itemsRes = await pool.query(
+      `SELECT id, product_name, quantity_ordered, quantity_received, unit_price, item_notes, is_emergency
+       FROM received_invoice_items
+       WHERE invoice_id = $1
+       ORDER BY sort_order`,
+      [invoiceId]
+    );
+    invoice.items = itemsRes.rows;
+
+    const filename = `invoice_draft_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoice.invoice_date}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const pdfStream = generateInvoicePdf(invoice, { watermark: 'DRAFT' });
+    pdfStream.pipe(res);
+  } catch (e) {
+    console.error('[Manager] invoice draft PDF download error', e);
+    res.status(500).send('Failed to generate PDF');
+  }
+});
+
+// Download invoice as PDF (shop manager copy)
+router.get('/received-invoice/download', async (req, res) => {
+  try {
+    const { getInvoiceDetail } = require('../services/receivedInvoiceService');
+    const { generateInvoicePdf } = require('../services/invoicePdfService');
+
+    // Get the manager's current invoice
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [req.user.userId]
+    );
+    if (storeRes.rows.length === 0) return res.status(404).send('No store');
+
+    const invoiceRes = await pool.query(
+      `SELECT id FROM received_invoices WHERE store_id = $1 AND status = 'submitted' ORDER BY submitted_at DESC LIMIT 1`,
+      [storeRes.rows[0].store_id]
+    );
+    if (invoiceRes.rows.length === 0) return res.status(404).send('No submitted invoice found');
+
+    const result = await getInvoiceDetail(invoiceRes.rows[0].id);
+    if (!result.success) return res.status(404).send('Invoice not found');
+
+    const invoice = result.invoice;
+    const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoice.invoice_date}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const pdfStream = generateInvoicePdf(invoice);
+    pdfStream.pipe(res);
+  } catch (e) {
+    console.error('[Manager] invoice PDF download error', e);
+    res.status(500).send('Failed to generate PDF');
+  }
+});
+
 // ─── Cash Submissions (Send cash photos to OM001) ───────────────────────────────
 
 router.get('/cash', async (req, res) => {
@@ -1511,10 +1604,10 @@ const maintenanceStorage = multer.diskStorage({
 });
 const maintenanceUpload = multer({
   storage: maintenanceStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB to allow videos
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed'), false);
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) cb(null, true);
+    else cb(new Error('Only image or video files are allowed'), false);
   }
 });
 
@@ -1533,13 +1626,16 @@ router.get('/maintenance', async (req, res) => {
   }
 });
 
-router.post('/maintenance/submit', maintenanceUpload.array('photos', 5), async (req, res) => {
+router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (req, res) => {
   try {
     const { description } = req.body;
     if (!description || !description.trim()) {
       return res.redirect('/manager/maintenance?error=' + encodeURIComponent('Please enter a description'));
     }
-    const result = await createMaintenanceReport(req.user.userId, description.trim(), req.files || []);
+    const allFiles = req.files || [];
+    const photos = allFiles.filter(f => f.mimetype.startsWith('image/'));
+    const videos = allFiles.filter(f => f.mimetype.startsWith('video/'));
+    const result = await createMaintenanceReport(req.user.userId, description.trim(), photos, videos);
     if (!result.success) {
       return res.redirect('/manager/maintenance?error=' + encodeURIComponent(result.error));
     }

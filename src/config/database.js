@@ -45,6 +45,11 @@ if (!process.env.DATABASE_URL) {
 // Create connection pool
 const pool = new Pool(poolConfig);
 
+// Set timezone to Australia/Melbourne for all connections
+pool.on('connect', (client) => {
+  client.query("SET timezone = 'Australia/Melbourne'");
+});
+
 // Connection retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;

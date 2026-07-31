@@ -1,55 +1,51 @@
-<%- include('../partials/header', { title: 'Checklist Detail', role: 'warehouse_manager', active: 'store-checklists' }) %>
+<%- include('../partials/header', { title: 'Order Detail', role: 'warehouse_manager', active: 'store-checklists' }) %>
 
-  <h1>Checklist Detail</h1>
+  <h1>Order Detail</h1>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
 
-  <% if (checklist) { %>
-    <div class="card" style="margin-bottom: 1.25rem;">
-      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-        <div><strong>Store:</strong> <%= checklist.store_name %></div>
-        <div><strong>Date:</strong> <%= formatDate(checklist.check_date) %></div>
-        <div><strong>By:</strong> <%= checklist.first_name %> <%= checklist.last_name %></div>
-        <div><strong>Status:</strong>
-          <span class="badge" style="background: <%= checklist.status === 'reviewed' ? 'var(--lettuce)' : 'var(--mustard)' %>; color: <%= checklist.status === 'reviewed' ? '#fff' : 'var(--bun-dark)' %>;">
-            <%= checklist.status %>
-          </span>
-        </div>
+  <% if (!checklist) { %>
+    <div class="empty">Checklist not found.</div>
+  <% } else { %>
+    <div style="background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <strong style="font-size: 1rem;"><%= checklist.store_name %></strong>
+        <span style="color: var(--muted);"> — <%= formatDate(checklist.check_date) %></span>
+      </div>
+      <div>
+        <% if (checklist.status === 'reviewed') { %>
+          <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">REVIEWED ✓</span>
+        <% } else { %>
+          <form method="POST" action="/warehouse/store-checklists/<%= checklist.id %>/review" style="margin: 0; display: inline;">
+            <button type="submit" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Mark Done</button>
+          </form>
+        <% } %>
       </div>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th style="width:5%">#</th>
-          <th style="width:40%">Product</th>
-          <th style="width:25%">Qty Needed</th>
-          <th style="width:30%">Qty To Bring</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% checklist.items.forEach((item, idx) => { %>
-          <tr>
-            <td style="color: var(--muted);"><%= idx + 1 %></td>
-            <td><%= item.product_name %></td>
-            <td><span class="badge"><%= item.quantity_needed %></span></td>
-            <td><strong style="color: <%= item.quantity_to_bring ? 'var(--lettuce-dark)' : 'var(--muted)' %>;"><%= item.quantity_to_bring || '—' %></strong></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem;">
+      Submitted by <%= checklist.first_name %> <%= checklist.last_name %> · <%= formatDateTime(checklist.submitted_at) %>
+    </div>
 
-    <% if (checklist.status === 'submitted') { %>
-      <form method="POST" action="/warehouse/store-checklists/<%= checklist.id %>/review" style="margin-top: 1.25rem;">
-        <button type="submit" class="btn confirm-btn" style="padding: 0.75rem 2rem; font-size: 1rem;">✓ Mark as Reviewed</button>
-      </form>
-    <% } else if (checklist.status === 'reviewed') { %>
-      <div class="msg" style="margin-top: 1rem;">✓ This checklist has been reviewed.</div>
+    <!-- Item list with numbering -->
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <% var displayIdx = 0; %>
+      <% checklist.items.forEach(function(item) { %>
+        <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || String(item.quantity_to_bring).trim() === '') return; %>
+        <% displayIdx++; %>
+        <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+          <span style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--charcoal); color: white; border-radius: 6px; font-size: 0.7rem; font-weight: 700; flex-shrink: 0;"><%= displayIdx %></span>
+          <span style="flex: 1; font-weight: 600; font-size: 0.9rem;"><%= item.product_name %></span>
+          <span style="padding: 0.25rem 0.7rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.85rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_to_bring %></span>
+        </div>
+      <% }); %>
+    </div>
+
+    <% if (displayIdx === 0) { %>
+      <div class="empty">No items in this order.</div>
     <% } %>
-  <% } %>
 
-  <p style="margin-top: 1.25rem;"><a href="/warehouse/store-checklists" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Store Orders</a></p>
+    <p style="margin-top: 1.25rem;"><a href="/warehouse/store-checklists" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Orders</a></p>
+  <% } %>
 
 <%- include('../partials/footer') %>

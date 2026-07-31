@@ -1,81 +1,57 @@
-<%- include('../partials/header', { title: 'Cash Submission', role: 'store_manager', active: 'cash' }) %>
+<%- include('../partials/header', { title: 'Cash Report', role: 'store_manager', active: 'cash' }) %>
 
-  <h1>Cash Submission</h1>
-  <p style="color: var(--text-muted); margin-bottom: 1.25rem;">Send photos of liquid cash received (apart from online payments) to Operations Manager.</p>
+  <h1>Cash Report</h1>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success) { %><div class="msg">✅ Cash report submitted!</div><% } %>
 
-  <% if (success) { %>
-    <div class="msg">✅ Cash report submitted successfully to OM001!</div>
-  <% } %>
-
-  <div class="card" style="margin-bottom: 1.5rem;">
-    <h2 style="margin-top: 0; font-size: 1.1rem;">New Cash Report</h2>
-    <form method="POST" action="/manager/cash/submit" enctype="multipart/form-data">
-      <div style="display: flex; flex-direction: column; gap: 1rem;">
-        <div>
-          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Amount ($)</label>
-          <input type="number" name="amount" step="0.01" min="0" required
-                 placeholder="e.g. 350.00"
-                 style="width: 200px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 1.1rem;">
-        </div>
-
-        <div>
-          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Photos (max 5 images)</label>
-          <input type="file" name="photos" accept="image/*" multiple required
-                 style="padding: 6px;">
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">
-            Take a photo of the cash or upload from gallery. Max 10MB per image.
-          </div>
-        </div>
-
-        <div>
-          <label style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Note (optional)</label>
-          <textarea name="notes" placeholder="Any details about this cash..."
-                    style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; min-height: 60px; resize: vertical;"></textarea>
-        </div>
-
-        <div>
-          <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--green), #388E3C); color: white; padding: 10px 24px;">
-            📸 Submit to OM001
-          </button>
-        </div>
+  <!-- Submit Form -->
+  <form method="POST" action="/manager/cash/submit" enctype="multipart/form-data">
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+      
+      <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem;">
+        <label style="font-weight: 600; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 0.4rem;">Amount ($)</label>
+        <input type="number" name="amount" step="0.01" min="0" required placeholder="350.00"
+               style="width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1.1rem; font-weight: 600; background: var(--cream);">
       </div>
-    </form>
-  </div>
+
+      <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem;">
+        <label style="font-weight: 600; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 0.4rem;">Photos (max 5)</label>
+        <input type="file" name="photos" accept="image/*" multiple required
+               style="font-size: 0.9rem;">
+        <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem;">Take a photo of the cash or upload from gallery.</div>
+      </div>
+
+      <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem;">
+        <label style="font-weight: 600; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 0.4rem;">Note (optional)</label>
+        <textarea name="notes" placeholder="Any details..."
+                  style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; min-height: 60px; resize: vertical; font-size: 0.9rem; background: var(--cream);"></textarea>
+      </div>
+    </div>
+
+    <button type="submit" style="width: 100%; padding: 0.9rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(139,105,20,0.3); display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      Submit Cash Report
+    </button>
+  </form>
 
   <% if (submissions && submissions.length > 0) { %>
-    <h2 style="font-size: 1.1rem;">Previous Submissions</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Amount</th>
-          <th>Photos</th>
-          <th>Notes</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% submissions.forEach(function(sub) { %>
-          <tr>
-            <td><%= formatDateTime(sub.submitted_at) %></td>
-            <td style="font-weight: 600;">$<%= parseFloat(sub.amount).toFixed(2) %></td>
-            <td><%= sub.image_count %> image<%= sub.image_count > 1 ? 's' : '' %></td>
-            <td style="color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= sub.notes || '-' %></td>
-            <td>
-              <% if (sub.status === 'reviewed') { %>
-                <span class="badge" style="background: var(--green); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">REVIEWED</span>
-              <% } else { %>
-                <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">SENT</span>
-              <% } %>
-            </td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
+    <h2 style="margin-top: 2rem; font-size: 1rem; color: var(--muted);">Previous Submissions</h2>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <% submissions.forEach(function(sub) { %>
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+          <div style="flex: 1;">
+            <div style="font-weight: 700;">$<%= parseFloat(sub.amount).toFixed(2) %></div>
+            <div style="font-size: 0.75rem; color: var(--muted);"><%= formatDateTime(sub.submitted_at) %> · <%= sub.image_count %> photo<%= sub.image_count > 1 ? 's' : '' %></div>
+          </div>
+          <% if (sub.status === 'reviewed') { %>
+            <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #e8f5e9; color: #2e7d32; border-radius: 8px; font-weight: 600;">REVIEWED</span>
+          <% } else { %>
+            <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #fef3e2; color: var(--bun-dark); border-radius: 8px; font-weight: 600;">SENT</span>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
   <% } %>
 
 <%- include('../partials/footer') %>

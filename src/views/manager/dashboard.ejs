@@ -1,43 +1,63 @@
-<%- include('../partials/header', { title: 'Manager Dashboard - Burger Store', role: 'store_manager', active: 'dashboard' }) %>
+<%- include('../partials/header', { title: 'Manager Dashboard', role: 'store_manager', active: 'dashboard' }) %>
 
   <h1>Dashboard</h1>
 
-  <div class="card">
-    <p>Review pending booking requests, end active shifts, and manage your crew.</p>
+  <% var bookings = (typeof activeBookings !== 'undefined' && activeBookings) ? activeBookings : []; %>
+
+  <!-- Stats -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Active Shifts</div>
+      <div style="font-size: 1.5rem; font-weight: 800; color: #f4a300;"><%= bookings.length %></div>
+    </div>
+    <a href="/manager/pending" style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white; text-decoration: none; display: block;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Pending Requests</div>
+      <div style="font-size: 1.5rem; font-weight: 800; color: #ff7043;">Review →</div>
+    </a>
   </div>
 
-  <h2>Active Shifts</h2>
-  <% var bookings = (typeof activeBookings !== 'undefined' && activeBookings) ? activeBookings : []; %>
+  <!-- Quick Actions -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1.5rem;">
+    <a href="/manager/roster" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">📋</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">Roster</span>
+    </a>
+    <a href="/manager/timesheet" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">⏱️</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">Timesheet</span>
+    </a>
+    <a href="/manager/store-checklist" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">✅</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">Checklist</span>
+    </a>
+    <a href="/manager/received-invoice" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">🧾</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">Invoice</span>
+    </a>
+  </div>
+
+  <!-- Active Shifts -->
+  <h2 style="font-size: 1rem; color: var(--muted); margin-bottom: 0.5rem;">Active Shifts</h2>
   <% if (bookings.length === 0) { %>
-    <p class="empty">No active shifts to end at this time.</p>
+    <div class="empty">No active shifts to end at this time.</div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Shift Start</th>
-          <th>Shift End</th>
-          <th>Store</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% bookings.forEach(b => { %>
-        <tr>
-          <td><%= b.first_name %> <%= b.last_name %></td>
-          <td><%= formatDate(b.start_time) %> <%= new Date(b.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-          <td><%= formatDate(b.end_time) %> <%= new Date(b.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-          <td><%= b.store_location %></td>
-          <td>
-            <form method="POST" action="/manager/end-shift">
-              <input type="hidden" name="bookingId" value="<%= b.booking_id %>" />
-              <button type="submit" class="end-btn">End Shift</button>
-            </form>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <% bookings.forEach(b => { %>
+        <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: var(--shadow); flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 120px;">
+            <div style="font-weight: 700; font-size: 0.95rem;"><%= b.first_name %> <%= b.last_name %></div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">
+              <%= new Date(b.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(b.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--muted);"><%= b.store_location %> · <%= formatDateShort(b.start_time) %></div>
+          </div>
+          <form method="POST" action="/manager/end-shift" style="margin: 0;">
+            <input type="hidden" name="bookingId" value="<%= b.booking_id %>" />
+            <button type="submit" style="padding: 0.45rem 1rem; font-size: 0.8rem; background: linear-gradient(135deg, #f4a300, #e8950a); color: var(--bun-dark); border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">End Shift</button>
+          </form>
+        </div>
+      <% }) %>
+    </div>
   <% } %>
 
 <%- include('../partials/footer') %>

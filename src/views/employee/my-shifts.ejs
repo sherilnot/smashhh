@@ -1,4 +1,4 @@
-<%- include('../partials/header', { title: 'My Shifts - Burger Store', role: 'employee', active: 'my-shifts' }) %>
+<%- include('../partials/header', { title: 'My Shifts', role: 'employee', active: 'my-shifts' }) %>
 
   <h1>My Shifts</h1>
 
@@ -6,40 +6,61 @@
   <% if (typeof success !== 'undefined' && success) { %><div class="msg"><%= success %></div><% } %>
 
   <% if (shifts.length === 0) { %>
-    <p class="empty">No shifts found in this period.</p>
+    <div class="empty">No shifts found in this period.</div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Start</th>
-          <th>End</th>
-          <th>Location</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% shifts.forEach(shift => { %>
-          <% const status = (shift.bookingStatus === null || shift.bookingStatus === undefined || shift.bookingStatus === '') ? null : String(shift.bookingStatus); %>
-          <tr>
-            <td><%= formatDate(shift.startTime) %></td>
-            <td><%= new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= shift.storeLocation %></td>
-            <td class="status-<%= status === null ? 'unknown' : status %>"><%= status === null ? 'Unknown' : status %></td>
-            <td>
-              <% if (status === 'confirmed' || status === 'pending') { %>
-                <form method="POST" action="/employee/cancel">
-                  <input type="hidden" name="shiftId" value="<%= shift.id %>" />
-                  <button type="submit" class="cancel-btn">Cancel</button>
-                </form>
-              <% } %>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <% shifts.forEach(shift => { %>
+        <% const status = (shift.bookingStatus === null || shift.bookingStatus === undefined || shift.bookingStatus === '') ? null : String(shift.bookingStatus); %>
+        <%
+          var statusColor = '#9a8774';
+          var statusBg = 'rgba(154,135,116,0.08)';
+          if (status === 'pending') { statusColor = '#f4a300'; statusBg = 'rgba(244,163,0,0.08)'; }
+          else if (status === 'confirmed') { statusColor = '#2d9c5a'; statusBg = 'rgba(45,156,90,0.08)'; }
+          else if (status === 'completed') { statusColor = '#2563eb'; statusBg = 'rgba(37,99,235,0.08)'; }
+          else if (status === 'cancelled' || status === 'rejected') { statusColor = '#e63946'; statusBg = 'rgba(230,57,70,0.08)'; }
+        %>
+        <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: var(--shadow);">
+          
+          <!-- Date block -->
+          <div style="min-width: 50px; text-align: center;">
+            <div style="font-size: 1.2rem; font-weight: 700; color: var(--bun-dark); line-height: 1.2;">
+              <%= new Date(shift.startTime).getDate() %>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--muted); text-transform: uppercase;">
+              <%= ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date(shift.startTime).getMonth()] %>
+            </div>
+            <div style="font-size: 0.65rem; color: var(--muted);">
+              <%= ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(shift.startTime).getDay()] %>
+            </div>
+          </div>
+
+          <!-- Shift info -->
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 0.95rem;">
+              <%= new Date(shift.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(shift.endTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem;">
+              <%= shift.storeLocation %>
+            </div>
+          </div>
+
+          <!-- Status + Action -->
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem;">
+            <span style="font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 8px; background: <%= statusBg %>; color: <%= statusColor %>; text-transform: uppercase;">
+              <%= status || 'unknown' %>
+            </span>
+            <% if (status === 'confirmed' || status === 'pending') { %>
+              <form method="POST" action="/employee/cancel" style="margin: 0;">
+                <input type="hidden" name="shiftId" value="<%= shift.id %>" />
+                <button type="submit" style="font-size: 0.7rem; padding: 0.2rem 0.6rem; background: #fef2f2; color: #b91c1c; border: 1px solid #f3c6c6; border-radius: 6px; cursor: pointer; font-weight: 600; box-shadow: none;">
+                  Cancel
+                </button>
+              </form>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
   <% } %>
 
 <%- include('../partials/footer') %>

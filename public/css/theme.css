@@ -321,26 +321,17 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
 /* ---------- Login ---------- */
 .login-wrap {
   display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem;
-  background: linear-gradient(160deg, #1a1a1a 0%, #2a1507 40%, #3d1e06 100%);
+  background: url('/images/login-bg.jpg') center center / cover no-repeat;
   position: relative; overflow: hidden;
 }
 .login-wrap::before {
   content: '';
   position: absolute;
-  width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(244, 163, 0, 0.15), transparent 70%);
-  top: -10%; right: -5%;
-  border-radius: 50%;
-  filter: blur(60px);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
 }
 .login-wrap::after {
-  content: '';
-  position: absolute;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent 70%);
-  bottom: -10%; left: -5%;
-  border-radius: 50%;
-  filter: blur(60px);
+  content: none;
 }
 .login-card {
   background: rgba(255, 252, 247, 0.95);
@@ -425,10 +416,19 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
   .sidebar .section-label { display: block; }
   .sidebar .logout { margin-top: auto; }
 
-  .content { padding: 1.25rem 1rem; }
-  .summary { flex-wrap: wrap; gap: 1rem; }
-  table { font-size: 0.85rem; }
-  th, td { padding: 0.5rem 0.6rem; }
+  .content { padding: 1.25rem 1rem; max-width: 100%; }
+  .content h1 { font-size: 1.3rem; }
+  .summary { flex-wrap: wrap; gap: 1rem; padding: 0.75rem 1rem; }
+  .summary strong { font-size: 1.1rem; }
+  .card { padding: 0.75rem 1rem; }
+
+  /* Tables: make them scroll horizontally on mobile */
+  table { font-size: 0.8rem; }
+  th, td { padding: 0.45rem 0.5rem; }
+  th { font-size: 0.65rem; }
+
+  /* Hide columns that aren't critical on mobile */
+  .hide-mobile { display: none; }
 }
 
 /* Small action buttons for inline forms */

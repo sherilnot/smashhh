@@ -2,10 +2,10 @@ const { pool } = require('../config/database');
 
 /**
  * Maintenance Report Service
- * Store managers submit text descriptions + photos of maintenance issues.
+ * Store managers submit text descriptions + photos + videos of maintenance issues.
  */
 
-async function createMaintenanceReport(managerId, description, files) {
+async function createMaintenanceReport(managerId, description, photos = [], videos = []) {
   const client = await pool.connect();
   try {
     const storeRes = await client.query(
@@ -27,9 +27,17 @@ async function createMaintenanceReport(managerId, description, files) {
     );
     const reportId = res.rows[0].id;
 
-    for (const file of (files || [])) {
+    for (const file of photos) {
       await client.query(
         `INSERT INTO maintenance_report_images (report_id, filename, original_name, mime_type, file_size)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [reportId, file.filename, file.originalname, file.mimetype, file.size]
+      );
+    }
+
+    for (const file of videos) {
+      await client.query(
+        `INSERT INTO maintenance_report_videos (report_id, filename, original_name, mime_type, file_size)
          VALUES ($1, $2, $3, $4, $5)`,
         [reportId, file.filename, file.originalname, file.mimetype, file.size]
       );
@@ -57,7 +65,8 @@ async function getManagerMaintenanceReports(managerId) {
 
     const res = await pool.query(
       `SELECT mr.id, mr.description, mr.status, mr.submitted_at,
-              (SELECT COUNT(*) FROM maintenance_report_images WHERE report_id = mr.id) AS image_count
+              (SELECT COUNT(*) FROM maintenance_report_images WHERE report_id = mr.id) AS image_count,
+              (SELECT COUNT(*) FROM maintenance_report_videos WHERE report_id = mr.id) AS video_count
        FROM maintenance_reports mr
        WHERE mr.store_id = $1
        ORDER BY mr.submitted_at DESC LIMIT 50`,
@@ -78,7 +87,8 @@ async function getAllMaintenanceReports(page = 1, limit = 50) {
   const res = await pool.query(
     `SELECT mr.id, mr.description, mr.status, mr.submitted_at,
             s.name AS store_name, u.first_name, u.last_name,
-            (SELECT COUNT(*) FROM maintenance_report_images WHERE report_id = mr.id) AS image_count
+            (SELECT COUNT(*) FROM maintenance_report_images WHERE report_id = mr.id) AS image_count,
+            (SELECT COUNT(*) FROM maintenance_report_videos WHERE report_id = mr.id) AS video_count
      FROM maintenance_reports mr
      JOIN stores s ON s.id = mr.store_id
      JOIN users u ON u.id = mr.submitted_by
@@ -104,7 +114,15 @@ async function getMaintenanceReportDetail(reportId) {
     [reportId]
   );
 
-  return { success: true, report: { ...reportRes.rows[0], images: imagesRes.rows } };
+  const videosRes = await pool.query(
+    `SELECT filename, original_name, mime_type FROM maintenance_report_videos WHERE report_id = $1`,
+    [reportId]
+  );
+
+  return {
+    success: true,
+    report: { ...reportRes.rows[0], images: imagesRes.rows, videos: videosRes.rows }
+  };
 }
 
 module.exports = { createMaintenanceReport, getManagerMaintenanceReports, getAllMaintenanceReports, getMaintenanceReportDetail };

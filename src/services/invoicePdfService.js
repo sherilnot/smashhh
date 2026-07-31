@@ -3,8 +3,11 @@ const PDFDocument = require('pdfkit');
 /**
  * Generate a professional invoice PDF matching the Flavio PTY LTD Excel format.
  * Returns a readable stream.
+ * @param {object} invoice
+ * @param {object} [options]
+ * @param {string} [options.watermark] - Optional watermark text (e.g. 'DRAFT')
  */
-function generateInvoicePdf(invoice) {
+function generateInvoicePdf(invoice, options = {}) {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
 
   const navy = '#1b2a5e';
@@ -148,6 +151,19 @@ function generateInvoicePdf(invoice) {
     y += 35;
     doc.font('Helvetica-Bold').fontSize(9).fillColor(navy).text('Notes:', leftX, y);
     doc.font('Helvetica').fontSize(9).fillColor(gray).text(invoice.notes, leftX + 40, y, { width: pageWidth - 40 });
+  }
+
+  // Watermark (e.g. "DRAFT")
+  if (options.watermark) {
+    doc.save();
+    doc.opacity(0.08);
+    doc.font('Helvetica-Bold').fontSize(110).fillColor(navy);
+    doc.rotate(-45, { origin: [doc.page.width / 2, doc.page.height / 2] });
+    doc.text(options.watermark, 0, doc.page.height / 2 - 60, {
+      width: doc.page.width,
+      align: 'center'
+    });
+    doc.restore();
   }
 
   doc.end();

@@ -1,132 +1,143 @@
-<%- include('../partials/header', { title: 'Dashboard - Burger Store', role: 'employee', active: 'dashboard' }) %>
+<%- include('../partials/header', { title: 'Dashboard', role: 'employee', active: 'dashboard' }) %>
 
-  <h1><span class="emoji">🍔</span>Crew Dashboard</h1>
-  <div class="card">
-    <p>Welcome! Grab open shifts, track your bookings, and watch your earnings stack up.</p>
+  <h1>Dashboard</h1>
+
+  <%
+    var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : [];
+    var total = Number(typeof wageTotal !== 'undefined' ? wageTotal : 0);
+    var totalHours = entries.reduce(function(sum, e) { return sum + (e.hoursWorked || 0); }, 0);
+  %>
+
+  <!-- Stats Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Total Earned</div>
+      <div style="font-size: 1.5rem; font-weight: 800; color: #f4a300;">$<%= total.toFixed(2) %></div>
+    </div>
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Hours Worked</div>
+      <div style="font-size: 1.5rem; font-weight: 800; color: #4fc3f7;"><%= totalHours.toFixed(1) %>h</div>
+    </div>
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
+      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Shifts Done</div>
+      <div style="font-size: 1.5rem; font-weight: 800; color: #81c784;"><%= entries.length %></div>
+    </div>
   </div>
 
-  <!-- Notification Settings Card -->
-  <div class="card" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-left: 4px solid #667eea;">
-    <h3 style="margin-top: 0; display: flex; align-items: center; gap: 0.5rem;">
-      <span style="font-size: 1.5rem;">🔔</span>
-      Shift Booking Reminders
-    </h3>
-    <p style="margin-bottom: 1rem;">
-      Get browser notifications to remind you to book your shifts during the Wednesday-Saturday booking window.
-    </p>
-    <div id="notification-status" style="margin-bottom: 1rem;">
-      <strong>Status:</strong> <span id="status-text">Checking...</span>
+  <!-- Current Shift -->
+  <%
+    var current = (typeof currentShift !== 'undefined') ? currentShift : null;
+  %>
+  <% if (current) { %>
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1rem; margin-bottom: 1.25rem; color: white;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
+        <span style="display: inline-block; width: 8px; height: 8px; background: #4caf50; border-radius: 50%; animation: pulse 1.5s infinite;"></span>
+        <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: #4caf50; font-weight: 700;">On Shift Now</span>
+      </div>
+      <div style="font-size: 1.2rem; font-weight: 800; color: #f4a300;">
+        <%= new Date(current.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(current.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
+      </div>
+      <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-top: 0.2rem;"><%= current.store_location %></div>
     </div>
-    <button 
-      id="toggle-notifications" 
-      class="btn btn-primary" 
-      style="background: #667eea; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; color: white; font-weight: 600;">
-      Enable Notifications
+    <style>@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }</style>
+  <% } %>
+
+  <!-- Upcoming Shifts Banner -->
+  <%
+    var upcoming = (typeof upcomingShifts !== 'undefined' && upcomingShifts) ? upcomingShifts : [];
+  %>
+  <% if (upcoming.length > 0) { %>
+    <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border: 1px solid rgba(45,156,90,0.2); border-radius: 14px; padding: 1rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+        <span style="font-size: 1.1rem;">✅</span>
+        <strong style="font-size: 0.9rem; color: #1b5e20;">Upcoming Confirmed Shifts</strong>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        <% upcoming.forEach(function(s) { %>
+          <%
+            var d = new Date(s.start_time);
+            var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          %>
+          <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.7); border-radius: 8px;">
+            <div style="min-width: 40px; text-align: center;">
+              <div style="font-weight: 800; font-size: 1rem; color: #2e7d32; line-height: 1.1;"><%= d.getDate() %></div>
+              <div style="font-size: 0.65rem; color: #388e3c;"><%= dayNames[d.getDay()] %></div>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; font-size: 0.88rem; color: #1b5e20;">
+                <%= new Date(s.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(s.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
+              </div>
+              <div style="font-size: 0.75rem; color: #388e3c;"><%= s.store_location %></div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Quick Actions -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1.5rem;">
+    <a href="/employee/shifts" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">📅</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">Book Shifts</span>
+    </a>
+    <a href="/employee/my-roster" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
+      <span style="font-size: 1.3rem;">📋</span>
+      <span style="font-weight: 600; font-size: 0.85rem;">My Roster</span>
+    </a>
+  </div>
+
+  <!-- Wage History -->
+  <h2 style="font-size: 1rem; color: var(--muted); margin-bottom: 0.5rem;">Recent Wages</h2>
+  <% if (entries.length === 0) { %>
+    <div class="empty">No wage entries yet. Complete shifts to see earnings.</div>
+  <% } else { %>
+    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <% entries.slice(-10).reverse().forEach(function(entry) { %>
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 0.9rem;"><%= formatDate(entry.date) %></div>
+            <div style="font-size: 0.75rem; color: var(--muted);"><%= entry.hoursWorked %>h worked</div>
+          </div>
+          <strong style="color: var(--green); font-size: 0.95rem;">$<%= Number(entry.wageEarned).toFixed(2) %></strong>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <!-- Notification Settings -->
+  <div style="margin-top: 1.5rem; padding: 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px;">
+    <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
+      <span style="font-size: 1.2rem;">🔔</span>
+      <strong style="font-size: 0.9rem;">Push Notifications</strong>
+    </div>
+    <div id="notification-status" style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem;">
+      <span id="status-text">Checking...</span>
+    </div>
+    <button id="toggle-notifications" style="padding: 0.4rem 1rem; font-size: 0.8rem; background: #667eea; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+      Enable
     </button>
   </div>
 
   <script>
-    // Update notification status display
     async function updateNotificationStatus() {
-      const statusText = document.getElementById('status-text');
-      const toggleBtn = document.getElementById('toggle-notifications');
-      
-      if (!window.webPushManager) {
-        statusText.textContent = '⏳ Loading...';
-        setTimeout(updateNotificationStatus, 500);
-        return;
-      }
-
-      const status = await window.webPushManager.getStatus();
-
-      if (!status.supported) {
-        statusText.textContent = '❌ Not supported by this browser';
-        statusText.style.color = '#dc3545';
-        toggleBtn.disabled = true;
-        toggleBtn.style.opacity = '0.5';
-        toggleBtn.style.cursor = 'not-allowed';
-        return;
-      }
-
-      if (status.subscribed) {
-        statusText.textContent = '✅ Enabled - You\'ll receive reminders even when browser is closed';
-        statusText.style.color = '#28a745';
-        toggleBtn.textContent = 'Disable Notifications';
-        toggleBtn.style.background = '#dc3545';
-        toggleBtn.disabled = false;
-      } else if (status.permission === 'denied') {
-        statusText.textContent = '❌ Blocked - Enable in browser settings';
-        statusText.style.color = '#dc3545';
-        toggleBtn.disabled = true;
-        toggleBtn.style.opacity = '0.5';
-        toggleBtn.style.cursor = 'not-allowed';
-      } else {
-        statusText.textContent = '⚪ Not enabled - Click below to enable';
-        statusText.style.color = '#6c757d';
-        toggleBtn.textContent = 'Enable Notifications';
-        toggleBtn.style.background = '#667eea';
-        toggleBtn.disabled = false;
-      }
+      var statusText = document.getElementById('status-text');
+      var toggleBtn = document.getElementById('toggle-notifications');
+      if (!window.webPushManager) { setTimeout(updateNotificationStatus, 500); return; }
+      var status = await window.webPushManager.getStatus();
+      if (!status.supported) { statusText.textContent = 'Not supported'; toggleBtn.style.display='none'; return; }
+      if (status.subscribed) { statusText.textContent = '✅ Enabled'; toggleBtn.textContent = 'Disable'; toggleBtn.style.background = '#e63946'; }
+      else if (status.permission === 'denied') { statusText.textContent = '❌ Blocked in settings'; toggleBtn.style.display='none'; }
+      else { statusText.textContent = 'Not enabled'; toggleBtn.textContent = 'Enable'; toggleBtn.style.background = '#667eea'; }
     }
-
-    // Toggle notifications
     document.getElementById('toggle-notifications').addEventListener('click', async function() {
       if (!window.webPushManager) return;
-
-      const status = await window.webPushManager.getStatus();
-
-      if (status.subscribed) {
-        // Disable
-        const result = await window.webPushManager.unsubscribe();
-        if (result.success) {
-          alert('✅ Notifications disabled');
-        }
-      } else {
-        // Enable
-        const result = await window.webPushManager.subscribe();
-        if (!result.success) {
-          alert('❌ Failed to enable notifications. Please check browser settings.');
-        }
-      }
-
+      var status = await window.webPushManager.getStatus();
+      if (status.subscribed) { await window.webPushManager.unsubscribe(); }
+      else { await window.webPushManager.subscribe(); }
       updateNotificationStatus();
     });
-
-    // Update status on load
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(updateNotificationStatus, 1000);
-    });
+    setTimeout(updateNotificationStatus, 1000);
   </script>
-
-  <h2>My Wages</h2>
-  <% var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : []; %>
-  <% if (entries.length === 0) { %>
-    <p class="empty">No wage entries are available yet.</p>
-  <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Shift date</th>
-          <th>Worked hours</th>
-          <th class="amount">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% entries.forEach(entry => { %>
-          <tr>
-            <td><%= formatDate(entry.date) %></td>
-            <td><%= entry.hoursWorked %></td>
-            <td class="amount">$<%= Number(entry.wageEarned).toFixed(2) %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2">Total</td>
-          <td class="amount">$<%= Number(typeof wageTotal !== 'undefined' ? wageTotal : 0).toFixed(2) %></td>
-        </tr>
-      </tfoot>
-    </table>
-  <% } %>
 
 <%- include('../partials/footer') %>

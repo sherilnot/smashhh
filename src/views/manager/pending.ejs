@@ -1,54 +1,84 @@
-<%- include('../partials/header', { title: 'Pending Requests - Burger Store', role: 'store_manager', active: 'pending' }) %>
+<%- include('../partials/header', { title: 'Pending Requests', role: 'store_manager', active: 'pending' }) %>
 
   <h1>Pending Requests</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
   <% if (!hasManagedStore) { %>
-    <div class="notice">No store assigned. You are not currently managing any store, so there are no pending requests to review.</div>
+    <div class="notice">No store assigned.</div>
   <% } else if (requests.length === 0) { %>
-    <p class="empty">No pending requests at this time.</p>
+    <div class="empty">No pending requests at this time.</div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Day</th>
-          <th>Shift Start</th>
-          <th>Shift End</th>
-          <th>Store</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% requests.forEach(request => { 
-          const startDate = new Date(request.shiftStartTime);
-          const endDate = new Date(request.shiftEndTime);
-          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const dayName = dayNames[startDate.getDay()];
-        %>
-          <tr>
-            <td><%= request.employeeName %></td>
-            <td><%= dayName %></td>
-            <td><%= startDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= endDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-            <td><%= request.storeName || 'Store ' + request.storeId.substring(0, 8) %></td>
-            <td>
-              <div class="actions">
-                <form method="POST" action="/manager/confirm">
-                  <input type="hidden" name="bookingId" value="<%= request.bookingId %>" />
-                  <button type="submit" class="confirm-btn">Confirm</button>
-                </form>
-                <form method="POST" action="/manager/reject">
-                  <input type="hidden" name="bookingId" value="<%= request.bookingId %>" />
-                  <button type="submit" class="reject-btn">Reject</button>
-                </form>
+    <%
+      // Group requests by employee
+      var byEmployee = {};
+      requests.forEach(function(r) {
+        if (!byEmployee[r.employeeName]) byEmployee[r.employeeName] = [];
+        byEmployee[r.employeeName].push(r);
+      });
+      var employeeNames = Object.keys(byEmployee);
+    %>
+
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem;">
+      <%= employeeNames.length %> employee<%= employeeNames.length > 1 ? 's' : '' %> submitted availability for next week.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <% employeeNames.forEach(function(empName) { %>
+        <% var empRequests = byEmployee[empName]; %>
+        <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);">
+          
+          <!-- Employee header -->
+          <div style="padding: 0.85rem 1rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="font-size: 1rem;"><%= empName %></strong>
+              <div style="font-size: 0.75rem; color: var(--muted);"><%= empRequests.length %> shift<%= empRequests.length > 1 ? 's' : '' %> requested</div>
+            </div>
+            <!-- Confirm All button -->
+            <form method="POST" action="/manager/confirm-all" style="margin: 0;">
+              <% empRequests.forEach(function(r) { %>
+                <input type="hidden" name="bookingIds[]" value="<%= r.bookingId %>">
+              <% }); %>
+              <button type="submit" style="padding: 0.4rem 0.9rem; font-size: 0.8rem; background: linear-gradient(135deg, #2d9c5a, #25845a); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(45,156,90,0.2);">
+                ✓ Accept All
+              </button>
+            </form>
+          </div>
+
+          <!-- Shifts list -->
+          <div style="padding: 0.5rem;">
+            <% empRequests.forEach(function(r) { %>
+              <%
+                var startDate = new Date(r.shiftStartTime);
+                var endDate = new Date(r.shiftEndTime);
+                var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+              %>
+              <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.5rem; border-bottom: 1px solid var(--border);">
+                <div style="min-width: 36px; text-align: center;">
+                  <div style="font-weight: 800; font-size: 0.95rem; color: var(--bun-dark); line-height: 1.1;"><%= startDate.getDate() %></div>
+                  <div style="font-size: 0.6rem; color: var(--muted);"><%= dayNames[startDate.getDay()] %></div>
+                </div>
+                <div style="flex: 1;">
+                  <span style="font-weight: 600; font-size: 0.88rem;">
+                    <%= startDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= endDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
+                  </span>
+                </div>
+                <div style="display: flex; gap: 0.3rem;">
+                  <form method="POST" action="/manager/confirm" style="margin: 0;">
+                    <input type="hidden" name="bookingId" value="<%= r.bookingId %>">
+                    <button type="submit" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: #e8f5e9; color: #2e7d32; font-weight: 700; cursor: pointer; font-size: 0.9rem;">✓</button>
+                  </form>
+                  <form method="POST" action="/manager/reject" style="margin: 0;">
+                    <input type="hidden" name="bookingId" value="<%= r.bookingId %>">
+                    <button type="submit" style="width: 30px; height: 30px; border-radius: 8px; border: none; background: #fce4ec; color: #c62828; font-weight: 700; cursor: pointer; font-size: 0.9rem;">✕</button>
+                  </form>
+                </div>
               </div>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+            <% }); %>
+          </div>
+        </div>
+      <% }); %>
+    </div>
   <% } %>
 
 <%- include('../partials/footer') %>

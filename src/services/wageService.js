@@ -10,6 +10,7 @@ const { getManagedStores } = require('./storeAssignmentService');
 
 /**
  * Worked hours = (end - start) expressed in hours.
+ * Full-day shifts (11:00–21:00) get 30 minutes deducted for lunch break.
  *
  * Requirement 8.2: compute worked hours as the difference between the shift end
  * time and the shift start time expressed in hours.
@@ -25,7 +26,15 @@ const { getManagedStores } = require('./storeAssignmentService');
 function workedHours(startTime, endTime) {
   const start = startTime instanceof Date ? startTime : new Date(startTime);
   const end = endTime instanceof Date ? endTime : new Date(endTime);
-  return (end.getTime() - start.getTime()) / 3600000;
+  let hours = (end.getTime() - start.getTime()) / 3600000;
+
+  // Deduct 30-min lunch break for full-day shifts (11:00–21:00)
+  if (start.getHours() === 11 && start.getMinutes() === 0 &&
+      end.getHours() === 21 && end.getMinutes() === 0) {
+    hours -= 0.5;
+  }
+
+  return hours;
 }
 
 /**
@@ -151,7 +160,8 @@ async function getManagerWageEntries(managerId) {
     const result = await pool.query(
       `SELECT sb.id AS booking_id, u.id AS employee_id, u.first_name, u.last_name,
               u.hourly_wage, s.start_time,
-              COALESCE(sb.completed_at, s.end_time) AS end_time,
+              CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time
+                   THEN sb.completed_at ELSE s.end_time END AS end_time,
               sb.no_show, sb.adjusted_hours
        FROM shift_bookings sb
        JOIN users u ON u.id = sb.employee_id
@@ -201,7 +211,8 @@ async function getEmployeeWageEntries(employeeId) {
     const result = await pool.query(
       `SELECT sb.id AS booking_id, u.id AS employee_id, u.first_name, u.last_name,
               u.hourly_wage, s.start_time,
-              COALESCE(sb.completed_at, s.end_time) AS end_time,
+              CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time
+                   THEN sb.completed_at ELSE s.end_time END AS end_time,
               sb.no_show, sb.adjusted_hours
        FROM shift_bookings sb
        JOIN users u ON u.id = sb.employee_id
@@ -239,7 +250,9 @@ async function getEmployeeWageEntries(employeeId) {
 async function calculateAllWages(startDate, endDate) {
   const result = await pool.query(
     `SELECT u.id AS employee_id, u.first_name, u.last_name, u.hourly_wage,
-            s.id AS shift_id, s.start_time, s.end_time,
+            s.id AS shift_id, s.start_time,
+            CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time
+                 THEN sb.completed_at ELSE s.end_time END AS end_time,
             sb.no_show, sb.adjusted_hours
      FROM shift_bookings sb
      JOIN users u ON u.id = sb.employee_id
@@ -278,6 +291,13 @@ async function calculateAllWages(startDate, endDate) {
       hours = parseFloat(row.adjusted_hours);
     } else {
       hours = (new Date(row.end_time) - new Date(row.start_time)) / 3600000;
+      // Deduct 30-min lunch break for full-day shifts (11:00–21:00)
+      const s = new Date(row.start_time);
+      const e = new Date(row.end_time);
+      if (s.getHours() === 11 && s.getMinutes() === 0 &&
+          e.getHours() === 21 && e.getMinutes() === 0) {
+        hours -= 0.5;
+      }
     }
 
     const wage = hours * report.hourlyRate;

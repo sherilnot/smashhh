@@ -1,52 +1,40 @@
 <%- include('../partials/header', { title: 'Maintenance Reports', role: 'operation_manager', active: 'maintenance' }) %>
 
-  <h1>Maintenance Reports</h1>
-  <p style="color: var(--text-muted); margin-bottom: 1.25rem;">Maintenance issues reported by shop managers.</p>
+  <h1>Maintenance</h1>
 
   <% if (reports.length === 0) { %>
-    <div class="empty">No maintenance reports have been submitted yet.</div>
+    <div class="empty">No maintenance reports submitted yet.</div>
   <% } else { %>
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Store</th>
-          <th>Submitted By</th>
-          <th>Description</th>
-          <th>Photos</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% reports.forEach(function(report) { %>
-          <tr>
-            <td><%= formatDateTime(report.submitted_at) %></td>
-            <td><strong><%= report.store_name %></strong></td>
-            <td><%= report.first_name %> <%= report.last_name %></td>
-            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><%= report.description %></td>
-            <td><%= report.image_count %> image<%= parseInt(report.image_count) > 1 ? 's' : '' %></td>
-            <td>
-              <% if (report.status === 'reviewed') { %>
-                <span class="badge" style="background: var(--green); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">REVIEWED</span>
-              <% } else { %>
-                <span class="badge" style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">NEW</span>
-              <% } %>
-            </td>
-            <td><a href="/operation-manager/maintenance/<%= report.id %>" class="btn" style="padding: 4px 12px; font-size: 0.8rem;">View</a></td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <% reports.forEach(function(report) { %>
+        <a href="/operation-manager/maintenance/<%= report.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow);">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 700; font-size: 0.95rem;"><%= report.store_name %></div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= report.description %></div>
+            <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem;">
+              <%= formatDateTime(report.submitted_at) %> · <%= report.first_name %> <%= report.last_name %> · 📷 <%= report.image_count %> photo<%= parseInt(report.image_count) !== 1 ? 's' : '' %><% if (parseInt(report.video_count) > 0) { %> · 🎥 <%= report.video_count %> video<%= parseInt(report.video_count) !== 1 ? 's' : '' %><% } %>
+            </div>
+          </div>
+          <div style="flex-shrink: 0;">
+            <% if (report.status === 'reviewed') { %>
+              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">REVIEWED</span>
+            <% } else { %>
+              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fce4ec; color: #c62828; border-radius: 6px; font-weight: 600;">NEW</span>
+            <% } %>
+          </div>
+          <span style="color: var(--muted); font-size: 1rem;">›</span>
+        </a>
+      <% }); %>
+    </div>
 
     <% if (totalPages > 1) { %>
       <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
         <% if (page > 1) { %>
-          <a href="?page=<%= page - 1 %>" class="btn" style="padding: 4px 12px;">&laquo; Prev</a>
+          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
         <% } %>
-        <span style="padding: 6px 12px; color: var(--text-muted);">Page <%= page %> of <%= totalPages %></span>
+        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
         <% if (page < totalPages) { %>
-          <a href="?page=<%= page + 1 %>" class="btn" style="padding: 4px 12px;">Next &raquo;</a>
+          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
         <% } %>
       </div>
     <% } %>

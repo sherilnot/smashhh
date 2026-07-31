@@ -1,21 +1,19 @@
 <!DOCTYPE html>
-<!--
-  Login view — Burger Store themed.
-  Requirement 18.1: dynamic content rendered with EJS auto-escaping (<%= %>).
-  Locals: error {string|null}, userId {string}
--->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login - Burger Store</title>
-  <link rel="stylesheet" href="/css/theme.css" />
+  <title>Login — Rizins Smash</title>
+  <link rel="stylesheet" href="/css/theme.css?v=5" />
 </head>
 <body>
   <div class="login-wrap">
     <div class="login-card">
-      <div class="brand-big">🍔 Burger Store</div>
-      <div class="tagline">Staff &amp; Shift Management</div>
+      <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem;">
+        <img src="/images/logo-large.png" alt="Rizins Smash" style="height: 110px; width: auto; margin-bottom: 0.5rem;">
+        <div class="brand-big" style="margin-bottom: 0.15rem;">Rizins Smash</div>
+        <div class="tagline">Staff &amp; Shift Management</div>
+      </div>
 
       <% if (typeof error !== 'undefined' && error) { %>
         <div class="error"><%= error %></div>

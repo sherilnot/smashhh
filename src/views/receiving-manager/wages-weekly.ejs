@@ -1,0 +1,52 @@
+<%- include('../partials/header', { title: 'Weekly Wages', role: 'receiving_manager', active: 'weekly' }) %>
+
+  <h1>Weekly Wages</h1>
+
+  <!-- Week Nav -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.6rem 0.75rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+    <a href="/receiving-manager/wages-weekly?date=<%= prevWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">←</a>
+    <strong style="font-size: 0.9rem; color: var(--bun-dark);"><%= formatDate(weekStart) %> — <%= formatDate(weekEnd) %></strong>
+    <a href="/receiving-manager/wages-weekly?date=<%= nextWeekDate %>" style="color: var(--lettuce-dark); font-weight: 700; text-decoration: none;">→</a>
+  </div>
+
+  <!-- Totals -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 12px; padding: 0.75rem; color: white; text-align: center;">
+      <div style="font-size: 0.6rem; text-transform: uppercase; color: rgba(255,255,255,0.6);">Total Hours</div>
+      <div style="font-size: 1.3rem; font-weight: 800; color: #4fc3f7;"><%= grandTotalHours.toFixed(1) %>h</div>
+    </div>
+    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 12px; padding: 0.75rem; color: white; text-align: center;">
+      <div style="font-size: 0.6rem; text-transform: uppercase; color: rgba(255,255,255,0.6);">Total Pay</div>
+      <div style="font-size: 1.3rem; font-weight: 800; color: #f4a300;">$<%= grandTotalPay.toFixed(0) %></div>
+    </div>
+  </div>
+
+  <% var storeNames = Object.keys(byStore); %>
+  <% if (storeNames.length === 0) { %>
+    <div class="empty">No wage data for this week.</div>
+  <% } else { %>
+    <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+      <% storeNames.forEach(function(storeName) { %>
+        <% var emps = byStore[storeName]; %>
+        <details open style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+          <summary style="padding: 0.7rem 1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--bun-dark);">
+            🏪 <%= storeName %>
+            <span style="margin-left: auto; font-size: 0.7rem; color: var(--muted);"><%= emps.length %> emp</span>
+          </summary>
+          <div style="padding: 0.4rem;">
+            <% emps.forEach(function(emp) { %>
+              <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border);">
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.85rem;"><%= emp.first_name %> <%= emp.last_name || '' %></div>
+                  <div style="font-size: 0.7rem; color: var(--muted);"><%= emp.total_hours.toFixed(1) %>h × $<%= parseFloat(emp.hourly_wage).toFixed(0) %></div>
+                </div>
+                <strong style="font-size: 0.95rem; color: var(--green);">$<%= emp.pay.toFixed(0) %></strong>
+              </div>
+            <% }); %>
+          </div>
+        </details>
+      <% }); %>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

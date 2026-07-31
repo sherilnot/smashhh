@@ -64,7 +64,8 @@ async function getOrCreateTodayInvoice(managerId) {
     }
 
     const { store_id, store_name } = storeRes.rows[0];
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     // Check if there's a submitted/reviewed checklist for today
     const checklistRes = await client.query(
@@ -126,9 +127,9 @@ async function getOrCreateTodayInvoice(managerId) {
           );
         }
 
-        // Remove old items and regenerate from current checklist
+        // Remove only non-emergency items; preserve emergency items the manager added manually
         await client.query(
-          `DELETE FROM received_invoice_items WHERE invoice_id = $1`,
+          `DELETE FROM received_invoice_items WHERE invoice_id = $1 AND (is_emergency = FALSE OR is_emergency IS NULL)`,
           [invoiceId]
         );
         await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
@@ -139,7 +140,7 @@ async function getOrCreateTodayInvoice(managerId) {
 
     // Fetch items
     const itemsRes = await client.query(
-      `SELECT id, product_name, quantity_ordered, quantity_received, unit_price, item_notes, sort_order
+      `SELECT id, product_name, quantity_ordered, quantity_received, unit_price, item_notes, sort_order, is_emergency
        FROM received_invoice_items
        WHERE invoice_id = $1
        ORDER BY sort_order`,
@@ -202,10 +203,10 @@ async function addInvoiceItem(managerId, invoiceId, productName) {
     );
     const nextOrder = sortRes.rows[0].next_order;
 
-    // Add item
+    // Add item with quantity defaulting to 0, flagged as emergency
     await client.query(
-      `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_received, unit_price, sort_order)
-       VALUES ($1, $2, '', $3, $4)`,
+      `INSERT INTO received_invoice_items (invoice_id, product_name, quantity_received, unit_price, sort_order, is_emergency)
+       VALUES ($1, $2, '0', $3, $4, TRUE)`,
       [invoiceId, productName, randomUnitPrice(), nextOrder]
     );
 

@@ -15,9 +15,44 @@ router.get('/dashboard', async (req, res) => {
   try {
     const { entries } = await getEmployeeWageEntries(req.user.userId);
     const total = totalWage(entries);
-    res.render('employee/dashboard', { user: req.user, wageEntries: entries, wageTotal: total });
+
+    const { pool } = require('../config/database');
+
+    // Fetch current shift (happening right now)
+    const currentRes = await pool.query(
+      `SELECT s.start_time, s.end_time, s.store_location
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       WHERE sb.employee_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time <= NOW()
+         AND s.end_time >= NOW()
+       LIMIT 1`,
+      [req.user.userId]
+    );
+
+    // Fetch upcoming confirmed shifts
+    const upcomingRes = await pool.query(
+      `SELECT s.start_time, s.end_time, s.store_location
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       WHERE sb.employee_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time > NOW()
+       ORDER BY s.start_time ASC
+       LIMIT 5`,
+      [req.user.userId]
+    );
+
+    res.render('employee/dashboard', {
+      user: req.user,
+      wageEntries: entries,
+      wageTotal: total,
+      currentShift: currentRes.rows[0] || null,
+      upcomingShifts: upcomingRes.rows
+    });
   } catch (e) {
-    res.render('employee/dashboard', { user: req.user, wageEntries: [], wageTotal: 0 });
+    res.render('employee/dashboard', { user: req.user, wageEntries: [], wageTotal: 0, currentShift: null, upcomingShifts: [] });
   }
 });
 
@@ -75,17 +110,8 @@ router.post('/book-weekly-shifts', async (req, res) => {
   try {
     console.log('[Employee] book-weekly-shifts received:', Object.keys(req.body).length, 'fields');
     
-    // Check if employee has already submitted this week
-    const { hasSubmitted, submittedAt } = await hasSubmittedThisWeek(req.user.userId);
-    if (hasSubmitted) {
-      console.log('[Employee] Submission blocked - already submitted at:', submittedAt);
-      return res.redirect('/employee/shifts?error=' + encodeURIComponent('You have already submitted your shifts for next week.'));
-    }
-    
-    // Validate submission window (Mon-Sun — employees can book any day)
     const now = new Date();
     const currentDay = now.getDay();
-    // No day restriction — employees can book from Monday onwards
 
     const { pool } = require('../config/database');
     
@@ -99,6 +125,25 @@ router.post('/book-weekly-shifts', async (req, res) => {
     }
     const storeId = storeRes.rows[0].store_id;
     const storeName = storeRes.rows[0].name;
+
+    // Calculate next week bounds
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 1 : 8 - day;
+    const nextMonday = new Date(now);
+    nextMonday.setDate(now.getDate() + diffToMonday);
+    nextMonday.setHours(0, 0, 0, 0);
+    const nextSunday = new Date(nextMonday);
+    nextSunday.setDate(nextMonday.getDate() + 6);
+    nextSunday.setHours(23, 59, 59, 999);
+
+    // Delete existing PENDING bookings for next week (allows re-submission)
+    // Only delete pending ones — confirmed bookings (already approved by manager) stay
+    await pool.query(
+      `DELETE FROM shift_bookings
+       WHERE employee_id = $1 AND booking_status = 'pending'
+         AND shift_id IN (SELECT id FROM shifts WHERE store_id = $2 AND start_time >= $3 AND start_time <= $4)`,
+      [req.user.userId, storeId, nextMonday, nextSunday]
+    );
 
     const SHIFT_MAP = {
       '11-1730': { startH: 11, startM: 0, endH: 17, endM: 30 },

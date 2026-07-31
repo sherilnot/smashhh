@@ -24,9 +24,11 @@
       { key: 'store-checklists', href: '/warehouse/store-checklists', icon: 'clipboard-list',   label: 'Store Orders' }
     ],
     receiving_manager: [
-      { key: 'dashboard',  href: '/receiving-manager/timesheets', icon: 'layout-dashboard', label: 'Dashboard' },
-      { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'Timesheets' },
-      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Wages' }
+      { key: 'dashboard',  href: '/receiving-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+      { key: 'timesheets', href: '/receiving-manager/timesheets', icon: 'file-spreadsheet', label: 'All Timesheets' },
+      { key: 'weekly',     href: '/receiving-manager/wages-weekly', icon: 'calendar',       label: 'Weekly Wages' },
+      { key: 'monthly',    href: '/receiving-manager/wages-monthly', icon: 'calendar-range', label: 'Monthly Wages' },
+      { key: 'wages',      href: '/receiving-manager/wages',      icon: 'banknote',         label: 'Rates' }
     ],
     operation_manager: [
       { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
@@ -54,7 +56,7 @@
   <meta name="apple-mobile-web-app-title" content="Rizins" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/theme.css?v=5" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <% if (navRole === 'employee') { %>
   <script src="/js/webpush-notifications.js"></script>
@@ -68,7 +70,7 @@
     </button>
     <% } %>
     <span class="brand">
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" x2="18" y1="17" y2="17"/></svg>
+      <img src="/images/logo.png" alt="Rizins" style="height: 42px; width: auto;">
       Rizins <span class="accent">Smash</span>
     </span>
     <span class="spacer"></span>

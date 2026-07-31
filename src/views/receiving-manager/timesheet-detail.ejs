@@ -1,97 +1,146 @@
 <%- include('../partials/header', { title: 'Timesheet Detail', role: 'receiving_manager', active: 'timesheets', wide: true }) %>
 
-  <h1>Payroll — Timesheet Detail</h1>
+  <h1>Timesheet</h1>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <div id="msg"></div>
 
   <% if (timesheet) { %>
-    <div class="card" style="margin-bottom: 1.25rem;">
-      <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
-        <div><strong>Store:</strong> <%= timesheet.store_name %></div>
-        <div><strong>Week:</strong> <%= formatDate(timesheet.week_start) %> — <%= formatDate(timesheet.week_end) %></div>
-        <div><strong>By:</strong> <%= timesheet.submitted_first %> <%= timesheet.submitted_last %></div>
-        <div><strong>Submitted:</strong> <%= formatDateTime(timesheet.submitted_at) %></div>
-      </div>
-    </div>
 
-    <div class="summary">
-      <div><strong><%= timesheet.employee_count %></strong><span>Employees</span></div>
-      <div><strong><%= parseFloat(timesheet.total_hours).toFixed(2) %></strong><span>Total Hours</span></div>
-      <div><strong>$<%= parseFloat(timesheet.total_wages || 0).toFixed(2) %></strong><span>Total Wages</span></div>
+    <!-- Week info -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.6rem 0.75rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
+      <strong style="font-size: 0.9rem; color: var(--bun-dark);"><%= timesheet.store_name %></strong>
+      <span style="font-size: 0.85rem; color: var(--muted);"><%= formatDate(timesheet.week_start) %> — <%= formatDate(timesheet.week_end) %></span>
     </div>
 
     <% if (timesheet.timesheetRows && timesheet.timesheetRows.length > 0) { %>
-      <table style="table-layout: fixed; width: 100%;">
-        <colgroup>
-          <col style="width: 12%;">
-          <col style="width: 6%;">
-          <col style="width: 6%;">
-          <% timesheet.dayLabels.forEach(function() { %><col style="width: 9%;"><% }) %>
-          <col style="width: 7%;">
-          <col style="width: 7%;">
-          <col style="width: 7%;">
-          <col style="width: 8%;">
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Employee</th>
-            <th>Type</th>
-            <th>Rate</th>
-            <% timesheet.dayLabels.forEach(function(label, i) { %>
-              <th><%= label %><br><span style="font-weight: 400; font-size: 0.8em; color: var(--muted);"><%= formatDateShort(timesheet.dayDates[i]) %></span></th>
-            <% }) %>
-            <th class="amount">Weekday</th>
-            <th class="amount">Weekend</th>
-            <th class="amount">Total Hrs</th>
-            <th class="amount">Earned</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% timesheet.timesheetRows.forEach(function(row) { %>
+
+      <!-- Weekend Multiplier Controls -->
+      <div style="margin-bottom: 0.75rem; padding: 0.6rem 0.75rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <input type="checkbox" id="selectAllCb" onchange="toggleAll()" style="width: 16px; height: 16px; accent-color: var(--charcoal);">
+        <span style="font-size: 0.8rem; font-weight: 600;">Weekend rate:</span>
+        <button type="button" onclick="applyWeekendRate(1.5)" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: #2e7d32; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">1.5x</button>
+        <button type="button" onclick="applyWeekendRate(2.0)" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: #1565c0; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">2.0x</button>
+        <button type="button" onclick="resetAll()" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: white; color: #666; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Reset</button>
+        <span id="selectedCount" style="font-size: 0.7rem; color: var(--muted); margin-left: auto;">0</span>
+      </div>
+
+      <!-- Table (same layout as manager timesheet) -->
+      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 10px;">
+        <table style="width: 100%; min-width: 700px; margin: 0; border: none; box-shadow: none;">
+          <thead>
             <tr>
-              <td><strong><%= row.name %></strong></td>
-              <td>
-                <% if (row.employmentType === 'permanent') { %>
-                  <span class="badge" style="background: linear-gradient(135deg, #e0f2e9, #d3ecdf); color: var(--green); border-color: rgba(45,156,90,0.2); font-size: 0.7em;">Perm</span>
-                <% } else if (row.employmentType === 'casual') { %>
-                  <span class="badge" style="background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--mustard); border-color: rgba(244,163,0,0.2); font-size: 0.7em;">Casual</span>
-                <% } else { %>
-                  <span style="color: var(--muted);">—</span>
-                <% } %>
-              </td>
-              <td class="amount"><span style="font-size: 0.85em;">$<%= parseFloat(row.hourly_wage || 0).toFixed(2) %></span></td>
-              <% row.byDay.forEach(function(cell) { %>
-                <td style="vertical-align: top; padding: 0.35rem;">
-                  <% if (cell) { %>
-                    <div style="padding: 0.3rem 0.4rem; border-radius: 4px; background: <%= cell.color %>; font-size: 0.8em; border: 1px solid rgba(0,0,0,0.08);">
-                      <div style="font-weight: 600; color: #333;"><%= cell.label %></div>
-                      <div style="font-size: 0.85em; color: #666; margin-top: 0.15rem;"><%= cell.hours_worked.toFixed(2) %>h</div>
-                    </div>
-                  <% } else { %>
-                    <span style="color: var(--muted); font-size: 0.8em;">—</span>
-                  <% } %>
-                </td>
+              <th style="width: 30px; position: sticky; left: 0; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 2;"></th>
+              <th style="position: sticky; left: 30px; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 2; min-width: 80px; font-size: 0.65rem;">EMPLOYEE</th>
+              <% timesheet.dayLabels.forEach(function(label, i) { %>
+                <th style="text-align: center; font-size: 0.65rem; padding: 0.5rem 0.3rem; <%= i >= 5 ? 'background: rgba(244,163,0,0.08);' : '' %>">
+                  <div><%= label %></div>
+                  <div style="font-weight: 400; color: var(--muted);"><%= formatDateShort(timesheet.dayDates[i]) %></div>
+                </th>
               <% }) %>
-              <td class="amount"><%= row.weekdayHours.toFixed(2) %></td>
-              <td class="amount"><%= row.weekendHours.toFixed(2) %></td>
-              <td class="amount"><strong><%= row.totalHours.toFixed(2) %></strong></td>
-              <td class="amount"><strong style="color: var(--green);">$<%= row.totalEarned.toFixed(2) %></strong></td>
+              <th style="text-align: right; font-size: 0.65rem; min-width: 45px;">HRS</th>
+              <th style="text-align: right; font-size: 0.65rem; min-width: 50px;">PAY</th>
             </tr>
-          <% }) %>
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colspan="10"><strong>Total (<%= timesheet.employee_count %> employees)</strong></td>
-            <td class="amount"><strong><%= parseFloat(timesheet.total_hours).toFixed(2) %></strong></td>
-            <td class="amount"><strong style="color: var(--green);">$<%= parseFloat(timesheet.total_wages || 0).toFixed(2) %></strong></td>
-          </tr>
-        </tfoot>
-      </table>
+          </thead>
+          <tbody>
+            <% timesheet.timesheetRows.forEach(function(row) { %>
+              <tr>
+                <td style="position: sticky; left: 0; background: var(--warm-white); z-index: 1; padding: 0.3rem;">
+                  <input type="checkbox" class="emp-cb" data-name="<%= row.name %>" onchange="updateCount()" style="width: 15px; height: 15px; accent-color: var(--charcoal);">
+                </td>
+                <td style="position: sticky; left: 30px; background: var(--warm-white); z-index: 1; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border);">
+                  <div style="font-weight: 700; font-size: 0.75rem; white-space: nowrap;"><%= row.name %></div>
+                  <div style="font-size: 0.6rem; color: var(--muted);">
+                    $<%= parseFloat(row.hourly_wage || 0).toFixed(0) %>/h
+                    <% if (row.hasOverride) { %>
+                      <span style="color: #d32f2f;">→ $<%= row.overrideRate.toFixed(0) %> wknd</span>
+                    <% } %>
+                  </div>
+                </td>
+                <% row.byDay.forEach(function(cell, i) { %>
+                  <td style="text-align: center; padding: 0.25rem; vertical-align: top; border-bottom: 1px solid var(--border); <%= i >= 5 ? 'background: rgba(244,163,0,0.04);' : '' %>">
+                    <% if (cell) { %>
+                      <div style="padding: 0.2rem; border-radius: 5px; background: <%= cell.color %>; font-size: 0.7rem; border: 1px solid rgba(0,0,0,0.05);">
+                        <div style="font-weight: 600; color: #333;"><%= cell.startLabel %></div>
+                        <div style="color: #555;"><%= cell.endLabel %></div>
+                        <div style="font-weight: 700; color: var(--green); margin-top: 0.1rem;"><%= cell.hours_worked.toFixed(1) %>h</div>
+                      </div>
+                    <% } else { %>
+                      <span style="color: var(--muted); font-size: 0.7rem;">—</span>
+                    <% } %>
+                  </td>
+                <% }); %>
+                <td style="text-align: right; padding: 0.3rem 0.4rem; font-weight: 800; font-size: 0.85rem; border-bottom: 1px solid var(--border);">
+                  <%= row.totalHours.toFixed(1) %>
+                </td>
+                <td style="text-align: right; padding: 0.3rem 0.4rem; font-weight: 800; font-size: 0.85rem; color: var(--green); border-bottom: 1px solid var(--border);">
+                  $<%= row.totalEarned.toFixed(0) %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td style="position: sticky; left: 30px; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 1; font-weight: 700; font-size: 0.7rem; padding: 0.5rem;">TOTAL (<%= timesheet.employee_count %>)</td>
+              <% timesheet.dayLabels.forEach(function() { %><td></td><% }) %>
+              <td style="text-align: right; font-weight: 800; font-size: 0.9rem; padding: 0.4rem;"><%= parseFloat(timesheet.total_hours).toFixed(1) %>h</td>
+              <td style="text-align: right; font-weight: 800; font-size: 0.9rem; padding: 0.4rem; color: var(--green);">$<%= parseFloat(timesheet.total_wages || 0).toFixed(0) %></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+    <% } else { %>
+      <div class="empty">No shifts in this timesheet.</div>
     <% } %>
+
+    <p style="margin-top: 1rem;"><a href="/receiving-manager/timesheets" style="color: var(--lettuce-dark); font-weight: 700; font-size: 0.85rem;">← All Timesheets</a></p>
   <% } %>
 
-  <p style="margin-top: 1.25rem;"><a href="/receiving-manager/timesheets" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Timesheets</a></p>
+  <script>
+    var timesheetId = '<%= timesheet ? timesheet.id : "" %>';
+
+    function updateCount() {
+      var count = document.querySelectorAll('.emp-cb:checked').length;
+      document.getElementById('selectedCount').textContent = count + ' selected';
+    }
+
+    function toggleAll() {
+      var cbs = document.querySelectorAll('.emp-cb');
+      var allChecked = Array.from(cbs).every(function(c) { return c.checked; });
+      cbs.forEach(function(c) { c.checked = !allChecked; });
+      document.getElementById('selectAllCb').checked = !allChecked;
+      updateCount();
+    }
+
+    async function applyWeekendRate(multiplier) {
+      var checked = document.querySelectorAll('.emp-cb:checked');
+      if (checked.length === 0) { document.getElementById('msg').className = 'error'; document.getElementById('msg').textContent = 'Select employees first.'; return; }
+      var names = Array.from(checked).map(function(c) { return c.dataset.name; });
+      if (!confirm('Apply ' + multiplier + 'x weekend rate to ' + names.length + ' employee(s)?')) return;
+      var res = await fetch('/receiving-manager/apply-multiplier', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timesheetId: timesheetId, employeeIds: names, multiplier: multiplier })
+      });
+      var data = await res.json();
+      if (data.success) { window.location.reload(); }
+      else { document.getElementById('msg').className = 'error'; document.getElementById('msg').textContent = data.error || 'Failed.'; }
+    }
+
+    async function resetAll() {
+      var checked = document.querySelectorAll('.emp-cb:checked');
+      if (checked.length === 0) { document.getElementById('msg').className = 'error'; document.getElementById('msg').textContent = 'Select employees first.'; return; }
+      var names = Array.from(checked).map(function(c) { return c.dataset.name; });
+      if (!confirm('Reset rates for ' + names.length + ' employee(s)?')) return;
+      for (var i = 0; i < names.length; i++) {
+        await fetch('/receiving-manager/remove-multiplier', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timesheetId: timesheetId, employeeId: names[i] })
+        });
+      }
+      window.location.reload();
+    }
+  </script>
 
 <%- include('../partials/footer') %>

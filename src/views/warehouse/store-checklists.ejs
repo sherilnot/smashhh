@@ -2,50 +2,50 @@
 
   <h1>Store Orders</h1>
 
-  <% if (checklists.length === 0) { %>
-    <div class="empty">No store checklists have been submitted yet.</div>
+  <% var stores = (typeof byStore !== 'undefined') ? byStore : {}; %>
+  <% var storeNames = Object.keys(stores); %>
+
+  <% if (storeNames.length === 0) { %>
+    <div class="empty">No store orders submitted yet.</div>
   <% } else { %>
-    <div class="card" style="margin-bottom: 1rem;">
-      <strong><%= total %></strong> checklist(s) received from stores.
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <% storeNames.forEach(function(storeName) { %>
+        <% var storeChecklists = stores[storeName]; %>
+        <details open style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+          <summary style="padding: 0.85rem 1rem; font-weight: 700; font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--bun-dark);">
+            <span style="font-size: 1.1rem;">🏪</span>
+            <%= storeName %>
+            <span style="margin-left: auto; font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--charcoal); color: white; border-radius: 10px;"><%= storeChecklists.length %></span>
+          </summary>
+          <div style="padding: 0.5rem;">
+            <% storeChecklists.forEach(function(cl, idx) { %>
+              <a href="/warehouse/store-checklists/<%= cl.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--ink); <%= idx < storeChecklists.length - 1 ? 'border-bottom: 1px solid var(--border);' : '' %>">
+                <span style="font-weight: 600; font-size: 0.8rem; color: var(--muted); min-width: 22px;"><%= idx + 1 %></span>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; font-size: 0.9rem;"><%= formatDate(cl.check_date) %></div>
+                  <div style="font-size: 0.75rem; color: var(--muted);"><%= cl.first_name %> <%= cl.last_name %> · <%= formatDateShort(cl.submitted_at) %></div>
+                </div>
+                <% if (cl.status === 'reviewed') { %>
+                  <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">DONE</span>
+                <% } else { %>
+                  <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fef3e2; color: var(--bun-dark); border-radius: 6px; font-weight: 600;">NEW</span>
+                <% } %>
+                <span style="color: var(--muted);">›</span>
+              </a>
+            <% }); %>
+          </div>
+        </details>
+      <% }); %>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Store</th>
-          <th>Date</th>
-          <th>Submitted By</th>
-          <th>Submitted At</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% checklists.forEach(cl => { %>
-          <tr>
-            <td><strong><%= cl.store_name %></strong></td>
-            <td><%= formatDate(cl.check_date) %></td>
-            <td><%= cl.first_name %> <%= cl.last_name %></td>
-            <td><%= cl.submitted_at ? formatDateTime(cl.submitted_at) : '—' %></td>
-            <td>
-              <span class="badge" style="background: <%= cl.status === 'reviewed' ? 'var(--lettuce)' : 'var(--mustard)' %>; color: <%= cl.status === 'reviewed' ? '#fff' : 'var(--bun-dark)' %>;">
-                <%= cl.status %>
-              </span>
-            </td>
-            <td><a href="/warehouse/store-checklists/<%= cl.id %>" class="btn" style="font-size: 0.8rem; padding: 0.35rem 0.7rem;">View</a></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-
     <% if (totalPages > 1) { %>
-      <div style="margin-top: 1rem; text-align: center;">
+      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
         <% if (page > 1) { %>
-          <a href="/warehouse/store-checklists?page=<%= page - 1 %>" style="color: var(--lettuce-dark); font-weight: 700;">← Previous</a>
+          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
         <% } %>
-        <span style="margin: 0 1rem; color: var(--muted);">Page <%= page %> of <%= totalPages %></span>
+        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
         <% if (page < totalPages) { %>
-          <a href="/warehouse/store-checklists?page=<%= page + 1 %>" style="color: var(--lettuce-dark); font-weight: 700;">Next →</a>
+          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
         <% } %>
       </div>
     <% } %>

@@ -3,6 +3,7 @@ const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
 const { pool } = require('../config/database');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
+const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('receiving_manager'));
@@ -461,6 +462,39 @@ router.get('/received-invoices/:id', async (req, res) => {
       invoice: null,
       error: 'Failed to load invoice'
     });
+  }
+});
+
+module.exports = router;
+
+// ─── Cash Reports (Payroll receives cash submissions from shop managers) ───────
+
+router.get('/cash', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const { submissions, total } = await getAllCashSubmissions(page, 20);
+    res.render('receiving-manager/cash', {
+      user: req.user,
+      submissions,
+      page,
+      totalPages: Math.ceil(total / 20)
+    });
+  } catch (e) {
+    console.error('[ReceivingManager] cash list error', e);
+    res.render('receiving-manager/cash', { user: req.user, submissions: [], page: 1, totalPages: 1 });
+  }
+});
+
+router.get('/cash/:id', async (req, res) => {
+  try {
+    const result = await getCashSubmissionDetail(req.params.id);
+    if (!result.success) {
+      return res.status(404).render('receiving-manager/cash-detail', { user: req.user, submission: null, error: 'Not found' });
+    }
+    res.render('receiving-manager/cash-detail', { user: req.user, submission: result.submission, error: null });
+  } catch (e) {
+    console.error('[ReceivingManager] cash detail error', e);
+    res.status(500).render('receiving-manager/cash-detail', { user: req.user, submission: null, error: 'Failed to load' });
   }
 });
 

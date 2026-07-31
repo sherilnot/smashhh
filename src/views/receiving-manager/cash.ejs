@@ -1,0 +1,43 @@
+<%- include('../partials/header', { title: 'Cash Reports', role: 'receiving_manager', active: 'cash' }) %>
+
+  <h1>Cash Reports</h1>
+
+  <% if (submissions.length === 0) { %>
+    <div class="empty">No cash reports submitted yet.</div>
+  <% } else { %>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <% submissions.forEach(function(sub) { %>
+        <a href="/receiving-manager/cash/<%= sub.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow);">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 700; font-size: 0.95rem;"><%= sub.store_name %></div>
+            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem;">
+              <%= formatDateTime(sub.submitted_at) %> · <%= sub.first_name %> <%= sub.last_name %> · <%= sub.image_count %> photo<%= parseInt(sub.image_count) !== 1 ? 's' : '' %>
+            </div>
+          </div>
+          <div style="text-align: right; flex-shrink: 0;">
+            <div style="font-weight: 700; font-size: 1rem;">$<%= parseFloat(sub.amount).toFixed(2) %></div>
+            <% if (sub.status === 'reviewed') { %>
+              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">REVIEWED</span>
+            <% } else { %>
+              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fef3e2; color: var(--bun-dark); border-radius: 6px; font-weight: 600;">NEW</span>
+            <% } %>
+          </div>
+          <span style="color: var(--muted); font-size: 1rem;">›</span>
+        </a>
+      <% }); %>
+    </div>
+
+    <% if (totalPages > 1) { %>
+      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
+        <% if (page > 1) { %>
+          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
+        <% } %>
+        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
+        <% if (page < totalPages) { %>
+          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
+        <% } %>
+      </div>
+    <% } %>
+  <% } %>
+
+<%- include('../partials/footer') %>

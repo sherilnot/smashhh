@@ -1,0 +1,55 @@
+<%- include('../partials/header', { title: 'Cash Report Detail', role: 'receiving_manager', active: 'cash' }) %>
+
+  <h1>Cash Report Detail</h1>
+
+  <% if (error) { %>
+    <div class="error"><%= error %></div>
+  <% } %>
+
+  <% if (!submission) { %>
+    <div class="empty">Submission not found.</div>
+  <% } else { %>
+    <div class="card" style="margin-bottom: 1.25rem;">
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div><strong><%= submission.store_name %></strong></div>
+        <div style="color: var(--text-muted); font-size: 0.85rem;"><%= formatDateTime(submission.submitted_at) %></div>
+      </div>
+      <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;">
+        Submitted by: <strong><%= submission.first_name %> <%= submission.last_name %></strong>
+      </div>
+    </div>
+
+    <div class="summary" style="margin-bottom: 1.5rem;">
+      <div><strong>$<%= parseFloat(submission.amount).toFixed(2) %></strong><span>Cash Amount</span></div>
+      <div><strong><%= submission.images ? submission.images.length : 0 %></strong><span>Photos</span></div>
+    </div>
+
+    <% if (submission.notes) { %>
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <strong>Note:</strong> <%= submission.notes %>
+      </div>
+    <% } %>
+
+    <% if (submission.images && submission.images.length > 0) { %>
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Photos</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+        <% submission.images.forEach(function(img) { %>
+          <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+            <a href="/uploads/cash/<%= img.filename %>" target="_blank">
+              <img src="/uploads/cash/<%= img.filename %>" alt="<%= img.original_name %>"
+                   style="width: 100%; height: 200px; object-fit: cover; display: block;">
+            </a>
+            <div style="padding: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+              <%= img.original_name %> (<%= Math.round(img.file_size / 1024) %>KB)
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <div style="margin-top: 1.5rem;">
+      <a href="/receiving-manager/cash" class="btn" style="padding: 6px 16px;">&larr; Back to Cash Reports</a>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

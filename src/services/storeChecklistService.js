@@ -159,7 +159,8 @@ async function saveChecklist(managerId, checklistId, quantities) {
   }
 }
 
-
+/**
+ * Update quantities and submit checklist to warehouse manager.
  * @param {string} managerId
  * @param {string} checklistId
  * @param {Object} quantities - Map of item_id -> quantity_to_bring

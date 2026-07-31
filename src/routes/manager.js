@@ -7,7 +7,7 @@ const { endShift } = require('../services/shiftService');
 const { pool } = require('../config/database');
 const { getRosterWeek, validateRosterRequest, isWithinNavigationBounds, getRoster } = require('../services/rosterService');
 const { generateTimesheet, submitTimesheet, confirmTimesheet } = require('../services/timesheetService');
-const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist } = require('../services/storeChecklistService');
+const { getOrCreateTodayChecklist, submitChecklist: submitStoreChecklist, saveChecklist: saveStoreChecklist } = require('../services/storeChecklistService');
 const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotificationLogs, getDeliveryRate } = require('../services/notificationTrackerService');
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
@@ -1308,6 +1308,25 @@ router.post('/store-checklist/submit', async (req, res) => {
 
 // ─── (Legacy checklist upload removed — replaced by store-checklist) ────────────
 
+// Save checklist quantities without submitting (auto-save on change)
+router.post('/store-checklist/save', async (req, res) => {
+  try {
+    const body = req.body;
+    const checklistId = body.checklistId;
+    const quantities = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (key.startsWith('qty_')) {
+        quantities[key.replace('qty_', '')] = value;
+      }
+    }
+    await saveStoreChecklist(req.user.userId, checklistId, quantities);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Manager] store-checklist save error', e);
+    res.json({ success: false });
+  }
+});
+
 // ─── Notification Monitor ──────────────────────────────────────────────────────
 
 router.get('/notification-monitor', async (req, res) => {
@@ -1458,6 +1477,32 @@ router.post('/received-invoice/reopen', async (req, res) => {
   } catch (e) {
     console.error('[Manager] reopen invoice error', e);
     res.redirect('/manager/received-invoice?error=' + encodeURIComponent('Failed to reopen invoice'));
+  }
+});
+
+// Auto-save a single invoice item quantity (inline edit)
+router.post('/received-invoice/update-item', async (req, res) => {
+  try {
+    const { invoiceId, itemId, quantityReceived } = req.body;
+    if (!invoiceId || !itemId) return res.json({ success: false });
+
+    // Verify invoice belongs to this manager's store and is draft
+    const checkRes = await pool.query(
+      `SELECT ri.id FROM received_invoices ri
+       JOIN store_manager_assignments sma ON sma.store_id = ri.store_id
+       WHERE ri.id = $1 AND sma.manager_id = $2 AND ri.status = 'draft'`,
+      [invoiceId, req.user.userId]
+    );
+    if (checkRes.rows.length === 0) return res.json({ success: false });
+
+    await pool.query(
+      `UPDATE received_invoice_items SET quantity_received = $1 WHERE id = $2 AND invoice_id = $3`,
+      [quantityReceived || '0', itemId, invoiceId]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Manager] invoice update-item error', e);
+    res.json({ success: false });
   }
 });
 

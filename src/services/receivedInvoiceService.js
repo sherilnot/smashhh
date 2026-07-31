@@ -67,17 +67,17 @@ async function getOrCreateTodayInvoice(managerId) {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    // Check if there's a submitted/reviewed checklist for today
+    // Check if there's any checklist for today (draft, submitted, or reviewed)
     const checklistRes = await client.query(
       `SELECT id FROM store_checklists 
-       WHERE store_id = $1 AND check_date = $2 AND status IN ('submitted', 'reviewed')
+       WHERE store_id = $1 AND check_date = $2 AND status IN ('draft', 'submitted', 'reviewed')
        LIMIT 1`,
       [store_id, today]
     );
 
-    // If no checklist submitted today, block invoice access
+    // If no checklist at all today, block invoice access
     if (checklistRes.rows.length === 0) {
-      return { success: false, checklistPending: true, error: 'You must submit today\'s checklist before creating an invoice.' };
+      return { success: false, checklistPending: true, error: 'You must create today\'s checklist before creating an invoice.' };
     }
 
     const checklistId = checklistRes.rows[0].id;

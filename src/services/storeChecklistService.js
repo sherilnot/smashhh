@@ -119,7 +119,47 @@ async function getOrCreateTodayChecklist(managerId) {
 }
 
 /**
- * Update quantities and submit checklist to warehouse manager.
+ * Save quantities to a draft checklist without submitting.
+ * Creates the checklist if needed, updates quantities, keeps status as 'draft'.
+ * The invoice will sync from draft checklists too.
+ */
+async function saveChecklist(managerId, checklistId, quantities) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const checkRes = await client.query(
+      `SELECT sc.id, sc.status
+       FROM store_checklists sc
+       JOIN store_manager_assignments sma ON sma.store_id = sc.store_id
+       WHERE sc.id = $1 AND sma.manager_id = $2`,
+      [checklistId, managerId]
+    );
+
+    if (checkRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { success: false, error: 'Checklist not found or access denied' };
+    }
+
+    for (const [itemId, qty] of Object.entries(quantities)) {
+      await client.query(
+        `UPDATE store_checklist_items SET quantity_to_bring = $1 WHERE id = $2 AND checklist_id = $3`,
+        [qty || '', itemId, checklistId]
+      );
+    }
+
+    await client.query('COMMIT');
+    return { success: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[StoreChecklistService] saveChecklist error', error);
+    return { success: false, error: 'Failed to save checklist' };
+  } finally {
+    client.release();
+  }
+}
+
+
  * @param {string} managerId
  * @param {string} checklistId
  * @param {Object} quantities - Map of item_id -> quantity_to_bring
@@ -271,6 +311,7 @@ async function markReviewed(checklistId, warehouseManagerId) {
 
 module.exports = {
   getOrCreateTodayChecklist,
+  saveChecklist,
   submitChecklist,
   getSubmittedChecklists,
   getChecklistDetail,

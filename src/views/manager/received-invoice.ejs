@@ -2,20 +2,16 @@
 
   <h1>Received Invoice</h1>
 
-  <% if (error) { %>
-    <div class="error"><%= error %></div>
-  <% } %>
-
-  <% var successParam = (typeof locals.query !== 'undefined' && locals.query && locals.query.success) ? locals.query.success : null; %>
-  <% if (successParam === '1') { %>
-    <div class="msg">✅ Invoice submitted successfully to OM001!</div>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (typeof locals !== 'undefined' && locals.query && locals.query.success === '1') { %>
+    <div class="msg">✅ Invoice submitted successfully!</div>
   <% } %>
 
   <% if (typeof checklistPending !== 'undefined' && checklistPending) { %>
     <div class="card" style="text-align: center; padding: 2rem;">
       <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">📋</div>
       <h2 style="margin: 0 0 0.5rem;">Checklist Required First</h2>
-      <p style="color: var(--text-muted); margin-bottom: 1.25rem;">You need to submit today's daily checklist before you can create and send an invoice.</p>
+      <p style="color: var(--text-muted); margin-bottom: 1.25rem;">Create today's daily checklist before creating an invoice.</p>
       <a href="/manager/store-checklist" class="btn" style="background: linear-gradient(180deg, var(--accent), var(--accent-dark)); color: white; padding: 10px 20px;">
         Go to Daily Checklist
       </a>
@@ -23,299 +19,287 @@
   <% } else if (!invoice) { %>
     <div class="empty">Unable to load invoice. Make sure you're assigned to a store.</div>
   <% } else { %>
-    <div class="card" style="margin-bottom: 1.25rem;">
-      <strong><%= invoice.storeName %></strong> &nbsp;—&nbsp; 
-      <%= formatDate(invoice.invoiceDate) %>
-      <% if (invoice.checklistId) { %>
-        &nbsp;<span style="color: var(--text-muted); font-size: 0.8rem;">✓ Linked to today's checklist</span>
+
+    <!-- ── Formal Invoice Sheet (always visible) ────────────────────────── -->
+    <style>
+      .inv-sheet { background:#fff; padding:2rem 2.5rem; max-width:860px; margin:0 auto; font-family:'Aptos','Calibri','Segoe UI',Arial,sans-serif; color:#1a1a2e; border:1px solid #ddd; border-radius:12px; }
+      .inv-row1 { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem; }
+      .inv-company { font-size:1.5rem; font-weight:700; color:#1b2a5e; }
+      .inv-word { font-size:2rem; font-weight:700; color:#1b2a5e; letter-spacing:1px; }
+      .inv-address { font-size:0.85rem; color:#555; line-height:1.6; margin-bottom:1.25rem; }
+      .inv-meta { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
+      .inv-bill-label { font-weight:700; color:#1b2a5e; font-size:0.82rem; }
+      .inv-bill-value { font-size:0.85rem; color:#333; line-height:1.5; }
+      .inv-meta-right { display:flex; gap:2rem; }
+      .meta-label { font-weight:700; color:#1b2a5e; font-size:0.78rem; }
+      .meta-value { font-size:0.85rem; color:#333; }
+      .inv-table { width:100%; border-collapse:collapse; margin-top:1rem; font-size:0.85rem; }
+      .inv-table thead th { background:#1b2a5e; color:#fff; font-weight:700; font-size:0.74rem; text-transform:uppercase; padding:0.55rem 0.6rem; text-align:left; }
+      .inv-table thead th.ac { text-align:center; }
+      .inv-table thead th.ar { text-align:right; }
+      .inv-table tbody tr { border-bottom:1px solid #e0e4ef; cursor: pointer; transition: background 0.1s; }
+      .inv-table tbody tr:nth-child(odd) { background:#f4f6fb; }
+      .inv-table tbody tr:nth-child(even) { background:#fff; }
+      .inv-table tbody tr:hover { background:#fff8e1; }
+      .inv-table tbody td { padding:0.5rem 0.6rem; font-size:0.84rem; color:#222; vertical-align:middle; }
+      .inv-table tbody td.ac { text-align:center; }
+      .inv-table tbody td.ar { text-align:right; }
+      .inv-table tfoot td { padding:0.65rem 0.6rem; font-weight:700; font-size:0.95rem; border-top:2px solid #1b2a5e; color:#1b2a5e; }
+      .qty-edit-input { width:70px; text-align:center; padding:0.3rem; border:2px solid #f4a300; border-radius:6px; font-size:0.85rem; font-weight:700; background:#fffbf0; }
+      .badge-emergency { font-size:0.65rem; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px; padding:1px 4px; margin-left:4px; font-weight:600; }
+      @media print { .topbar,.sidebar,.sidebar-overlay,.inv-actions,.menu-toggle{display:none!important;} .layout{display:block!important;} .content{padding:0!important;} .inv-sheet{border:none;padding:1rem;border-radius:0;} .inv-table tbody tr{cursor:default;} }
+      @media (max-width:600px) { .inv-sheet{padding:1rem 0.75rem;} .inv-word{font-size:1.4rem;} .inv-meta{flex-direction:column;} .inv-meta-right{gap:1rem;} }
+    </style>
+
+    <div class="inv-sheet">
+      <div class="inv-row1">
+        <div class="inv-company">FLAVIO PTY LTD</div>
+        <div class="inv-word">INVOICE</div>
+      </div>
+      <div class="inv-address">16 Adelaide st<br>Dandenong VIC 3175</div>
+
+      <div class="inv-meta">
+        <div>
+          <div class="inv-bill-label">BILL TO</div>
+          <div class="inv-bill-value">
+            Rizins Burgers <%= invoice.storeName %><br>
+            <% if (invoice.storeName === 'Seaford') { %>6/366 Frankston-Dandenong Rd, Seaford VIC 3198
+            <% } else if (invoice.storeName === 'Dandenong') { %>16 Adelaide St, Dandenong VIC 3175
+            <% } else if (invoice.storeName === 'Mitcham') { %>454 Whitehorse Rd, Mitcham VIC 3132
+            <% } else if (invoice.storeName === 'Frankston') { %>123 Wells St, Frankston VIC 3199
+            <% } %>
+          </div>
+        </div>
+        <div class="inv-meta-right">
+          <div>
+            <div class="meta-label">INVOICE #</div>
+            <div class="meta-value"><%= invoice.id.substring(0,8).toUpperCase() %></div>
+          </div>
+          <div>
+            <div class="meta-label">DATE</div>
+            <div class="meta-value"><%= formatDate(invoice.invoiceDate) %></div>
+          </div>
+          <div>
+            <div class="meta-label">STATUS</div>
+            <div class="meta-value">
+              <% if (invoice.status === 'submitted') { %>
+                <span style="color:#2e7d32; font-weight:700;">Submitted</span>
+              <% } else { %>
+                <span style="color:#e65100; font-weight:700;">Draft</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <% if (invoice.status === 'draft') { %>
+        <p style="font-size:0.73rem; color:#888; margin:0 0 0.5rem;">💡 Tap any row to edit the received quantity inline.</p>
       <% } %>
-      <% if (invoice.status === 'submitted') { %>
-        &nbsp;<span class="badge" style="background: var(--green); color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem;">SUBMITTED</span>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width:4%;">#</th>
+            <th style="width:36%;">Description</th>
+            <th class="ac" style="width:11%;">Ordered</th>
+            <th class="ac" style="width:13%;">Received</th>
+            <th class="ac" style="width:14%;">Unit Price</th>
+            <th class="ac" style="width:10%;">GST</th>
+            <th class="ar" style="width:12%;">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="invoiceBody">
+          <% if (invoice.items && invoice.items.length > 0) { %>
+            <% var grandTotal = 0; %>
+            <% invoice.items.forEach(function(item, idx) { %>
+              <% var price = parseFloat(item.unit_price) || 0; %>
+              <% var qty = parseFloat(item.quantity_received) || 0; %>
+              <% var lineTotal = price * qty; %>
+              <% grandTotal += lineTotal; %>
+              <tr data-item-id="<%= item.id %>"
+                  onclick="<%= invoice.status === 'draft' ? 'startInvoiceEdit(this)' : '' %>"
+                  title="<%= invoice.status === 'draft' ? 'Tap to edit' : '' %>">
+                <td><%= idx + 1 %></td>
+                <td>
+                  <%= item.product_name %>
+                  <% if (item.is_emergency) { %><span class="badge-emergency">🚨 Emergency</span><% } %>
+                </td>
+                <td class="ac" style="color:#999;"><%= item.quantity_ordered || '—' %></td>
+                <td class="ac">
+                  <span class="qty-display" style="font-weight:700; color:<%= qty > 0 ? '#1b2a5e' : '#aaa' %>;">
+                    <%= qty > 0 ? qty : '0' %>
+                  </span>
+                  <input type="text" class="qty-edit-input" style="display:none;"
+                         value="<%= item.quantity_received || '0' %>"
+                         data-item-id="<%= item.id %>"
+                         data-price="<%= price %>"
+                         onclick="event.stopPropagation()"
+                         onkeydown="handleInvKey(event, this)"
+                         onblur="commitInvoiceEdit(this)">
+                </td>
+                <td class="ac">$ <%= price.toFixed(2) %></td>
+                <td class="ac" style="color:#aaa;">—</td>
+                <td class="ar inv-line-total" style="font-weight:600;">
+                  <%= lineTotal > 0 ? lineTotal.toFixed(2) : '—' %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr><td colspan="7" style="text-align:center; color:#aaa; padding:1.5rem;">No items yet.</td></tr>
+          <% } %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="6" style="text-align:right; padding-right:1rem;">TOTAL</td>
+            <td class="ar" id="invGrandTotal"><%= typeof grandTotal !== 'undefined' ? grandTotal.toFixed(2) : '0.00' %></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <% if (invoice.notes) { %>
+        <div style="margin-top:1.25rem; font-size:0.85rem; color:#555;">
+          <strong style="color:#1b2a5e;">Notes:</strong> <%= invoice.notes %>
+        </div>
       <% } %>
     </div>
 
-    <% if (invoice.status === 'draft') { %>
-      <form method="POST" action="/manager/received-invoice/submit">
-        <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
-        
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 3%;"><input type="checkbox" id="selectAllInvoice" checked title="Select/Deselect All"></th>
-                <th style="width: 4%;">#</th>
-                <th style="width: 20%;">Product</th>
-                <th style="width: 9%;">Ordered</th>
-                <th style="width: 11%;">Received Qty</th>
-                <th style="width: 9%;">Unit Price</th>
-                <th style="width: 11%;">Total</th>
-                <th style="width: 28%;">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% if (invoice.items && invoice.items.length > 0) { %>
-                <% var grandTotal = 0; %>
-                <% invoice.items.forEach(function(item, idx) { %>
-                  <% var price = parseFloat(item.unit_price) || 0; %>
-                  <% var qty = parseFloat(item.quantity_received) || 0; %>
-                  <% var lineTotal = price * qty; %>
-                  <% grandTotal += lineTotal; %>
-                  <tr>
-                    <td style="text-align:center;">
-                      <input type="checkbox" name="selected_<%= item.id %>" value="1" checked class="item-check-inv">
-                    </td>
-                    <td><%= idx + 1 %></td>
-                    <td>
-                      <strong><%= item.product_name %></strong>
-                      <% if (item.is_emergency) { %>
-                        <span title="Emergency item added manually" style="font-size:0.7rem; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px; padding:1px 5px; margin-left:4px; font-weight:600;">🚨 Emergency</span>
-                      <% } %>
-                    </td>
-                    <td style="text-align: center; color: var(--text-muted);">
-                      <%= item.quantity_ordered || '-' %>
-                    </td>
-                    <td>
-                      <input type="number" 
-                             name="quantity_<%= item.id %>" 
-                             value="<%= item.quantity_received || '' %>"
-                             placeholder="Qty"
-                             min="0"
-                             step="1"
-                             class="qty-input"
-                             data-price="<%= price %>"
-                             style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
-                    </td>
-                    <td style="text-align: center; font-weight: 500;">
-                      $<%= price.toFixed(2) %>
-                    </td>
-                    <td class="line-total" style="text-align: center; font-weight: 600;">
-                      $<%= lineTotal.toFixed(2) %>
-                    </td>
-                    <td>
-                      <input type="text" 
-                             name="notes_<%= item.id %>" 
-                             value="<%= item.item_notes || '' %>"
-                             placeholder="Any notes..."
-                             style="width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
-                    </td>
-                  </tr>
-                <% }); %>
-                <tr style="background: var(--surface-alt); font-weight: 700;">
-                  <td></td>
-                  <td colspan="5" style="text-align: right;">Grand Total:</td>
-                  <td id="grandTotal" style="text-align: center;">$<%= grandTotal.toFixed(2) %></td>
-                  <td></td>
-                </tr>
-              <% } else { %>
-                <tr>
-                  <td colspan="8" class="empty">
-                    No items yet. Add items below or submit a checklist first to auto-populate.
-                  </td>
-                </tr>
-              <% } %>
-            </tbody>
-          </table>
-        </div>
+    <!-- ── Actions ───────────────────────────────────────────────────────── -->
+    <div class="inv-actions" style="margin-top:1.25rem; display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;">
 
-        <div style="margin-top: 1.25rem;">
-          <label style="font-weight: 600; display: block; margin-bottom: 0.5rem;">General Notes for OM001:</label>
-          <textarea name="generalNotes" 
-                    placeholder="Additional comments about this delivery..."
-                    style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; min-height: 80px; resize: vertical;"></textarea>
-        </div>
-
-        <div style="margin-top: 1.25rem; display: flex; gap: 10px; flex-wrap: wrap;">
-          <button type="submit" style="padding: 0.75rem 1.5rem; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      <% if (invoice.status === 'draft') { %>
+        <!-- Submit button -->
+        <form method="POST" action="/manager/received-invoice/submit" id="invoiceSubmitForm" style="display:contents;">
+          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+          <input type="hidden" name="generalNotes" value="">
+          <% if (invoice.items) { invoice.items.forEach(function(item) { %>
+            <input type="hidden" name="selected_<%= item.id %>" value="1" class="inv-selected">
+            <input type="hidden" name="quantity_<%= item.id %>" class="inv-qty-hidden" data-item-id="<%= item.id %>" value="<%= item.quantity_received || '0' %>">
+            <input type="hidden" name="notes_<%= item.id %>" value="<%= item.item_notes || '' %>">
+          <% }); } %>
+          <button type="submit" style="padding:0.75rem 1.5rem; font-size:0.92rem; font-weight:700; background:linear-gradient(135deg,#8B6914,#A07D1A); color:white; border:none; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:0.4rem;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             Submit Invoice
           </button>
-          <a href="/manager/received-invoice/download-draft?invoiceId=<%= invoice.id %>" style="padding: 0.75rem 1rem; font-size: 0.85rem; font-weight: 600; background: linear-gradient(135deg, #1565c0, #1976d2); color: white; border-radius: 10px; text-decoration: none;">📥 Draft Copy</a>
-        </div>
-      </form>
-
-      <!-- Add Emergency Item — always visible -->
-      <div style="margin-top: 1.25rem; padding: 1rem 1.1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-        <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.6rem; color: var(--ink);">🚨 Add Emergency Item</div>
-        <form method="POST" action="/manager/received-invoice/add-item" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
-          <input type="text" name="productName" placeholder="Product name" required
-                 style="flex: 1; min-width: 160px; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;">
-          <button type="submit" style="padding: 0.55rem 1.1rem; font-size: 0.88rem; font-weight: 700; background: linear-gradient(135deg, #f4a300, #e8950a); color: #1a1400; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap;">+ Add Item</button>
         </form>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.4rem 0 0;">Added with quantity 0. Update the received qty in the table above before submitting.</p>
-      </div>
 
-    <% } else { %>
-      <!-- Submitted view — formal Flavio PTY LTD invoice -->
-      <div class="info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-        <span>✓ Invoice submitted to Operations.</span>
-        <div style="display: flex; gap: 0.4rem;">
-          <a href="/manager/received-invoice/download" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background: linear-gradient(135deg, #1565c0, #1976d2); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">📥 Download PDF</a>
-          <form method="POST" action="/manager/received-invoice/reopen" style="margin: 0;">
-            <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
-            <button type="submit" class="btn" style="background: linear-gradient(180deg, var(--mustard, #F4A300), #E09500); color: #333; font-size: 0.85rem;">✏️ Edit</button>
-          </form>
-        </div>
-      </div>
+        <!-- Draft PDF -->
+        <a href="/manager/received-invoice/download-draft?invoiceId=<%= invoice.id %>"
+           style="padding:0.75rem 1rem; font-size:0.85rem; font-weight:600; background:linear-gradient(135deg,#1565c0,#1976d2); color:white; border-radius:10px; text-decoration:none;">
+          📥 Draft PDF
+        </a>
 
-      <style>
-        .inv-sheet { background:#fff; padding:3rem 3.5rem; max-width:860px; margin:0 auto; font-family:'Aptos','Calibri','Segoe UI',Arial,sans-serif; color:#1a1a2e; border:1px solid #ddd; }
-        .inv-row1 { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem; }
-        .inv-row1 .company-name { font-size:1.5rem; font-weight:700; color:#1b2a5e; }
-        .inv-row1 .invoice-word { font-size:2.2rem; font-weight:700; color:#1b2a5e; letter-spacing:1px; }
-        .inv-address { font-size:0.88rem; color:#333; line-height:1.6; margin-bottom:1.5rem; }
-        .inv-meta-row { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem; gap:1rem; }
-        .inv-meta-row .bill-label { font-weight:700; color:#1b2a5e; font-size:0.88rem; }
-        .inv-meta-row .bill-value { font-size:0.88rem; color:#333; line-height:1.5; }
-        .inv-meta-right { display:flex; gap:2.5rem; align-items:flex-start; }
-        .inv-meta-right .meta-block .meta-label { font-weight:700; color:#1b2a5e; font-size:0.82rem; }
-        .inv-meta-right .meta-block .meta-value { font-size:0.88rem; color:#333; }
-        .inv-items { width:100%; border-collapse:collapse; margin-top:1.5rem; font-size:0.88rem; border:none; box-shadow:none; border-radius:0; background:transparent; }
-        .inv-items thead th { background:#1b2a5e; color:#fff; font-weight:700; font-size:0.78rem; text-transform:uppercase; padding:0.6rem 0.7rem; border:none; letter-spacing:0.3px; }
-        .inv-items thead th.al-c { text-align:center; }
-        .inv-items thead th.al-r { text-align:right; }
-        .inv-items tbody tr { border-bottom:1px solid #e0e4ef; }
-        .inv-items tbody tr:nth-child(odd) { background:#f4f6fb; }
-        .inv-items tbody tr:nth-child(even) { background:#fff; }
-        .inv-items tbody td { padding:0.5rem 0.7rem; border:none; font-size:0.86rem; color:#222; vertical-align:middle; }
-        .inv-items tbody td.al-c { text-align:center; }
-        .inv-items tbody td.al-r { text-align:right; }
-        .inv-items tbody td.price::before { content:'$ '; }
-        .inv-items tfoot td { padding:0.7rem 0.7rem; font-weight:700; font-size:0.95rem; border-top:2px solid #1b2a5e; color:#1b2a5e; background:transparent; border-bottom:none; }
-        @media print { .topbar,.sidebar,.sidebar-overlay,.info,.menu-toggle{display:none!important;} .layout{display:block!important;} .content{padding:0!important;max-width:100%!important;} .inv-sheet{box-shadow:none;border:none;padding:1.5rem;} }
-        @media (max-width:600px) { .inv-sheet{padding:1.5rem 1rem;} .inv-row1 .company-name{font-size:1.2rem;} .inv-row1 .invoice-word{font-size:1.5rem;} .inv-meta-row{flex-direction:column;} .inv-meta-right{gap:1.5rem;} }
-      </style>
+        <!-- Add emergency item -->
+        <button type="button" onclick="document.getElementById('emergencyBox').style.display = document.getElementById('emergencyBox').style.display === 'none' ? 'flex' : 'none'"
+                style="padding:0.75rem 1rem; font-size:0.85rem; font-weight:600; background:var(--warm-white); color:var(--ink); border:1px solid var(--border); border-radius:10px; cursor:pointer;">
+          🚨 Add Item
+        </button>
 
-      <div class="inv-sheet">
-        <div class="inv-row1">
-          <div class="company-name">FLAVIO PTY LTD</div>
-          <div class="invoice-word">INVOICE</div>
-        </div>
-        <div class="inv-address">16 Adelaide st<br>Dandenong VIC 3175</div>
-        <div class="inv-meta-row">
-          <div>
-            <div class="bill-label">BILL TO</div>
-            <div class="bill-value">
-              Rizins Burgers <%= invoice.storeName %><br>
-              <% if (invoice.storeName === 'Seaford') { %>
-                6/366 Frankston-Dandenong Rd, Seaford VIC 3198
-              <% } else if (invoice.storeName === 'Dandenong') { %>
-                16 Adelaide St, Dandenong VIC 3175
-              <% } else if (invoice.storeName === 'Mitcham') { %>
-                454 Whitehorse Rd, Mitcham VIC 3132
-              <% } else if (invoice.storeName === 'Frankston') { %>
-                123 Wells St, Frankston VIC 3199
-              <% } %>
-            </div>
-          </div>
-          <div class="inv-meta-right">
-            <div class="meta-block">
-              <div class="meta-label">INVOICE #</div>
-              <div class="meta-value"><%= invoice.id.substring(0,8).toUpperCase() %></div>
-            </div>
-            <div class="meta-block">
-              <div class="meta-label">DATE</div>
-              <div class="meta-value"><%= formatDate(invoice.invoiceDate) %></div>
-            </div>
-          </div>
-        </div>
+      <% } else { %>
+        <!-- Submitted state -->
+        <a href="/manager/received-invoice/download"
+           style="padding:0.75rem 1rem; font-size:0.85rem; font-weight:600; background:linear-gradient(135deg,#1565c0,#1976d2); color:white; border-radius:10px; text-decoration:none;">
+          📥 Download PDF
+        </a>
+        <form method="POST" action="/manager/received-invoice/reopen" style="margin:0;">
+          <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+          <button type="submit" class="btn" style="background:linear-gradient(180deg,#F4A300,#E09500); color:#333; font-size:0.85rem; padding:0.75rem 1rem; border-radius:10px;">
+            ✏️ Edit Invoice
+          </button>
+        </form>
+        <button onclick="window.print()" style="padding:0.75rem 1rem; font-size:0.85rem; font-weight:600; background:var(--warm-white); color:var(--ink); border:1px solid var(--border); border-radius:10px; cursor:pointer;">🖨 Print</button>
+      <% } %>
+    </div>
 
-        <table class="inv-items">
-          <thead>
-            <tr>
-              <th style="width:35%;">DESCRIPTION</th>
-              <th class="al-c" style="width:12%;">QTY</th>
-              <th class="al-c" style="width:18%;">UNIT PRICE</th>
-              <th class="al-c" style="width:12%;">GST</th>
-              <th class="al-r" style="width:18%;">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (invoice.items && invoice.items.length > 0) { %>
-              <% var grandTotal = 0; %>
-              <% invoice.items.forEach(function(item) { %>
-                <% var price = parseFloat(item.unit_price) || 0; %>
-                <% var qty = parseFloat(item.quantity_received) || 0; %>
-                <% if (qty === 0 || item.item_notes === 'NOT SELECTED') return; %>
-                <% var lineTotal = price * qty; %>
-                <% grandTotal += lineTotal; %>
-                <tr>
-                  <td><%= item.product_name %></td>
-                  <td class="al-c"><%= qty || '' %></td>
-                  <td class="al-c price"><%= price.toFixed(2) %></td>
-                  <td class="al-c" style="color:#999;">-</td>
-                  <td class="al-r" style="font-weight:600;"><%= lineTotal > 0 ? lineTotal.toFixed(2) : '-' %></td>
-                </tr>
-              <% }); %>
-            <% } %>
-          </tbody>
-          <% if (typeof grandTotal !== 'undefined' && grandTotal > 0) { %>
-          <tfoot>
-            <tr>
-              <td colspan="4" style="text-align:right;">TOTAL</td>
-              <td style="text-align:right;">$ <%= grandTotal.toFixed(2) %></td>
-            </tr>
-          </tfoot>
-          <% } %>
-        </table>
+    <!-- Emergency item form -->
+    <div id="emergencyBox" style="display:none; margin-top:1rem; padding:0.9rem 1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+      <span style="font-weight:700; font-size:0.85rem;">🚨 Emergency Item</span>
+      <form method="POST" action="/manager/received-invoice/add-item" style="display:flex; gap:0.4rem; flex-wrap:wrap; flex:1;">
+        <input type="hidden" name="invoiceId" value="<%= invoice.id %>">
+        <input type="text" name="productName" placeholder="Product name" required
+               style="flex:1; min-width:160px; padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:6px; font-size:0.9rem;">
+        <button type="submit" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700; background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1400; border:none; border-radius:6px; cursor:pointer;">
+          + Add
+        </button>
+      </form>
+      <p style="width:100%; font-size:0.72rem; color:var(--muted); margin:0.2rem 0 0;">Added with qty 0 — tap the row to set the quantity.</p>
+    </div>
 
-        <% if (invoice.notes) { %>
-          <div style="margin-top:1.5rem; font-size:0.88rem; color:#555;">
-            <strong style="color:#1b2a5e;">Notes:</strong> <%= invoice.notes %>
-          </div>
-        <% } %>
-      </div>
-
-      <div style="margin-top:1.5rem; text-align:center;">
-        <button onclick="window.print()" class="btn" style="padding:8px 18px; background:linear-gradient(135deg,#1b2a5e,#2a3a7e); color:#fff;">🖨 Print Invoice</button>
-      </div>
-    <% } %>
   <% } %>
 
   <script>
-    // Select all checkbox for invoice items
-    var selectAll = document.getElementById('selectAllInvoice');
-    if (selectAll) {
-      selectAll.addEventListener('change', function() {
-        document.querySelectorAll('.item-check-inv').forEach(function(cb) { cb.checked = selectAll.checked; });
-        recalcGrandTotal();
-      });
+    // ── Invoice inline editing ──────────────────────────────────────────
+    function startInvoiceEdit(row) {
+      var display = row.querySelector('.qty-display');
+      var input = row.querySelector('.qty-edit-input');
+      if (!input) return;
+      display.style.display = 'none';
+      input.style.display = 'inline-block';
+      input.focus();
+      input.select();
     }
 
-    // When a row is unchecked, zero out its contribution to the total
-    document.querySelectorAll('.item-check-inv').forEach(function(cb) {
-      cb.addEventListener('change', function() {
-        recalcGrandTotal();
-      });
-    });
+    function commitInvoiceEdit(input) {
+      var row = input.closest('tr');
+      var display = row.querySelector('.qty-display');
+      var val = parseFloat(input.value) || 0;
+      var price = parseFloat(input.dataset.price) || 0;
+      var lineTotal = val * price;
+      var itemId = input.dataset.itemId;
 
-    // Live recalculation of line totals and grand total when quantity changes
-    document.querySelectorAll('.qty-input').forEach(function(input) {
-      input.addEventListener('input', function() {
-        var price = parseFloat(this.dataset.price) || 0;
-        var qty = parseFloat(this.value) || 0;
-        var lineTotal = price * qty;
-        var row = this.closest('tr');
-        var totalCell = row.querySelector('.line-total');
-        if (totalCell) {
-          totalCell.textContent = '$' + lineTotal.toFixed(2);
-        }
-        recalcGrandTotal();
-      });
-    });
+      // Update display
+      display.textContent = val > 0 ? val : '0';
+      display.style.color = val > 0 ? '#1b2a5e' : '#aaa';
+      input.style.display = 'none';
+      display.style.display = '';
 
-    function recalcGrandTotal() {
-      var rows = document.querySelectorAll('tbody tr');
-      var grand = 0;
-      rows.forEach(function(row) {
-        var cb = row.querySelector('.item-check-inv');
-        var totalCell = row.querySelector('.line-total');
-        if (cb && totalCell && cb.checked) {
-          grand += parseFloat(totalCell.textContent.replace('$', '')) || 0;
+      // Update line total
+      var totalCell = row.querySelector('.inv-line-total');
+      if (totalCell) totalCell.textContent = lineTotal > 0 ? lineTotal.toFixed(2) : '—';
+
+      // Update hidden form input
+      var hidden = document.querySelector('.inv-qty-hidden[data-item-id="' + itemId + '"]');
+      if (hidden) hidden.value = val;
+
+      // Recalc grand total
+      recalcInvTotal();
+
+      // Auto-save to server
+      clearTimeout(window._invSaveTimer);
+      window._invSaveTimer = setTimeout(function() { autoSaveInvoice(itemId, val); }, 600);
+    }
+
+    function handleInvKey(e, input) {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = input.defaultValue; input.blur(); }
+      if (e.key === 'Tab') {
+        e.preventDefault(); input.blur();
+        var rows = Array.from(document.querySelectorAll('#invoiceBody tr[data-item-id]'));
+        var idx = rows.indexOf(input.closest('tr'));
+        var next = rows[idx + 1];
+        if (next) startInvoiceEdit(next);
+      }
+    }
+
+    function recalcInvTotal() {
+      var total = 0;
+      document.querySelectorAll('#invoiceBody tr[data-item-id]').forEach(function(row) {
+        var cell = row.querySelector('.inv-line-total');
+        if (cell) {
+          var v = parseFloat(cell.textContent.replace(/[^0-9.]/g, '')) || 0;
+          total += v;
         }
       });
-      var el = document.getElementById('grandTotal');
-      if (el) el.textContent = '$' + grand.toFixed(2);
+      var el = document.getElementById('invGrandTotal');
+      if (el) el.textContent = total.toFixed(2);
+    }
+
+    function autoSaveInvoice(itemId, qty) {
+      var INVOICE_ID = '<%= invoice ? invoice.id : "" %>';
+      fetch('/manager/received-invoice/update-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: INVOICE_ID, itemId: itemId, quantityReceived: String(qty) })
+      }).catch(function() {});
     }
   </script>
 

@@ -2,87 +2,156 @@
 
   <h1>Daily Checklist</h1>
 
-  <% if (checklist) { %>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success) { %><div class="msg">✅ Checklist submitted to warehouse!</div><% } %>
+
+  <% if (!checklist) { %>
+    <div class="empty">Unable to load checklist.</div>
+  <% } else { %>
+
     <%
       var now = new Date();
       var isBeforeTenAm = now.getHours() < 10;
       var dateLabel = isBeforeTenAm ? "Today's delivery" : "Tomorrow's delivery";
+      var isSubmitted = checklist.status === 'submitted' || checklist.status === 'reviewed';
     %>
-    <div style="background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
-      <span style="font-weight: 600; color: var(--bun-dark);"><%= checklist.storeName %></span>
-      <span style="color: var(--muted);"> — <%= formatDate(checklist.checkDate) %></span>
-      <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem;"><%= dateLabel %> · <%= isBeforeTenAm ? 'Editable until 10:00 AM' : 'Preparing for tomorrow' %></div>
-    </div>
-  <% } %>
 
-  <% if (error) { %><div class="error"><%= error %></div><% } %>
-  <% if (success) { %><div class="msg">✅ Checklist submitted to warehouse manager!</div><% } %>
-
-  <% if (!checklist) { %>
-    <div class="empty">Unable to load checklist.</div>
-  <% } else if (checklist.status === 'submitted' && !edit) { %>
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: var(--green-bg); border: 1px solid rgba(45,156,90,0.15); border-radius: 10px; margin-bottom: 1rem;">
-      <span style="color: var(--green); font-weight: 600; font-size: 0.9rem;">✓ Submitted to warehouse</span>
-      <a href="/manager/store-checklist?edit=1" style="padding: 0.4rem 0.9rem; font-size: 0.8rem; background: linear-gradient(135deg, #f4a300, #e8950a); color: var(--bun-dark); border-radius: 8px; font-weight: 700; text-decoration: none;">Edit</a>
+    <!-- Store / date banner -->
+    <div style="background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <span style="font-weight: 700; color: var(--bun-dark);"><%= checklist.storeName %></span>
+        <span style="color: var(--muted);"> — <%= formatDate(checklist.checkDate) %></span>
+        <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem;"><%= dateLabel %></div>
+      </div>
+      <% if (isSubmitted) { %>
+        <span style="font-size: 0.75rem; padding: 0.25rem 0.7rem; background: #e8f5e9; color: #2e7d32; border-radius: 8px; font-weight: 700;">✓ Submitted</span>
+      <% } else { %>
+        <span style="font-size: 0.75rem; padding: 0.25rem 0.7rem; background: #fef3e2; color: var(--bun-dark); border-radius: 8px; font-weight: 700;">Draft</span>
+      <% } %>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-      <% var displayIdx = 0; %>
-      <% checklist.items.forEach((item) => { %>
-        <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || item.quantity_to_bring.trim() === '') return; %>
-        <% displayIdx++; %>
-        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-          <span style="width: 22px; font-size: 0.8rem; color: var(--muted); font-weight: 600;"><%= displayIdx %></span>
-          <span style="flex: 1; font-weight: 600; font-size: 0.9rem;"><%= item.product_name %></span>
-          <span style="padding: 0.25rem 0.7rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.8rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_to_bring %></span>
-        </div>
-      <% }) %>
-    </div>
-
-  <% } else { %>
-    <form method="POST" action="/manager/store-checklist/submit" id="checklistForm">
-      <input type="hidden" name="checklistId" value="<%= checklist.id %>">
-
-      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-        <!-- Header row -->
-        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.85rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); font-weight: 700;">
-          <span style="width: 28px;"></span>
-          <span style="width: 22px;">#</span>
-          <span style="flex: 1;">Product</span>
-          <span style="width: 80px; text-align: center;">Qty Needed</span>
-          <span style="width: 80px; text-align: center;">Qty To Bring</span>
-        </div>
-
-        <% checklist.items.forEach((item, idx) => { %>
-          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-            <input type="checkbox" name="selected_<%= item.id %>" value="1" class="item-check-cl"
-              style="width: 20px; height: 20px; accent-color: var(--charcoal); flex-shrink: 0;">
-            <span style="width: 22px; font-size: 0.8rem; color: var(--muted); font-weight: 600;"><%= idx + 1 %></span>
-            <span style="flex: 1; font-weight: 600; font-size: 0.88rem;"><%= item.product_name %></span>
-            <span style="width: 80px; text-align: center; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_needed %></span>
-            <input type="text" name="qty_<%= item.id %>" value="<%= item.quantity_to_bring || '' %>"
-              placeholder="0" style="width: 80px; text-align: center; padding: 0.4rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; background: var(--cream);">
-          </div>
-        <% }) %>
+    <!-- Clean invoice-style display — always visible -->
+    <div style="background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 1.25rem;">
+      <div style="padding: 0.6rem 1rem; background: var(--bun-dark, #1a1a2e); display: grid; grid-template-columns: 2rem 1fr 6rem 6rem; gap: 0.5rem;">
+        <span style="font-size: 0.7rem; font-weight: 700; color: #aaa; text-transform: uppercase;">#</span>
+        <span style="font-size: 0.7rem; font-weight: 700; color: #aaa; text-transform: uppercase;">Product</span>
+        <span style="font-size: 0.7rem; font-weight: 700; color: #aaa; text-transform: uppercase; text-align: center;">Needed</span>
+        <span style="font-size: 0.7rem; font-weight: 700; color: #aaa; text-transform: uppercase; text-align: center;">To Send</span>
       </div>
 
-      <!-- Sticky submit button -->
-      <div style="position: sticky; bottom: 0; padding: 1rem 0; margin-top: 1rem; background: var(--cream);">
-        <button type="submit" style="width: 100%; padding: 0.9rem; font-size: 1rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(139,105,20,0.3); display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          Submit Inventory Report
+      <% var rowIdx = 0; %>
+      <% checklist.items.forEach(function(item, idx) { %>
+        <div class="cl-row" data-id="<%= item.id %>"
+             style="display: grid; grid-template-columns: 2rem 1fr 6rem 6rem; gap: 0.5rem; align-items: center; padding: 0.65rem 1rem; border-top: 1px solid var(--border); background: <%= idx % 2 === 0 ? 'var(--warm-white)' : '#fff' %>; cursor: pointer;"
+             onclick="startEdit(this)"
+             title="Tap to edit quantity">
+          <span style="font-size: 0.8rem; color: var(--muted); font-weight: 600;"><%= idx + 1 %></span>
+          <span style="font-weight: 600; font-size: 0.9rem;"><%= item.product_name %></span>
+          <span style="text-align: center; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.8rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_needed %></span>
+          <!-- View mode qty -->
+          <span class="qty-display" style="text-align: center; font-size: 0.9rem; font-weight: 700; color: <%= item.quantity_to_bring && item.quantity_to_bring !== '0' ? 'var(--bun-dark)' : 'var(--muted)' %>;">
+            <%= item.quantity_to_bring && item.quantity_to_bring !== '0' ? item.quantity_to_bring : '—' %>
+          </span>
+          <!-- Edit mode qty (hidden by default) -->
+          <input type="text" class="qty-input" data-item-id="<%= item.id %>"
+                 value="<%= item.quantity_to_bring || '' %>"
+                 placeholder="0"
+                 style="display: none; width: 100%; text-align: center; padding: 0.35rem; border: 2px solid var(--accent, #f4a300); border-radius: 8px; font-size: 0.9rem; font-weight: 700; background: #fffbf0;"
+                 onclick="event.stopPropagation()"
+                 onkeydown="handleQtyKey(event, this)"
+                 onblur="commitEdit(this)">
+        </div>
+      <% }); %>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+      <form method="POST" action="/manager/store-checklist/submit" id="checklistForm" style="flex: 1; min-width: 180px;">
+        <input type="hidden" name="checklistId" value="<%= checklist.id %>" id="formChecklistId">
+        <% checklist.items.forEach(function(item) { %>
+          <input type="hidden" name="qty_<%= item.id %>" class="hidden-qty" data-item-id="<%= item.id %>" value="<%= item.quantity_to_bring || '' %>">
+        <% }); %>
+        <button type="submit" style="width: 100%; padding: 0.85rem; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #8B6914, #A07D1A); color: white; border: none; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          <%= isSubmitted ? 'Re-submit Checklist' : 'Submit to Warehouse' %>
         </button>
-      </div>
-    </form>
+      </form>
+    </div>
 
-    <script>
-      // Select all toggle
-      var allChecked = true;
-      document.querySelector('h1').addEventListener('dblclick', function() {
-        allChecked = !allChecked;
-        document.querySelectorAll('.item-check-cl').forEach(function(cb) { cb.checked = allChecked; });
-      });
-    </script>
+    <p style="font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: -0.5rem;">Tap any row to edit the quantity · Changes save automatically</p>
+
   <% } %>
+
+  <script>
+    var CHECKLIST_ID = '<%= checklist ? checklist.id : "" %>';
+    var saveTimer = null;
+
+    function startEdit(row) {
+      var display = row.querySelector('.qty-display');
+      var input = row.querySelector('.qty-input');
+      display.style.display = 'none';
+      input.style.display = 'block';
+      input.focus();
+      input.select();
+    }
+
+    function commitEdit(input) {
+      var row = input.closest('.cl-row');
+      var display = row.querySelector('.qty-display');
+      var val = input.value.trim();
+
+      // Update the display
+      if (val && val !== '0') {
+        display.textContent = val;
+        display.style.color = 'var(--bun-dark)';
+      } else {
+        display.textContent = '—';
+        display.style.color = 'var(--muted)';
+      }
+
+      // Sync hidden form input
+      var itemId = input.dataset.itemId;
+      var hidden = document.querySelector('.hidden-qty[data-item-id="' + itemId + '"]');
+      if (hidden) hidden.value = val;
+
+      // Show display, hide input
+      input.style.display = 'none';
+      display.style.display = '';
+
+      // Debounced auto-save
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(autoSave, 600);
+    }
+
+    function handleQtyKey(e, input) {
+      if (e.key === 'Enter') { input.blur(); }
+      if (e.key === 'Escape') {
+        input.value = input.defaultValue;
+        input.blur();
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        input.blur();
+        // Move to next row
+        var rows = Array.from(document.querySelectorAll('.cl-row'));
+        var idx = rows.indexOf(input.closest('.cl-row'));
+        var next = rows[idx + 1];
+        if (next) startEdit(next);
+      }
+    }
+
+    function autoSave() {
+      var data = { checklistId: CHECKLIST_ID };
+      document.querySelectorAll('.qty-input').forEach(function(inp) {
+        data['qty_' + inp.dataset.itemId] = inp.value.trim();
+      });
+
+      fetch('/manager/store-checklist/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).catch(function() {});
+    }
+  </script>
 
 <%- include('../partials/footer') %>

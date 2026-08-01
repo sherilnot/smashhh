@@ -35,7 +35,11 @@
         <div style="font-size:0.75rem; color:var(--muted); margin-top:0.2rem;"><%= dateLabel %></div>
       </div>
       <% if (isSubmitted) { %>
-        <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Submitted</span>
+        <% if (checklist.status === 'reviewed') { %>
+          <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Reviewed by Warehouse</span>
+        <% } else { %>
+          <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Submitted</span>
+        <% } %>
       <% } else { %>
         <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#fef3e2; color:var(--bun-dark); border-radius:8px; font-weight:700;">Draft</span>
       <% } %>

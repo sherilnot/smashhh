@@ -16,27 +16,28 @@ router.get('/dashboard', (req, res) => {
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
-// List all submitted invoices from shop managers
+// List all submitted invoices from shop managers — grouped by store
 router.get('/invoices', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const { invoices, total } = await getSubmittedInvoices(page, 50);
-    const totalPages = Math.ceil(total / 50);
+    const { invoices, total } = await getSubmittedInvoices(1, 200);
+
+    // Group by store_name
+    const byStore = {};
+    invoices.forEach(inv => {
+      if (!byStore[inv.store_name]) byStore[inv.store_name] = [];
+      byStore[inv.store_name].push(inv);
+    });
 
     res.render('operation-manager/invoices', {
       user: req.user,
-      invoices,
-      page,
-      totalPages,
+      byStore,
       total
     });
   } catch (e) {
     console.error('[OperationManager] invoices error', e);
     res.render('operation-manager/invoices', {
       user: req.user,
-      invoices: [],
-      page: 1,
-      totalPages: 0,
+      byStore: {},
       total: 0
     });
   }

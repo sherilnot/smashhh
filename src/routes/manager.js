@@ -1374,12 +1374,26 @@ router.get('/notification-monitor', async (req, res) => {
 
 router.get('/received-invoice', async (req, res) => {
   try {
-    // Determine which date to show (defaults to today)
     const selectedDate = req.query.date || null;
 
-    const result = await getOrCreateTodayInvoice(req.user.userId, selectedDate);
+    // If no date provided, show the list view only
+    if (!selectedDate) {
+      const recentInvoices = await getRecentInvoicesForManager(req.user.userId);
+      return res.render('manager/received-invoice', {
+        user: req.user,
+        error: req.query.error || null,
+        invoice: null,
+        checklistPending: false,
+        availableProducts: [],
+        recentInvoices
+      });
+    }
+
+    // "today" is a shortcut
+    const dateParam = selectedDate === 'today' ? null : selectedDate;
+    const result = await getOrCreateTodayInvoice(req.user.userId, dateParam);
+
     if (!result.success) {
-      // Still fetch recent invoices for the date picker
       const recentInvoices = await getRecentInvoicesForManager(req.user.userId);
       return res.render('manager/received-invoice', {
         user: req.user,
@@ -1391,7 +1405,7 @@ router.get('/received-invoice', async (req, res) => {
       });
     }
 
-    // Get all template products for the emergency item picker
+    // Get template products for the emergency item picker
     let availableProducts = [];
     if (result.invoice && result.invoice.storeId) {
       const tplRes = await pool.query(
@@ -1405,7 +1419,6 @@ router.get('/received-invoice', async (req, res) => {
         .filter(name => !existingNames.has(name.toLowerCase()));
     }
 
-    // Fetch recent invoices (last 3 days) for the date picker
     const recentInvoices = await getRecentInvoicesForManager(req.user.userId);
 
     res.render('manager/received-invoice', {

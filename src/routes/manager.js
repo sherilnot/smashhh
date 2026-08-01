@@ -1556,7 +1556,7 @@ router.get('/received-invoice/download-draft', async (req, res) => {
       : new Date(invoice.invoice_date).toISOString().substring(0, 10);
     const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoiceDate}.pdf`;
 
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     const pdfStream = generateInvoicePdf(invoice);
@@ -1592,7 +1592,7 @@ router.get('/received-invoice/download', async (req, res) => {
     const invoice = result.invoice;
     const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoice.invoice_date}.pdf`;
 
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     const pdfStream = generateInvoicePdf(invoice);

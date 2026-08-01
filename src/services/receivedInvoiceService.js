@@ -42,12 +42,11 @@ async function syncInvoiceItemsFromChecklist(client, invoiceId, checklistId) {
 
 /**
  * Get or create today's invoice for a manager's store.
- * REQUIRES a submitted checklist for today — the invoice is based on the checklist.
- * If no checklist has been submitted yet, returns a flag so the UI can block access.
+ * If forDate is provided, loads the invoice for that specific date instead.
  * @param {string} managerId
- * @returns {Promise<{ success: boolean, invoice?: object, checklistPending?: boolean, error?: string }>}
+ * @param {string} [forDate] - Optional YYYY-MM-DD to load a specific date's invoice
  */
-async function getOrCreateTodayInvoice(managerId) {
+async function getOrCreateTodayInvoice(managerId, forDate) {
   const client = await pool.connect();
   try {
     // Find manager's store
@@ -64,26 +63,17 @@ async function getOrCreateTodayInvoice(managerId) {
     }
 
     const { store_id, store_name } = storeRes.rows[0];
-    // Use Australian Eastern time (AEST/AEDT) for the "today" date
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    // Check if there's any checklist for today (draft, submitted, or reviewed)
-    const checklistRes = await client.query(
-      `SELECT id FROM store_checklists 
-       WHERE store_id = $1 AND check_date = $2 AND status IN ('draft', 'submitted', 'reviewed')
-       LIMIT 1`,
-      [store_id, today]
-    );
-
-    // If no checklist at all today, block invoice access
-    if (checklistRes.rows.length === 0) {
-      return { success: false, checklistPending: true, error: 'You must create today\'s checklist before creating an invoice.' };
+    let today;
+    if (forDate && /^\d{4}-\d{2}-\d{2}$/.test(forDate)) {
+      today = forDate;
+    } else {
+      // Use Australian Eastern time
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+      today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
 
-    const checklistId = checklistRes.rows[0].id;
-
-    // Check if invoice already exists for today
+    // Check if invoice already exists for this date
     let invoiceRes = await client.query(
       `SELECT * FROM received_invoices WHERE store_id = $1 AND invoice_date = $2`,
       [store_id, today]
@@ -91,9 +81,61 @@ async function getOrCreateTodayInvoice(managerId) {
 
     let invoiceId;
     let status;
+    let checklistId = null;
 
-    if (invoiceRes.rows.length === 0) {
-      // Create new invoice from today's checklist
+    if (invoiceRes.rows.length > 0) {
+      // Invoice exists — load it (even if no checklist, e.g. past dates)
+      invoiceId = invoiceRes.rows[0].id;
+      status = invoiceRes.rows[0].status;
+      checklistId = invoiceRes.rows[0].checklist_id;
+
+      // If still in draft and there's a matching checklist, re-sync
+      if (status === 'draft') {
+        const checklistRes = await client.query(
+          `SELECT id FROM store_checklists 
+           WHERE store_id = $1 AND check_date = $2 AND status IN ('draft', 'submitted', 'reviewed')
+           LIMIT 1`,
+          [store_id, today]
+        );
+
+        if (checklistRes.rows.length > 0) {
+          const currentChecklistId = checklistRes.rows[0].id;
+          await client.query('BEGIN');
+
+          if (checklistId !== currentChecklistId) {
+            await client.query(
+              `UPDATE received_invoices SET checklist_id = $1 WHERE id = $2`,
+              [currentChecklistId, invoiceId]
+            );
+            checklistId = currentChecklistId;
+          }
+
+          // Remove only non-emergency items; preserve emergency items
+          await client.query(
+            `DELETE FROM received_invoice_items WHERE invoice_id = $1 AND (is_emergency = FALSE OR is_emergency IS NULL)`,
+            [invoiceId]
+          );
+          await syncInvoiceItemsFromChecklist(client, invoiceId, currentChecklistId);
+
+          await client.query('COMMIT');
+        }
+      }
+    } else {
+      // No invoice yet — need a checklist to create one
+      const checklistRes = await client.query(
+        `SELECT id FROM store_checklists 
+         WHERE store_id = $1 AND check_date = $2 AND status IN ('draft', 'submitted', 'reviewed')
+         LIMIT 1`,
+        [store_id, today]
+      );
+
+      if (checklistRes.rows.length === 0) {
+        return { success: false, checklistPending: true, error: 'You must create today\'s checklist before creating an invoice.' };
+      }
+
+      checklistId = checklistRes.rows[0].id;
+
+      // Create new invoice from checklist
       await client.query('BEGIN');
 
       const insertRes = await client.query(
@@ -104,39 +146,9 @@ async function getOrCreateTodayInvoice(managerId) {
       invoiceId = insertRes.rows[0].id;
       status = 'draft';
 
-      // Populate invoice items from checklist items
       await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
 
       await client.query('COMMIT');
-    } else {
-      invoiceId = invoiceRes.rows[0].id;
-      status = invoiceRes.rows[0].status;
-
-      // If still in draft, sync items with the checklist every time the page loads.
-      // This ensures any checklist changes (re-submissions, edits) are reflected.
-      if (status === 'draft') {
-        const existingChecklistId = invoiceRes.rows[0].checklist_id;
-
-        // Always re-sync: delete old items and regenerate from checklist
-        await client.query('BEGIN');
-
-        // Update the checklist reference if it changed
-        if (existingChecklistId !== checklistId) {
-          await client.query(
-            `UPDATE received_invoices SET checklist_id = $1 WHERE id = $2`,
-            [checklistId, invoiceId]
-          );
-        }
-
-        // Remove only non-emergency items; preserve emergency items the manager added manually
-        await client.query(
-          `DELETE FROM received_invoice_items WHERE invoice_id = $1 AND (is_emergency = FALSE OR is_emergency IS NULL)`,
-          [invoiceId]
-        );
-        await syncInvoiceItemsFromChecklist(client, invoiceId, checklistId);
-
-        await client.query('COMMIT');
-      }
     }
 
     // Fetch items

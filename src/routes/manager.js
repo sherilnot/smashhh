@@ -13,6 +13,30 @@ const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoic
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
 
+// Helper: get recent invoices (last 3 days) for a manager's store
+async function getRecentInvoicesForManager(managerId) {
+  try {
+    const storeRes = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [managerId]
+    );
+    if (storeRes.rows.length === 0) return [];
+
+    const res = await pool.query(
+      `SELECT id, invoice_date, status, submitted_at
+       FROM received_invoices
+       WHERE store_id = $1
+       ORDER BY invoice_date DESC
+       LIMIT 5`,
+      [storeRes.rows[0].store_id]
+    );
+    return res.rows;
+  } catch (e) {
+    console.error('[Manager] getRecentInvoicesForManager error', e);
+    return [];
+  }
+}
+
 // Multer config for cash photo uploads
 const cashStorage = multer.diskStorage({
   destination: path.join(__dirname, '../../public/uploads/cash'),
@@ -1350,14 +1374,20 @@ router.get('/notification-monitor', async (req, res) => {
 
 router.get('/received-invoice', async (req, res) => {
   try {
-    const result = await getOrCreateTodayInvoice(req.user.userId);
+    // Determine which date to show (defaults to today)
+    const selectedDate = req.query.date || null;
+
+    const result = await getOrCreateTodayInvoice(req.user.userId, selectedDate);
     if (!result.success) {
+      // Still fetch recent invoices for the date picker
+      const recentInvoices = await getRecentInvoicesForManager(req.user.userId);
       return res.render('manager/received-invoice', {
         user: req.user,
         error: result.error,
         invoice: null,
         checklistPending: result.checklistPending || false,
-        availableProducts: []
+        availableProducts: [],
+        recentInvoices
       });
     }
 
@@ -1369,19 +1399,22 @@ router.get('/received-invoice', async (req, res) => {
          WHERE store_id = $1 AND is_active = true ORDER BY sort_order`,
         [result.invoice.storeId]
       );
-      // Filter out products already on the invoice
       const existingNames = new Set((result.invoice.items || []).map(i => i.product_name.toLowerCase()));
       availableProducts = tplRes.rows
         .map(r => r.product_name)
         .filter(name => !existingNames.has(name.toLowerCase()));
     }
 
+    // Fetch recent invoices (last 3 days) for the date picker
+    const recentInvoices = await getRecentInvoicesForManager(req.user.userId);
+
     res.render('manager/received-invoice', {
       user: req.user,
       error: req.query.error || null,
       invoice: result.invoice,
       checklistPending: false,
-      availableProducts
+      availableProducts,
+      recentInvoices
     });
   } catch (e) {
     console.error('[Manager] received-invoice error', e);
@@ -1390,7 +1423,8 @@ router.get('/received-invoice', async (req, res) => {
       error: 'Failed to load invoice',
       invoice: null,
       checklistPending: false,
-      availableProducts: []
+      availableProducts: [],
+      recentInvoices: []
     });
   }
 });

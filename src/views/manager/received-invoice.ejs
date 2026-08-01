@@ -7,6 +7,26 @@
     <div class="msg">✅ Invoice submitted successfully!</div>
   <% } %>
 
+  <!-- Recent invoices date picker -->
+  <% var recent = typeof recentInvoices !== 'undefined' ? recentInvoices : []; %>
+  <% if (recent.length > 0) { %>
+    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:1rem; overflow-x:auto; padding-bottom:0.25rem;">
+      <% recent.forEach(function(ri) { %>
+        <%
+          var dateStr = typeof ri.invoice_date === 'string' ? ri.invoice_date.substring(0,10) : new Date(ri.invoice_date).toISOString().substring(0,10);
+          var isActive = invoice && invoice.invoiceDate === dateStr;
+          var statusColor = ri.status === 'submitted' ? '#2e7d32' : '#e65100';
+          var statusIcon = ri.status === 'submitted' ? '✓' : '✏';
+        %>
+        <a href="/manager/received-invoice?date=<%= dateStr %>"
+           style="padding:0.5rem 0.85rem; border-radius:10px; font-size:0.82rem; font-weight:600; text-decoration:none; border:1px solid <%= isActive ? '#1b2a5e' : 'var(--border)' %>; background:<%= isActive ? '#1b2a5e' : 'var(--warm-white)' %>; color:<%= isActive ? '#fff' : 'var(--ink)' %>; white-space:nowrap;">
+          <%= formatDate(dateStr) %>
+          <span style="font-size:0.7rem; color:<%= isActive ? '#aaa' : statusColor %>;"><%= statusIcon %></span>
+        </a>
+      <% }); %>
+    </div>
+  <% } %>
+
   <% if (typeof checklistPending !== 'undefined' && checklistPending) { %>
     <div class="card" style="text-align:center; padding:2rem;">
       <div style="font-size:2.5rem; margin-bottom:0.75rem;">📋</div>

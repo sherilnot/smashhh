@@ -471,17 +471,23 @@ module.exports = router;
 
 router.get('/cash', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const { submissions, total } = await getAllCashSubmissions(page, 20);
+    const { submissions, total } = await getAllCashSubmissions(1, 200);
+
+    // Group by store
+    const byStore = {};
+    submissions.forEach(sub => {
+      if (!byStore[sub.store_name]) byStore[sub.store_name] = [];
+      byStore[sub.store_name].push(sub);
+    });
+
     res.render('receiving-manager/cash', {
       user: req.user,
-      submissions,
-      page,
-      totalPages: Math.ceil(total / 20)
+      byStore,
+      total
     });
   } catch (e) {
     console.error('[ReceivingManager] cash list error', e);
-    res.render('receiving-manager/cash', { user: req.user, submissions: [], page: 1, totalPages: 1 });
+    res.render('receiving-manager/cash', { user: req.user, byStore: {}, total: 0 });
   }
 });
 

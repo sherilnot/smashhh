@@ -197,27 +197,26 @@ router.get('/timesheets/:id', async (req, res) => {
 
 // ─── Cash Reports ─────────────────────────────────────────────────────────────
 
-// List all cash submissions
+// List all cash submissions — grouped by store
 router.get('/cash', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const { submissions, total } = await getAllCashSubmissions(page, 50);
-    const totalPages = Math.ceil(total / 50);
+    const { submissions, total } = await getAllCashSubmissions(1, 200);
+    const byStore = {};
+    submissions.forEach(sub => {
+      if (!byStore[sub.store_name]) byStore[sub.store_name] = [];
+      byStore[sub.store_name].push(sub);
+    });
 
     res.render('operation-manager/cash', {
       user: req.user,
-      submissions,
-      page,
-      totalPages,
+      byStore,
       total
     });
   } catch (e) {
     console.error('[OperationManager] cash list error', e);
     res.render('operation-manager/cash', {
       user: req.user,
-      submissions: [],
-      page: 1,
-      totalPages: 0,
+      byStore: {},
       total: 0
     });
   }

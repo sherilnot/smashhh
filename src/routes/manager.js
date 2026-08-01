@@ -1356,14 +1356,32 @@ router.get('/received-invoice', async (req, res) => {
         user: req.user,
         error: result.error,
         invoice: null,
-        checklistPending: result.checklistPending || false
+        checklistPending: result.checklistPending || false,
+        availableProducts: []
       });
     }
+
+    // Get all template products for the emergency item picker
+    let availableProducts = [];
+    if (result.invoice && result.invoice.storeId) {
+      const tplRes = await pool.query(
+        `SELECT product_name FROM store_checklist_templates
+         WHERE store_id = $1 AND is_active = true ORDER BY sort_order`,
+        [result.invoice.storeId]
+      );
+      // Filter out products already on the invoice
+      const existingNames = new Set((result.invoice.items || []).map(i => i.product_name.toLowerCase()));
+      availableProducts = tplRes.rows
+        .map(r => r.product_name)
+        .filter(name => !existingNames.has(name.toLowerCase()));
+    }
+
     res.render('manager/received-invoice', {
       user: req.user,
       error: req.query.error || null,
       invoice: result.invoice,
-      checklistPending: false
+      checklistPending: false,
+      availableProducts
     });
   } catch (e) {
     console.error('[Manager] received-invoice error', e);
@@ -1371,7 +1389,8 @@ router.get('/received-invoice', async (req, res) => {
       user: req.user,
       error: 'Failed to load invoice',
       invoice: null,
-      checklistPending: false
+      checklistPending: false,
+      availableProducts: []
     });
   }
 });

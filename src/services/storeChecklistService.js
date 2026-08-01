@@ -123,7 +123,7 @@ async function getOrCreateTodayChecklist(managerId) {
  * Creates the checklist if needed, updates quantities, keeps status as 'draft'.
  * The invoice will sync from draft checklists too.
  */
-async function saveChecklist(managerId, checklistId, quantities) {
+async function saveChecklist(managerId, checklistId, quantities, neededQtys = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -146,6 +146,16 @@ async function saveChecklist(managerId, checklistId, quantities) {
         `UPDATE store_checklist_items SET quantity_to_bring = $1 WHERE id = $2 AND checklist_id = $3`,
         [qty || '', itemId, checklistId]
       );
+    }
+
+    // Also update quantity_needed if provided
+    for (const [itemId, val] of Object.entries(neededQtys)) {
+      if (val !== undefined) {
+        await client.query(
+          `UPDATE store_checklist_items SET quantity_needed = $1 WHERE id = $2 AND checklist_id = $3`,
+          [val || '', itemId, checklistId]
+        );
+      }
     }
 
     await client.query('COMMIT');

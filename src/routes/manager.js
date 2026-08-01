@@ -1254,25 +1254,12 @@ router.post('/store-checklist/submit', async (req, res) => {
   try {
     const { checklistId, ...body } = req.body;
 
-    // Determine which items were selected (checkbox fields named selected_<itemId>)
-    const selectedItems = new Set();
-    for (const [key, value] of Object.entries(body)) {
-      if (key.startsWith('selected_') && value === '1') {
-        selectedItems.add(key.replace('selected_', ''));
-      }
-    }
-
-    // Extract quantities only for selected items (fields named qty_<itemId>)
+    // Extract quantities (no checkboxes anymore — items with a value are included)
     const quantities = {};
     for (const [key, value] of Object.entries(body)) {
       if (key.startsWith('qty_')) {
         const itemId = key.replace('qty_', '');
-        if (selectedItems.has(itemId)) {
-          quantities[itemId] = value;
-        } else {
-          // Unselected items get cleared (empty quantity)
-          quantities[itemId] = '';
-        }
+        quantities[itemId] = value || '';
       }
     }
 
@@ -1314,12 +1301,16 @@ router.post('/store-checklist/save', async (req, res) => {
     const body = req.body;
     const checklistId = body.checklistId;
     const quantities = {};
+    const needed = {};
     for (const [key, value] of Object.entries(body)) {
       if (key.startsWith('qty_')) {
         quantities[key.replace('qty_', '')] = value;
       }
+      if (key.startsWith('needed_')) {
+        needed[key.replace('needed_', '')] = value;
+      }
     }
-    await saveStoreChecklist(req.user.userId, checklistId, quantities);
+    await saveStoreChecklist(req.user.userId, checklistId, quantities, needed);
     res.json({ success: true });
   } catch (e) {
     console.error('[Manager] store-checklist save error', e);

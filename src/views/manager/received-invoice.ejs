@@ -17,9 +17,9 @@
         <% recent.forEach(function(ri) { %>
           <%
             var dateStr = typeof ri.invoice_date === 'string' ? ri.invoice_date.substring(0,10) : new Date(ri.invoice_date).toISOString().substring(0,10);
-            var statusLabel = ri.status === 'submitted' ? '✓ Submitted' : '✏ Draft';
-            var statusBg = ri.status === 'submitted' ? '#e8f5e9' : '#fef3e2';
-            var statusColor = ri.status === 'submitted' ? '#2e7d32' : '#e65100';
+            var statusLabel = ri.status === 'submitted' ? '✓ Submitted' : ri.status === 'new' ? '+ New' : '✏ Draft';
+            var statusBg = ri.status === 'submitted' ? '#e8f5e9' : ri.status === 'new' ? '#e3f2fd' : '#fef3e2';
+            var statusColor = ri.status === 'submitted' ? '#2e7d32' : ri.status === 'new' ? '#1565c0' : '#e65100';
           %>
           <a href="/manager/received-invoice?date=<%= dateStr %>"
              style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink); box-shadow:var(--shadow);">

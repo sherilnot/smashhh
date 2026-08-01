@@ -13,7 +13,7 @@ const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoic
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
 
-// Helper: get recent invoices (last 3 days) for a manager's store
+// Helper: get recent invoices + upcoming dates for a manager's store
 async function getRecentInvoicesForManager(managerId) {
   try {
     const storeRes = await pool.query(
@@ -21,16 +21,46 @@ async function getRecentInvoicesForManager(managerId) {
       [managerId]
     );
     if (storeRes.rows.length === 0) return [];
+    const storeId = storeRes.rows[0].store_id;
 
+    // Get existing invoices
     const res = await pool.query(
       `SELECT id, invoice_date, status, submitted_at
        FROM received_invoices
        WHERE store_id = $1
        ORDER BY invoice_date DESC
        LIMIT 5`,
-      [storeRes.rows[0].store_id]
+      [storeId]
     );
-    return res.rows;
+    const invoices = res.rows;
+
+    // Get dates that have checklists but no invoice yet
+    const checklistDates = await pool.query(
+      `SELECT DISTINCT check_date FROM store_checklists
+       WHERE store_id = $1 AND status IN ('draft', 'submitted', 'reviewed')
+         AND check_date NOT IN (SELECT invoice_date FROM received_invoices WHERE store_id = $1)
+       ORDER BY check_date DESC LIMIT 3`,
+      [storeId]
+    );
+
+    // Add these as "available" entries (no id, status = 'new')
+    checklistDates.rows.forEach(row => {
+      invoices.push({
+        id: null,
+        invoice_date: row.check_date,
+        status: 'new',
+        submitted_at: null
+      });
+    });
+
+    // Sort by date descending
+    invoices.sort((a, b) => {
+      const da = new Date(a.invoice_date);
+      const db = new Date(b.invoice_date);
+      return db - da;
+    });
+
+    return invoices.slice(0, 7);
   } catch (e) {
     console.error('[Manager] getRecentInvoicesForManager error', e);
     return [];

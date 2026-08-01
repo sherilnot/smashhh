@@ -97,16 +97,24 @@
     <!-- Hidden items list -->
     <div id="moreItemsPanel" style="display:none; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
       <div style="padding:0.5rem 1rem; background:#f7f9fc; font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--border);">
-        Tap an item to add it to your order
+        Select items to add to your order
       </div>
       <% inactiveItems.forEach(function(item) { %>
         <div class="more-item" data-id="<%= item.id %>"
-             onclick="addItem('<%= item.id %>')"
-             style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 1rem; border-top:1px solid var(--border); cursor:pointer; transition:background 0.1s;">
-          <span style="font-weight:600; font-size:0.88rem;"><%= item.product_name %></span>
+             style="display:flex; align-items:center; gap:0.75rem; padding:0.6rem 1rem; border-top:1px solid var(--border);">
+          <input type="checkbox" class="add-check" data-id="<%= item.id %>" data-needed="<%= item.quantity_needed || '1' %>"
+                 style="width:20px; height:20px; accent-color:var(--mustard); flex-shrink:0;">
+          <span style="font-weight:600; font-size:0.88rem; flex:1;"><%= item.product_name %></span>
           <span style="font-size:0.75rem; color:var(--muted); background:#fef3e2; padding:0.2rem 0.5rem; border-radius:6px;">need: <%= item.quantity_needed || '—' %></span>
         </div>
       <% }); %>
+      <!-- Add Selected button -->
+      <div style="padding:0.75rem 1rem; border-top:1px solid var(--border); background:#f7f9fc;">
+        <button type="button" onclick="addSelectedItems()"
+                style="width:100%; padding:0.7rem; font-size:0.9rem; font-weight:700; background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1400; border:none; border-radius:10px; cursor:pointer;">
+          ✓ Add Selected Items
+        </button>
+      </div>
     </div>
     <% } %>
 
@@ -137,17 +145,19 @@
       else { panel.style.display = 'none'; icon.textContent = '＋'; }
     }
 
-    // Add an inactive item → set its qty to the needed value and auto-save
-    function addItem(itemId) {
-      var hidden = document.querySelector('.hidden-qty[data-item-id="' + itemId + '"]');
-      // Get the needed qty from the more-item element text
-      var moreEl = document.querySelector('.more-item[data-id="' + itemId + '"]');
-      var neededText = moreEl ? moreEl.querySelector('span:last-child').textContent.replace('need:', '').trim() : '1';
-      var qty = neededText === '—' ? '1' : neededText;
+    // Add multiple selected items at once
+    function addSelectedItems() {
+      var checks = document.querySelectorAll('.add-check:checked');
+      if (checks.length === 0) { alert('Select at least one item'); return; }
 
-      if (hidden) hidden.value = qty;
+      checks.forEach(function(cb) {
+        var itemId = cb.dataset.id;
+        var needed = cb.dataset.needed;
+        var qty = needed === '—' ? '1' : needed;
+        var hidden = document.querySelector('.hidden-qty[data-item-id="' + itemId + '"]');
+        if (hidden) hidden.value = qty;
+      });
 
-      // Save and reload
       doSave(function() { location.reload(); });
     }
 

@@ -14,6 +14,7 @@ const { createCashSubmission, getManagerCashSubmissions } = require('../services
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
 
 // Helper: get recent invoices + upcoming dates for a manager's store
+// Always shows yesterday, today, and tomorrow
 async function getRecentInvoicesForManager(managerId) {
   try {
     const storeRes = await pool.query(
@@ -23,44 +24,48 @@ async function getRecentInvoicesForManager(managerId) {
     if (storeRes.rows.length === 0) return [];
     const storeId = storeRes.rows[0].store_id;
 
-    // Get existing invoices
+    // Calculate yesterday, today, tomorrow in Melbourne time
+    const melbNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+    const dates = [];
+    for (let offset = -1; offset <= 1; offset++) {
+      const d = new Date(melbNow);
+      d.setDate(d.getDate() + offset);
+      dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    }
+
+    // Fetch invoices for these dates
     const res = await pool.query(
       `SELECT id, invoice_date, status, submitted_at
        FROM received_invoices
-       WHERE store_id = $1
-       ORDER BY invoice_date DESC
-       LIMIT 5`,
-      [storeId]
-    );
-    const invoices = res.rows;
-
-    // Get dates that have checklists but no invoice yet
-    const checklistDates = await pool.query(
-      `SELECT DISTINCT check_date FROM store_checklists
-       WHERE store_id = $1 AND status IN ('draft', 'submitted', 'reviewed')
-         AND check_date NOT IN (SELECT invoice_date FROM received_invoices WHERE store_id = $1)
-       ORDER BY check_date DESC LIMIT 3`,
-      [storeId]
+       WHERE store_id = $1 AND invoice_date = ANY($2::date[])
+       ORDER BY invoice_date DESC`,
+      [storeId, dates]
     );
 
-    // Add these as "available" entries (no id, status = 'new')
-    checklistDates.rows.forEach(row => {
-      invoices.push({
-        id: null,
-        invoice_date: row.check_date,
-        status: 'new',
-        submitted_at: null
-      });
+    // Build the list: always show all 3 days
+    const invoiceMap = {};
+    res.rows.forEach(row => {
+      const ds = typeof row.invoice_date === 'string' ? row.invoice_date.substring(0, 10) : new Date(row.invoice_date).toISOString().substring(0, 10);
+      invoiceMap[ds] = row;
     });
 
-    // Sort by date descending
-    invoices.sort((a, b) => {
-      const da = new Date(a.invoice_date);
-      const db = new Date(b.invoice_date);
-      return db - da;
-    });
+    const result = [];
+    // Tomorrow, Today, Yesterday (newest first)
+    for (let i = dates.length - 1; i >= 0; i--) {
+      const dateStr = dates[i];
+      if (invoiceMap[dateStr]) {
+        result.push(invoiceMap[dateStr]);
+      } else {
+        result.push({
+          id: null,
+          invoice_date: dateStr,
+          status: 'new',
+          submitted_at: null
+        });
+      }
+    }
 
-    return invoices.slice(0, 7);
+    return result;
   } catch (e) {
     console.error('[Manager] getRecentInvoicesForManager error', e);
     return [];

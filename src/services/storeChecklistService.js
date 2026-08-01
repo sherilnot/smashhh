@@ -30,7 +30,8 @@ async function getOrCreateTodayChecklist(managerId) {
     const { store_id, store_name } = storeRes.rows[0];
     
     // Target date = tomorrow. But if it's before 10am, we can still edit today's list.
-    const now = new Date();
+    // Use Australian Eastern time
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
     const hour = now.getHours();
     
     let targetDate;

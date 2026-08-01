@@ -64,7 +64,8 @@ async function getOrCreateTodayInvoice(managerId) {
     }
 
     const { store_id, store_name } = storeRes.rows[0];
-    const now = new Date();
+    // Use Australian Eastern time (AEST/AEDT) for the "today" date
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     // Check if there's any checklist for today (draft, submitted, or reviewed)

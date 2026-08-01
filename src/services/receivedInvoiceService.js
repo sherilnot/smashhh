@@ -68,9 +68,23 @@ async function getOrCreateTodayInvoice(managerId, forDate) {
     if (forDate && /^\d{4}-\d{2}-\d{2}$/.test(forDate)) {
       today = forDate;
     } else {
-      // Use Australian Eastern time
-      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
-      today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      // Use the same date as the latest checklist for this store
+      // This handles the case where checklist targets tomorrow (after 10am rule)
+      const latestChecklistRes = await client.query(
+        `SELECT check_date FROM store_checklists
+         WHERE store_id = $1 AND status IN ('draft', 'submitted', 'reviewed')
+         ORDER BY check_date DESC LIMIT 1`,
+        [store_id]
+      );
+
+      if (latestChecklistRes.rows.length > 0) {
+        const d = latestChecklistRes.rows[0].check_date;
+        today = typeof d === 'string' ? d.substring(0, 10) : new Date(d).toISOString().substring(0, 10);
+      } else {
+        // Fallback to Melbourne today if no checklist exists at all
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+        today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      }
     }
 
     // Check if invoice already exists for this date

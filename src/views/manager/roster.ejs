@@ -40,6 +40,74 @@
       <% } %>
     </div>
 
+    <!-- ═══ Availability by Day (collapsible) ═══ -->
+    <% var avail = (typeof availabilityByDay !== 'undefined') ? availabilityByDay : []; %>
+    <% if (avail.length > 0) { %>
+      <%
+        var totalAvailable = 0;
+        avail.forEach(function(d) { totalAvailable += d.total; });
+      %>
+      <div style="margin-bottom:1rem;">
+        <div style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">
+          Availability Requests (<%= totalAvailable %>)
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+          <% avail.forEach(function(day, dIdx) { %>
+            <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+              <!-- Day header -->
+              <div onclick="toggleDay(<%= dIdx %>)" style="display:flex; align-items:center; justify-content:space-between; padding:0.65rem 0.9rem; cursor:pointer; user-select:none;">
+                <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                  <span style="font-weight:700; font-size:0.9rem; color:var(--bun-dark); min-width:4.5rem;"><%= day.label %></span>
+                  <span style="font-size:0.7rem; color:var(--muted);"><%= formatDateShort(day.date) %></span>
+                  <% if (day.total > 0) { %>
+                    <span style="font-size:0.68rem; padding:0.15rem 0.45rem; background:#1a1a2e; color:#fff; border-radius:20px; font-weight:700;"><%= day.total %> available</span>
+                    <% if (day.counts.Morning > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#C8E6C9; color:#1b5e20; border-radius:5px; font-weight:600;">🌅 <%= day.counts.Morning %></span><% } %>
+                    <% if (day.counts.Evening > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#BBDEFB; color:#0d47a1; border-radius:5px; font-weight:600;">🌆 <%= day.counts.Evening %></span><% } %>
+                    <% if (day.counts['Full Day'] > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#FFE0B2; color:#e65100; border-radius:5px; font-weight:600;">☀ <%= day.counts['Full Day'] %></span><% } %>
+                  <% } else { %>
+                    <span style="font-size:0.7rem; color:var(--muted);">No requests</span>
+                  <% } %>
+                </div>
+                <span id="dayArrow-<%= dIdx %>" style="font-size:0.9rem; color:var(--muted); transition:transform 0.2s;">▾</span>
+              </div>
+
+              <!-- People list (collapsed by default) -->
+              <div id="dayPanel-<%= dIdx %>" style="display:none; border-top:1px solid var(--border);">
+                <% if (day.people.length === 0) { %>
+                  <div style="padding:0.75rem 0.9rem; font-size:0.8rem; color:var(--muted);">No availability requests for this day.</div>
+                <% } else { %>
+                  <% day.people.forEach(function(p) { %>
+                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; border-top:1px solid var(--border); flex-wrap:wrap;">
+                      <div style="flex:1; min-width:120px;">
+                        <div style="font-weight:600; font-size:0.85rem;"><%= p.name %></div>
+                        <div style="font-size:0.68rem; color:var(--muted);">
+                          <%= p.employmentType === 'casual' ? 'Casual' : 'Permanent' %>
+                          <% if (p.priorityScore > 0) { %> · Priority <%= p.priorityScore %><% } %>
+                        </div>
+                      </div>
+                      <span style="font-size:0.7rem; padding:0.2rem 0.5rem; background:<%= p.color %>; color:#333; border-radius:6px; font-weight:700; white-space:nowrap;">
+                        <%= p.shiftLabel %>
+                      </span>
+                      <span style="font-size:0.68rem; color:var(--muted); white-space:nowrap;"><%= p.timeRange %></span>
+                      <form method="POST" action="/manager/roster/assign" style="margin:0;">
+                        <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
+                        <input type="hidden" name="employeeId" value="<%= p.employeeId %>">
+                        <input type="hidden" name="shiftType" value="<%= p.shiftCode %>">
+                        <input type="hidden" name="day" value="<%= day.date %>">
+                        <button type="submit" style="padding:0.35rem 0.75rem; font-size:0.75rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap;">
+                          ✓ Assign
+                        </button>
+                      </form>
+                    </div>
+                  <% }); %>
+                <% } %>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+
     <!-- Roster Table -->
     <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 10px;">
       <table style="width: 100%; min-width: 650px; margin: 0; border: none; box-shadow: none;">
@@ -125,5 +193,20 @@
     <% } %>
 
   <% } %>
+
+  <script>
+    function toggleDay(idx) {
+      var panel = document.getElementById('dayPanel-' + idx);
+      var arrow = document.getElementById('dayArrow-' + idx);
+      if (!panel) return;
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+      } else {
+        panel.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+  </script>
 
 <%- include('../partials/footer') %>

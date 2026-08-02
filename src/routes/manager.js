@@ -300,7 +300,7 @@ router.get('/roster', async (req, res) => {
     if (storeRes.rows.length === 0) {
       return res.render('manager/roster', {
         user: req.user, error: null, hasManagedStore: false,
-        shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [],
+        shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [], availabilityByDay: [],
         query: req.query, employees: [],
         weekStartFormatted: toLocalDateString(weekStart),
         weekEndFormatted: toLocalDateString(weekEnd),
@@ -393,10 +393,74 @@ router.get('/roster', async (req, res) => {
       employees = await getEmployeesByPriority(storeId);
     }
 
+    // ─── Availability: pending shift requests grouped by day ───────────────
+    const pendingRes = await pool.query(
+      `SELECT sb.id AS booking_id, sb.employee_id, sb.booking_status,
+              u.first_name, u.last_name, u.employment_type, u.priority_score,
+              s.id AS shift_id, s.start_time, s.end_time
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       JOIN users u ON u.id = sb.employee_id
+       WHERE s.store_id = $1
+         AND sb.booking_status = 'pending'
+         AND s.start_time >= $2 AND s.start_time <= $3
+       ORDER BY u.priority_score DESC NULLS LAST, u.first_name`,
+      [storeId, weekStart, weekEnd]
+    );
+
+    // Build availability per day
+    const availabilityByDay = dayDates.map((dateStr, idx) => {
+      const requests = pendingRes.rows.filter(r => toLocalDateString(new Date(r.start_time)) === dateStr);
+
+      const mapped = requests.map(r => {
+        const bStart = new Date(r.start_time);
+        const bEnd = new Date(r.end_time);
+        let shiftLabel = 'Custom';
+        let shiftCode = 'custom';
+        let color = '#F8BBD0';
+
+        SHIFT_TYPES.forEach(st => {
+          if (bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
+              bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM) {
+            color = st.color;
+            if (st.startH === 11 && st.endH === 17) { shiftLabel = 'Morning'; shiftCode = '11-1730'; }
+            else if (st.startH === 17) { shiftLabel = 'Evening'; shiftCode = '1730-2100'; }
+            else if (st.startH === 11 && st.endH === 21) { shiftLabel = 'Full Day'; shiftCode = '11-2100'; }
+            else { shiftLabel = st.label; }
+          }
+        });
+
+        return {
+          bookingId: r.booking_id,
+          employeeId: r.employee_id,
+          name: r.last_name ? (r.first_name + ' ' + r.last_name) : r.first_name,
+          employmentType: r.employment_type,
+          priorityScore: r.priority_score || 0,
+          shiftLabel,
+          shiftCode,
+          color,
+          timeRange: bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) + '–' +
+                     bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
+        };
+      });
+
+      // Count by shift type
+      const counts = { Morning: 0, Evening: 0, 'Full Day': 0, Custom: 0 };
+      mapped.forEach(m => { if (counts[m.shiftLabel] !== undefined) counts[m.shiftLabel]++; else counts.Custom++; });
+
+      return {
+        date: dateStr,
+        label: dayLabels[idx],
+        total: mapped.length,
+        counts,
+        people: mapped
+      };
+    });
+
     res.render('manager/roster', {
       user: req.user, error: req.query.error || null, hasManagedStore: true,
       shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterRows,
-      query: req.query, employees,
+      query: req.query, employees, availabilityByDay,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
       prevWeekDate: toLocalDateString(prevMonday),
@@ -407,7 +471,7 @@ router.get('/roster', async (req, res) => {
     console.error('[Manager] roster error', e);
     res.render('manager/roster', {
       user: req.user, error: 'Failed to load roster',
-      hasManagedStore: true, shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [],
+      hasManagedStore: true, shiftTypes: [], dayLabels: [], dayDates: [], rosterRows: [], availabilityByDay: [],
       query: req.query, employees: [],
       weekStartFormatted: '', weekEndFormatted: '',
       prevWeekDate: '', nextWeekDate: '',

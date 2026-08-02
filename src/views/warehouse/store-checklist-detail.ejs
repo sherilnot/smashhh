@@ -1,51 +1,131 @@
 <%- include('../partials/header', { title: 'Order Detail', role: 'warehouse_manager', active: 'store-checklists' }) %>
 
-  <h1>Order Detail</h1>
-
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
   <% if (!checklist) { %>
     <div class="empty">Checklist not found.</div>
   <% } else { %>
-    <div style="background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-      <div>
-        <strong style="font-size: 1rem;"><%= checklist.store_name %></strong>
-        <span style="color: var(--muted);"> — <%= formatDate(checklist.check_date) %></span>
-      </div>
-      <div>
-        <% if (checklist.status === 'reviewed') { %>
-          <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">REVIEWED ✓</span>
-        <% } else { %>
-          <form method="POST" action="/warehouse/store-checklists/<%= checklist.id %>/review" style="margin: 0; display: inline;">
-            <button type="submit" style="padding: 0.35rem 0.8rem; font-size: 0.8rem; background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Mark Done</button>
-          </form>
-        <% } %>
-      </div>
-    </div>
 
-    <div style="font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem;">
-      Submitted by <%= checklist.first_name %> <%= checklist.last_name %> · <%= formatDateTime(checklist.submitted_at) %>
-    </div>
+    <%
+      var pickItems = checklist.items.filter(function(item) {
+        return item.quantity_to_bring && String(item.quantity_to_bring) !== '0' && String(item.quantity_to_bring).trim() !== '';
+      });
+    %>
 
-    <!-- Item list with numbering -->
-    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-      <% var displayIdx = 0; %>
-      <% checklist.items.forEach(function(item) { %>
-        <% if (!item.quantity_to_bring || item.quantity_to_bring === '0' || String(item.quantity_to_bring).trim() === '') return; %>
-        <% displayIdx++; %>
-        <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-          <span style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--charcoal); color: white; border-radius: 6px; font-size: 0.7rem; font-weight: 700; flex-shrink: 0;"><%= displayIdx %></span>
-          <span style="flex: 1; font-weight: 600; font-size: 0.9rem;"><%= item.product_name %></span>
-          <span style="padding: 0.25rem 0.7rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 8px; font-size: 0.85rem; font-weight: 700; color: var(--bun-dark);"><%= item.quantity_to_bring %></span>
+    <style>
+      .pick-sheet { background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); margin-bottom:1.25rem; }
+      .pick-head { padding:1.1rem 1.35rem; background:#1a1a2e; color:#fff; }
+      .pick-head .title { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; opacity:0.6; }
+      .pick-head .store { font-size:1.35rem; font-weight:800; margin-top:0.15rem; }
+      .pick-head .date { font-size:0.85rem; opacity:0.75; margin-top:0.1rem; }
+      .pick-meta { display:flex; flex-wrap:wrap; gap:0.4rem 2rem; padding:0.7rem 1.35rem; background:#f7f9fc; border-bottom:1px solid var(--border); }
+      .pick-meta .blk .l { font-size:0.6rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+      .pick-meta .blk .v { font-size:0.85rem; font-weight:600; color:var(--ink); }
+      .pick-tbl { width:100%; border-collapse:collapse; margin:0; background:transparent; box-shadow:none; border:none; border-radius:0; }
+      .pick-tbl thead th { background:#f0f2f7; color:var(--muted); font-size:0.63rem; text-transform:uppercase; letter-spacing:0.5px; padding:0.5rem 1.35rem; font-weight:700; border-bottom:1px solid var(--border); text-align:left; }
+      .pick-tbl thead th.c { text-align:center; }
+      .pick-tbl tbody tr { border-bottom:1px solid #eef0f4; }
+      .pick-tbl tbody tr:nth-child(even) { background:#fafbfd; }
+      .pick-tbl tbody td { padding:0.65rem 1.35rem; border:none; font-size:0.9rem; color:var(--ink); }
+      .pick-tbl tbody td.num { width:2.5rem; font-size:0.78rem; color:var(--muted); font-weight:700; }
+      .pick-tbl tbody td.qty { text-align:center; width:5rem; }
+      .pick-tbl tbody td.qty span { display:inline-block; min-width:2.5rem; padding:0.28rem 0.6rem; background:#1a1a2e; color:#fff; border-radius:7px; font-size:0.9rem; font-weight:800; }
+      .pick-tbl tfoot td { padding:0.75rem 1.35rem; background:#f7f9fc; border-top:2px solid #1a1a2e; font-weight:700; font-size:0.88rem; color:var(--ink); }
+      .pick-actions { display:flex; gap:0.6rem; flex-wrap:wrap; }
+      .pick-actions a, .pick-actions button { padding:0.65rem 1.1rem; font-size:0.86rem; font-weight:700; border:none; border-radius:10px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:0.35rem; }
+      @media print {
+        .topbar,.sidebar,.sidebar-overlay,.pick-actions,.menu-toggle { display:none !important; }
+        .layout { display:block !important; }
+        .content { padding:0 !important; max-width:100% !important; }
+        .pick-sheet { border:none; border-radius:0; box-shadow:none; }
+        .pick-head { background:#fff !important; color:#000 !important; border-bottom:2px solid #000; }
+        .pick-head .title, .pick-head .date { opacity:1; color:#555 !important; }
+        .pick-tbl tbody td.qty span { background:#fff !important; color:#000 !important; border:1.5px solid #000; }
+      }
+      @media (max-width:600px) {
+        .pick-head { padding:0.9rem 1rem; }
+        .pick-head .store { font-size:1.1rem; }
+        .pick-meta { padding:0.6rem 1rem; gap:0.4rem 1.25rem; }
+        .pick-tbl thead th, .pick-tbl tbody td, .pick-tbl tfoot td { padding-left:1rem; padding-right:1rem; }
+      }
+    </style>
+
+    <div class="pick-sheet">
+      <!-- Header -->
+      <div class="pick-head">
+        <div class="title">Picking List</div>
+        <div class="store"><%= checklist.store_name %></div>
+        <div class="date">Delivery: <%= formatDate(checklist.check_date) %></div>
+      </div>
+
+      <!-- Meta -->
+      <div class="pick-meta">
+        <div class="blk">
+          <div class="l">Submitted By</div>
+          <div class="v"><%= checklist.first_name %> <%= checklist.last_name %></div>
         </div>
-      <% }); %>
+        <div class="blk">
+          <div class="l">Submitted At</div>
+          <div class="v"><%= formatDateTime(checklist.submitted_at) %></div>
+        </div>
+        <div class="blk">
+          <div class="l">Items</div>
+          <div class="v"><%= pickItems.length %></div>
+        </div>
+        <div class="blk">
+          <div class="l">Status</div>
+          <div class="v" style="color:<%= checklist.status === 'reviewed' ? '#2e7d32' : '#e65100' %>;">
+            <%= checklist.status === 'reviewed' ? '✓ Reviewed' : 'Pending' %>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items table -->
+      <% if (pickItems.length > 0) { %>
+        <div style="overflow-x:auto;">
+          <table class="pick-tbl">
+            <thead>
+              <tr>
+                <th style="width:2.5rem;">#</th>
+                <th>Product</th>
+                <th class="c" style="width:5rem;">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% var totalQty = 0; %>
+              <% pickItems.forEach(function(item, idx) { %>
+                <% totalQty += parseFloat(item.quantity_to_bring) || 0; %>
+                <tr>
+                  <td class="num"><%= idx + 1 %></td>
+                  <td style="font-weight:600;"><%= item.product_name %></td>
+                  <td class="qty"><span><%= item.quantity_to_bring %></span></td>
+                </tr>
+              <% }); %>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2" style="text-align:right;">Total Units</td>
+                <td style="text-align:center;"><%= totalQty %></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      <% } else { %>
+        <div style="padding:2rem; text-align:center; color:var(--muted);">No items in this order.</div>
+      <% } %>
     </div>
 
-    <% if (displayIdx === 0) { %>
-      <div class="empty">No items in this order.</div>
-    <% } %>
+    <!-- Actions -->
+    <div class="pick-actions">
+      <a href="/warehouse/store-checklists" style="background:var(--warm-white); color:var(--ink); border:1px solid var(--border) !important;">← Back</a>
+      <button onclick="window.print()" style="background:linear-gradient(135deg,#1a1a2e,#2a2a4e); color:#fff;">🖨 Print List</button>
+      <% if (checklist.status !== 'reviewed') { %>
+        <form method="POST" action="/warehouse/store-checklists/<%= checklist.id %>/review" style="display:contents;">
+          <button type="submit" style="background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff;">✓ Mark as Done</button>
+        </form>
+      <% } %>
+    </div>
 
-    <p style="margin-top: 1.25rem;"><a href="/warehouse/store-checklists" style="color: var(--lettuce-dark); font-weight: 700;">← Back to Orders</a></p>
   <% } %>
 
 <%- include('../partials/footer') %>

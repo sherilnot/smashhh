@@ -8,44 +8,93 @@
   <% if (storeNames.length === 0) { %>
     <div class="empty">No store orders submitted yet.</div>
   <% } else { %>
-    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+
+    <%
+      var totalPending = 0;
+      storeNames.forEach(function(sn) {
+        stores[sn].forEach(function(cl) { if (cl.status !== 'reviewed') totalPending++; });
+      });
+    %>
+
+    <!-- Summary bar -->
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">
+      <div style="flex:1; min-width:120px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; box-shadow:var(--shadow);">
+        <div style="font-size:0.65rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Stores</div>
+        <div style="font-size:1.4rem; font-weight:800; color:var(--bun-dark);"><%= storeNames.length %></div>
+      </div>
+      <div style="flex:1; min-width:120px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; box-shadow:var(--shadow);">
+        <div style="font-size:0.65rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Pending</div>
+        <div style="font-size:1.4rem; font-weight:800; color:<%= totalPending > 0 ? '#e65100' : '#2e7d32' %>;"><%= totalPending %></div>
+      </div>
+    </div>
+
+    <!-- Store sections -->
+    <div style="display:flex; flex-direction:column; gap:0.85rem;">
       <% storeNames.forEach(function(storeName) { %>
-        <% var storeChecklists = stores[storeName]; %>
-        <details open style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
-          <summary style="padding: 0.85rem 1rem; font-weight: 700; font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--bun-dark);">
-            <span style="font-size: 1.1rem;">🏪</span>
-            <%= storeName %>
-            <span style="margin-left: auto; font-size: 0.75rem; padding: 0.2rem 0.5rem; background: var(--charcoal); color: white; border-radius: 10px;"><%= storeChecklists.length %></span>
-          </summary>
-          <div style="padding: 0.5rem;">
-            <% storeChecklists.forEach(function(cl, idx) { %>
-              <a href="/warehouse/store-checklists/<%= cl.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.75rem; border-radius: 8px; text-decoration: none; color: var(--ink); <%= idx < storeChecklists.length - 1 ? 'border-bottom: 1px solid var(--border);' : '' %>">
-                <span style="font-weight: 600; font-size: 0.8rem; color: var(--muted); min-width: 22px;"><%= idx + 1 %></span>
-                <div style="flex: 1;">
-                  <div style="font-weight: 600; font-size: 0.9rem;"><%= formatDate(cl.check_date) %></div>
-                  <div style="font-size: 0.75rem; color: var(--muted);"><%= cl.first_name %> <%= cl.last_name %> · <%= formatDateShort(cl.submitted_at) %></div>
-                </div>
-                <% if (cl.status === 'reviewed') { %>
-                  <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">DONE</span>
-                <% } else { %>
-                  <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fef3e2; color: var(--bun-dark); border-radius: 6px; font-weight: 600;">NEW</span>
-                <% } %>
-                <span style="color: var(--muted);">›</span>
-              </a>
-            <% }); %>
+        <% var cls = stores[storeName]; %>
+        <% var pendingCount = cls.filter(function(c) { return c.status !== 'reviewed'; }).length; %>
+
+        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
+          <!-- Store header -->
+          <div style="padding:0.8rem 1.1rem; background:#1a1a2e; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span style="font-size:1rem; font-weight:700; color:#fff;"><%= storeName %></span>
+            </div>
+            <div style="display:flex; gap:0.4rem; align-items:center;">
+              <% if (pendingCount > 0) { %>
+                <span style="font-size:0.68rem; padding:0.2rem 0.55rem; background:#f4a300; color:#1a1400; border-radius:20px; font-weight:700;"><%= pendingCount %> pending</span>
+              <% } else { %>
+                <span style="font-size:0.68rem; padding:0.2rem 0.55rem; background:#2e7d32; color:#fff; border-radius:20px; font-weight:700;">All done</span>
+              <% } %>
+            </div>
           </div>
-        </details>
+
+          <!-- Table -->
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; margin:0; background:transparent; box-shadow:none; border:none; border-radius:0;">
+              <thead>
+                <tr>
+                  <th style="background:#f7f9fc; color:var(--muted); font-size:0.63rem; text-transform:uppercase; letter-spacing:0.4px; padding:0.45rem 1.1rem; text-align:left; border-bottom:1px solid var(--border); font-weight:700;">Delivery Date</th>
+                  <th style="background:#f7f9fc; color:var(--muted); font-size:0.63rem; text-transform:uppercase; letter-spacing:0.4px; padding:0.45rem 0.75rem; text-align:left; border-bottom:1px solid var(--border); font-weight:700;">Submitted By</th>
+                  <th style="background:#f7f9fc; color:var(--muted); font-size:0.63rem; text-transform:uppercase; letter-spacing:0.4px; padding:0.45rem 0.75rem; text-align:center; border-bottom:1px solid var(--border); font-weight:700;">Status</th>
+                  <th style="background:#f7f9fc; padding:0.45rem 1.1rem; border-bottom:1px solid var(--border); width:2rem;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% cls.forEach(function(cl) { %>
+                  <tr onclick="window.location='/warehouse/store-checklists/<%= cl.id %>'" style="cursor:pointer; border-bottom:1px solid var(--border);">
+                    <td style="padding:0.6rem 1.1rem; font-size:0.88rem; font-weight:600; color:var(--ink); border:none;">
+                      <%= formatDate(cl.check_date) %>
+                    </td>
+                    <td style="padding:0.6rem 0.75rem; font-size:0.8rem; color:var(--muted); border:none;">
+                      <%= cl.first_name %> <%= cl.last_name %>
+                      <div style="font-size:0.7rem; opacity:0.7;"><%= formatDateShort(cl.submitted_at) %></div>
+                    </td>
+                    <td style="padding:0.6rem 0.75rem; text-align:center; border:none;">
+                      <% if (cl.status === 'reviewed') { %>
+                        <span style="font-size:0.65rem; padding:0.18rem 0.5rem; background:#e8f5e9; color:#2e7d32; border-radius:6px; font-weight:700;">✓ DONE</span>
+                      <% } else { %>
+                        <span style="font-size:0.65rem; padding:0.18rem 0.5rem; background:#fff3e0; color:#e65100; border-radius:6px; font-weight:700;">NEW</span>
+                      <% } %>
+                    </td>
+                    <td style="padding:0.6rem 1.1rem; text-align:right; color:var(--muted); border:none;">›</td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+        </div>
       <% }); %>
     </div>
 
-    <% if (totalPages > 1) { %>
-      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
+    <% if (typeof totalPages !== 'undefined' && totalPages > 1) { %>
+      <div style="margin-top:1.25rem; display:flex; gap:8px; justify-content:center;">
         <% if (page > 1) { %>
-          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
+          <a href="?page=<%= page - 1 %>" style="padding:0.4rem 1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:8px; text-decoration:none; color:var(--ink); font-size:0.85rem;">← Prev</a>
         <% } %>
-        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
+        <span style="padding:0.4rem 0.75rem; color:var(--muted); font-size:0.85rem;">Page <%= page %>/<%= totalPages %></span>
         <% if (page < totalPages) { %>
-          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
+          <a href="?page=<%= page + 1 %>" style="padding:0.4rem 1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:8px; text-decoration:none; color:var(--ink); font-size:0.85rem;">Next →</a>
         <% } %>
       </div>
     <% } %>

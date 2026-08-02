@@ -99,7 +99,7 @@ async function getOrCreateTodayChecklist(managerId) {
       for (const item of templateRes.rows) {
         await client.query(
           `INSERT INTO store_checklist_items (checklist_id, product_name, quantity_needed, quantity_to_bring, sort_order)
-           VALUES ($1, $2, $3, $3, $4)`,
+           VALUES ($1, $2, $3, '0', $4)`,
           [checklistId, item.product_name, item.default_quantity, item.sort_order]
         );
       }

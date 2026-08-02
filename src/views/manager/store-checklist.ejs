@@ -134,12 +134,14 @@
       var p = document.getElementById('editorPanel');
       if (p.style.display === 'none') {
         p.style.display = 'block';
-        // Scroll to editor
         p.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else {
         p.style.display = 'none';
-        // Reload to update draft list
-        location.reload();
+        // Save then navigate to a clean GET URL (avoids re-POST / 404)
+        doSave();
+        setTimeout(function() {
+          window.location.href = '/manager/store-checklist';
+        }, 400);
       }
     }
 

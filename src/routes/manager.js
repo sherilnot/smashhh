@@ -1299,7 +1299,11 @@ router.get('/store-checklist', async (req, res) => {
       });
     }
     res.render('manager/store-checklist', {
-      user: req.user, checklist: result.checklist, error: null, success: false, edit: req.query.edit === '1'
+      user: req.user,
+      checklist: result.checklist,
+      error: req.query.error || null,
+      success: req.query.success === '1',
+      edit: req.query.edit === '1'
     });
   } catch (e) {
     console.error('[Manager] store-checklist error', e);
@@ -1324,31 +1328,14 @@ router.post('/store-checklist/submit', async (req, res) => {
 
     const result = await submitStoreChecklist(req.user.userId, checklistId, quantities);
 
+    // Redirect after POST (PRG pattern) so refresh/reload works cleanly
     if (!result.success) {
-      const checklistResult = await getOrCreateTodayChecklist(req.user.userId);
-      return res.render('manager/store-checklist', {
-        user: req.user,
-        checklist: checklistResult.success ? checklistResult.checklist : null,
-        error: result.error,
-        success: false,
-        edit: false
-      });
+      return res.redirect('/manager/store-checklist?error=' + encodeURIComponent(result.error));
     }
-
-    // Reload to show submitted state
-    const checklistResult = await getOrCreateTodayChecklist(req.user.userId);
-    res.render('manager/store-checklist', {
-      user: req.user,
-      checklist: checklistResult.success ? checklistResult.checklist : null,
-      error: null,
-      success: true,
-      edit: false
-    });
+    res.redirect('/manager/store-checklist?success=1');
   } catch (e) {
     console.error('[Manager] store-checklist submit error', e);
-    res.render('manager/store-checklist', {
-      user: req.user, checklist: null, error: 'Failed to submit checklist', success: false, edit: false
-    });
+    res.redirect('/manager/store-checklist?error=' + encodeURIComponent('Failed to submit checklist'));
   }
 });
 

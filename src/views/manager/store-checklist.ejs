@@ -12,6 +12,11 @@
     <%
       var isEditable = checklist.editable;
       var isSubmitted = checklist.status === 'submitted' || checklist.status === 'reviewed';
+
+      // Items with qty > 0 = drafted items
+      var draftedItems = checklist.items.filter(function(item) {
+        return item.quantity_to_bring && item.quantity_to_bring !== '0' && item.quantity_to_bring.trim() !== '';
+      });
     %>
 
     <!-- Banner -->
@@ -32,39 +37,76 @@
       <% } %>
     </div>
 
-    <!-- Items table -->
+    <!-- ═══ DRAFT LIST (items with qty > 0) ═══ -->
+    <% if (draftedItems.length > 0) { %>
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
-      <!-- Header -->
-      <div style="display:grid; grid-template-columns:2rem 1fr 4.5rem 4.5rem; gap:0.4rem; padding:0.55rem 1rem; background:#1a1a2e; align-items:center;">
-        <span style="font-size:0.62rem; font-weight:700; color:#999; text-transform:uppercase;">#</span>
-        <span style="font-size:0.62rem; font-weight:700; color:#999; text-transform:uppercase;">Product</span>
-        <span style="font-size:0.62rem; font-weight:700; color:#999; text-transform:uppercase; text-align:center;">Need</span>
-        <span style="font-size:0.62rem; font-weight:700; color:#999; text-transform:uppercase; text-align:center;">Bring</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 1rem; background:#f7f9fc; border-bottom:1px solid var(--border);">
+        <span style="font-size:0.75rem; font-weight:700; color:var(--bun-dark); text-transform:uppercase; letter-spacing:0.4px;">Order Draft (<%= draftedItems.length %> items)</span>
+        <% if (isEditable) { %>
+          <button type="button" onclick="toggleEditor()" style="font-size:0.78rem; font-weight:700; padding:0.3rem 0.7rem; background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1400; border:none; border-radius:6px; cursor:pointer;">✏ Edit</button>
+        <% } %>
+      </div>
+      <% draftedItems.forEach(function(item, idx) { %>
+        <div style="display:flex; align-items:center; padding:0.55rem 1rem; border-top:<%= idx > 0 ? '1px solid var(--border)' : 'none' %>; gap:0.75rem;">
+          <span style="width:1.5rem; font-size:0.78rem; color:var(--muted); font-weight:600;"><%= idx + 1 %></span>
+          <span style="flex:1; font-weight:600; font-size:0.88rem;"><%= item.product_name %></span>
+          <span style="min-width:36px; text-align:center; padding:0.25rem 0.5rem; background:#fef3e2; border-radius:6px; font-size:0.85rem; font-weight:700; color:var(--bun-dark);"><%= item.quantity_to_bring %></span>
+        </div>
+      <% }); %>
+    </div>
+    <% } else { %>
+      <div class="empty" style="margin-bottom:1rem;">No items in your order yet. Tap "Edit" to add items.</div>
+      <% if (isEditable) { %>
+        <button type="button" onclick="toggleEditor()" style="width:100%; padding:0.8rem; font-size:0.92rem; font-weight:700; background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1400; border:none; border-radius:12px; cursor:pointer; margin-bottom:1rem;">
+          ✏ Add Items to Order
+        </button>
+      <% } %>
+    <% } %>
+
+    <!-- ═══ FULL EDITOR (scrollable, hidden by default) ═══ -->
+    <% if (isEditable) { %>
+    <div id="editorPanel" style="display:none; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 1rem; background:#1a1a2e;">
+        <span style="font-size:0.72rem; font-weight:700; color:#ccc; text-transform:uppercase;">All Items — set quantities</span>
+        <button type="button" onclick="toggleEditor()" style="font-size:0.75rem; font-weight:700; padding:0.25rem 0.6rem; background:rgba(255,255,255,0.15); color:#fff; border:none; border-radius:6px; cursor:pointer;">✕ Close</button>
       </div>
 
-      <!-- Rows -->
-      <% checklist.items.forEach(function(item, idx) { %>
-        <div style="display:grid; grid-template-columns:2rem 1fr 4.5rem 4.5rem; gap:0.4rem; align-items:center; padding:0.55rem 1rem; border-top:1px solid var(--border); background:<%= idx % 2 === 0 ? 'var(--warm-white)' : '#fff' %>;">
-          <span style="font-size:0.78rem; color:var(--muted); font-weight:600;"><%= idx + 1 %></span>
-          <span style="font-weight:600; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><%= item.product_name %></span>
-          <!-- Needed -->
-          <span style="text-align:center; font-size:0.82rem; font-weight:700; color:var(--muted); background:#f7f9fc; border-radius:6px; padding:0.25rem 0;"><%= item.quantity_needed || '0' %></span>
-          <!-- To Bring -->
-          <% if (isEditable) { %>
+      <!-- Scrollable list -->
+      <div style="max-height:400px; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+        <!-- Column header -->
+        <div style="display:grid; grid-template-columns:2rem 1fr 3.5rem 3.5rem; gap:0.3rem; padding:0.4rem 1rem; background:#f7f9fc; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:1;">
+          <span style="font-size:0.6rem; font-weight:700; color:#999;">#</span>
+          <span style="font-size:0.6rem; font-weight:700; color:#999;">PRODUCT</span>
+          <span style="font-size:0.6rem; font-weight:700; color:#999; text-align:center;">NEED</span>
+          <span style="font-size:0.6rem; font-weight:700; color:#999; text-align:center;">BRING</span>
+        </div>
+
+        <% checklist.items.forEach(function(item, idx) { %>
+          <div style="display:grid; grid-template-columns:2rem 1fr 3.5rem 3.5rem; gap:0.3rem; align-items:center; padding:0.5rem 1rem; border-top:1px solid var(--border); background:<%= idx % 2 === 0 ? '#fff' : 'var(--warm-white)' %>;">
+            <span style="font-size:0.75rem; color:var(--muted);"><%= idx + 1 %></span>
+            <span style="font-size:0.82rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><%= item.product_name %></span>
+            <span style="text-align:center; font-size:0.78rem; color:var(--muted);"><%= item.quantity_needed || '0' %></span>
             <input type="text" class="bring-input" data-item-id="<%= item.id %>"
                    value="<%= item.quantity_to_bring || '0' %>"
                    onfocus="this.select()"
                    onchange="saveQty(this)"
-                   onkeydown="if(event.key==='Enter')this.blur()"
-                   style="width:100%; text-align:center; padding:0.25rem; border:2px solid var(--mustard,#f4a300); border-radius:6px; font-size:0.85rem; font-weight:700; background:#fffbf0;">
-          <% } else { %>
-            <span style="text-align:center; font-size:0.85rem; font-weight:700; color:var(--bun-dark); background:#fef3e2; border-radius:6px; padding:0.25rem 0;"><%= item.quantity_to_bring || '0' %></span>
-          <% } %>
-        </div>
-      <% }); %>
-    </div>
+                   onkeydown="if(event.key==='Enter'){this.blur();focusNext(this);}"
+                   style="width:100%; text-align:center; padding:0.2rem; border:1.5px solid var(--border); border-radius:5px; font-size:0.82rem; font-weight:700; background:#fffbf0;">
+          </div>
+        <% }); %>
+      </div>
 
-    <!-- Submit -->
+      <!-- Done button -->
+      <div style="padding:0.7rem 1rem; border-top:1px solid var(--border); background:#f7f9fc;">
+        <button type="button" onclick="toggleEditor()"
+                style="width:100%; padding:0.7rem; font-size:0.9rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:white; border:none; border-radius:10px; cursor:pointer;">
+          ✓ Done
+        </button>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- ═══ Submit ═══ -->
     <% if (isEditable) { %>
     <form method="POST" action="/manager/store-checklist/submit" id="clForm">
       <input type="hidden" name="checklistId" value="<%= checklist.id %>">
@@ -87,6 +129,25 @@
   <script>
     var CL_ID = '<%= checklist ? checklist.id : "" %>';
     var _t;
+
+    function toggleEditor() {
+      var p = document.getElementById('editorPanel');
+      if (p.style.display === 'none') {
+        p.style.display = 'block';
+        // Scroll to editor
+        p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        p.style.display = 'none';
+        // Reload to update draft list
+        location.reload();
+      }
+    }
+
+    function focusNext(input) {
+      var inputs = Array.from(document.querySelectorAll('.bring-input'));
+      var idx = inputs.indexOf(input);
+      if (idx < inputs.length - 1) inputs[idx + 1].focus();
+    }
 
     function saveQty(input) {
       var id = input.dataset.itemId;

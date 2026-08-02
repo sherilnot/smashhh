@@ -3,7 +3,7 @@
  * Provides offline caching and handles push events
  */
 
-const VERSION = 'v5.0.0';
+const VERSION = 'v6.0.0';
 const CACHE_NAME = `rizins-cache-${VERSION}`;
 
 // Assets to pre-cache on install (app shell)

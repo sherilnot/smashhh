@@ -33,7 +33,33 @@
 
   <% if (typeof nextWeekDays !== 'undefined' && nextWeekDays.length > 0 && canSubmit) { %>
     <form method="POST" action="/employee/book-weekly-shifts" id="shiftForm">
-      
+
+      <!-- ═══ Quick Fill — set whole week at once ═══ -->
+      <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:12px; padding:0.85rem 1rem; margin-bottom:1rem;">
+        <div style="font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.6rem;">
+          ⚡ Quick Fill — Whole Week
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:0.45rem;">
+          <button type="button" onclick="fillWeek('11-2100')"
+                  style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:700; background:#e3f2fd; color:#1565c0; border:1.5px solid #90caf9; border-radius:9px; cursor:pointer;">
+            ☀ Full Week<br><span style="font-size:0.68rem; font-weight:500; opacity:0.8;">Full days</span>
+          </button>
+          <button type="button" onclick="fillWeek('11-1730')"
+                  style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:700; background:#e8f5e9; color:#2e7d32; border:1.5px solid #a5d6a7; border-radius:9px; cursor:pointer;">
+            🌅 All Mornings<br><span style="font-size:0.68rem; font-weight:500; opacity:0.8;">11:00–5:30</span>
+          </button>
+          <button type="button" onclick="fillWeek('1730-2100')"
+                  style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:700; background:#fff3e0; color:#e65100; border:1.5px solid #ffcc80; border-radius:9px; cursor:pointer;">
+            🌆 All Evenings<br><span style="font-size:0.68rem; font-weight:500; opacity:0.8;">5:30–9:00</span>
+          </button>
+          <button type="button" onclick="fillWeek('none')"
+                  style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:700; background:#f5f5f5; color:#666; border:1.5px solid #ddd; border-radius:9px; cursor:pointer;">
+            ✕ Clear All<br><span style="font-size:0.68rem; font-weight:500; opacity:0.8;">All days off</span>
+          </button>
+        </div>
+        <p style="font-size:0.7rem; color:var(--muted); margin:0.5rem 0 0;">Applies to all days below — you can still adjust individual days after.</p>
+      </div>
+
       <!-- Day Cards -->
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
         <% nextWeekDays.forEach(function(d, index) { %>
@@ -151,6 +177,18 @@
       'none': { bg: '#f0f0f0', color: '#666' }
     };
 
+    // ─── Quick fill: apply a shift type to every day ───
+    function fillWeek(value) {
+      document.querySelectorAll('.day-card').forEach(function(card) {
+        var date = card.id.replace('card_', '');
+        var radio = document.querySelector('input[name="shift_' + date + '"][value="' + value + '"]');
+        if (radio) {
+          radio.checked = true;
+          radio.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+
     document.querySelectorAll('input[type="radio"]').forEach(function(radio) {
       radio.addEventListener('change', function() {
         var date = this.name.replace('shift_', '');
@@ -158,6 +196,7 @@
         var label = document.getElementById('label_' + date);
         var customDiv = document.getElementById('custom_' + date);
         var value = this.value;
+        if (!card || !label) return;
 
         // Update label
         label.textContent = shiftLabels[value] || 'Off';
@@ -173,10 +212,8 @@
         }
 
         // Custom times
-        if (value === 'custom') {
-          customDiv.style.display = 'block';
-        } else {
-          customDiv.style.display = 'none';
+        if (customDiv) {
+          customDiv.style.display = value === 'custom' ? 'block' : 'none';
         }
       });
     });

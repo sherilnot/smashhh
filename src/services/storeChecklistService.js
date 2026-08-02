@@ -2,19 +2,56 @@ const { pool } = require('../config/database');
 
 /**
  * Store Checklist Service
- * Manages daily supply checklists that store managers fill out and send to the warehouse manager.
+ * 
+ * TIMING RULES:
+ * - Checklist for a date is editable from 12pm the day before until 10am on that date
+ * - Before 12pm: show today's checklist (editable if before 10am, locked if after)
+ * - 12pm onwards: show tomorrow's checklist (editable)
+ * - Between 10am-12pm: show today's checklist (locked)
  */
 
+function getMelbourneNow() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
+}
+
+function formatDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
- * Get or create checklist for a manager's store.
- * Checklist is prepared for TOMORROW. Editable until 10am the next day (the actual date).
- * @param {string} managerId
- * @returns {Promise<{ success: boolean, checklist?: object, checklistPending?: boolean, error?: string }>}
+ * Determine which checklist date to show and whether it's editable.
+ */
+function getActiveChecklistInfo() {
+  const now = getMelbourneNow();
+  const hour = now.getHours();
+
+  let targetDate;
+  let editable;
+
+  if (hour >= 12) {
+    // After noon: show tomorrow's checklist (editable)
+    targetDate = new Date(now);
+    targetDate.setDate(targetDate.getDate() + 1);
+    editable = true;
+  } else if (hour < 10) {
+    // Before 10am: show today's checklist (still editable)
+    targetDate = new Date(now);
+    editable = true;
+  } else {
+    // 10am - 12pm: show today's checklist (locked)
+    targetDate = new Date(now);
+    editable = false;
+  }
+
+  return { targetDate: formatDate(targetDate), editable, hour };
+}
+
+/**
+ * Get or create the active checklist for a manager's store.
  */
 async function getOrCreateTodayChecklist(managerId) {
   const client = await pool.connect();
   try {
-    // Find manager's store
     const storeRes = await client.query(
       `SELECT s.id AS store_id, s.name AS store_name
        FROM store_manager_assignments sma
@@ -28,32 +65,15 @@ async function getOrCreateTodayChecklist(managerId) {
     }
 
     const { store_id, store_name } = storeRes.rows[0];
-    
-    // Target date = tomorrow. But if it's before 10am, we can still edit today's list.
-    // Use Australian Eastern time
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
-    const hour = now.getHours();
-    
-    let targetDate;
-    if (hour < 10) {
-      // Before 10am: show today's checklist (prepared yesterday, still editable)
-      targetDate = new Date(now);
-    } else {
-      // After 10am: prepare tomorrow's checklist
-      targetDate = new Date(now);
-      targetDate.setDate(targetDate.getDate() + 1);
-    }
-    
-    const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    const { targetDate, editable, hour } = getActiveChecklistInfo();
 
-    // Check if checklist already exists for this date
+    // Check if checklist already exists for target date
     let checklistRes = await client.query(
       `SELECT * FROM store_checklists WHERE store_id = $1 AND check_date = $2`,
-      [store_id, dateStr]
+      [store_id, targetDate]
     );
 
-    let checklistId;
-    let status;
+    let checklistId, status;
 
     if (checklistRes.rows.length === 0) {
       // Create new checklist from template
@@ -62,7 +82,7 @@ async function getOrCreateTodayChecklist(managerId) {
       const insertRes = await client.query(
         `INSERT INTO store_checklists (store_id, submitted_by, check_date, status)
          VALUES ($1, $2, $3, 'draft') RETURNING id, status`,
-        [store_id, managerId, dateStr]
+        [store_id, managerId, targetDate]
       );
       checklistId = insertRes.rows[0].id;
       status = 'draft';
@@ -99,14 +119,28 @@ async function getOrCreateTodayChecklist(managerId) {
       [checklistId]
     );
 
+    // Determine label
+    const now = getMelbourneNow();
+    const todayStr = formatDate(now);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = formatDate(tomorrow);
+
+    let dateLabel;
+    if (targetDate === todayStr) dateLabel = "Today's Order";
+    else if (targetDate === tomorrowStr) dateLabel = "Tomorrow's Order";
+    else dateLabel = targetDate;
+
     return {
       success: true,
       checklist: {
         id: checklistId,
         storeId: store_id,
         storeName: store_name,
-        checkDate: dateStr,
+        checkDate: targetDate,
         status,
+        editable,
+        dateLabel,
         items: itemsRes.rows
       }
     };
@@ -120,9 +154,7 @@ async function getOrCreateTodayChecklist(managerId) {
 }
 
 /**
- * Save quantities to a draft checklist without submitting.
- * Creates the checklist if needed, updates quantities, keeps status as 'draft'.
- * The invoice will sync from draft checklists too.
+ * Save quantities (auto-save without submitting).
  */
 async function saveChecklist(managerId, checklistId, quantities, neededQtys = {}) {
   const client = await pool.connect();
@@ -149,7 +181,6 @@ async function saveChecklist(managerId, checklistId, quantities, neededQtys = {}
       );
     }
 
-    // Also update quantity_needed if provided
     for (const [itemId, val] of Object.entries(neededQtys)) {
       if (val !== undefined) {
         await client.query(
@@ -171,18 +202,13 @@ async function saveChecklist(managerId, checklistId, quantities, neededQtys = {}
 }
 
 /**
- * Update quantities and submit checklist to warehouse manager.
- * @param {string} managerId
- * @param {string} checklistId
- * @param {Object} quantities - Map of item_id -> quantity_to_bring
- * @returns {Promise<{ success: boolean, error?: string }>}
+ * Submit checklist to warehouse manager.
  */
 async function submitChecklist(managerId, checklistId, quantities) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Verify checklist belongs to manager's store and is in draft status
     const checkRes = await client.query(
       `SELECT sc.id, sc.status, sc.store_id
        FROM store_checklists sc
@@ -196,25 +222,25 @@ async function submitChecklist(managerId, checklistId, quantities) {
       return { success: false, error: 'Checklist not found or access denied' };
     }
 
+    // Allow re-submission
     if (checkRes.rows[0].status === 'submitted') {
-      // Allow re-submission (edit) — revert to draft first
       await client.query(
         `UPDATE store_checklists SET status = 'draft', submitted_at = NULL WHERE id = $1`,
         [checklistId]
       );
     }
 
-    // Update each item's quantity_to_bring
+    // Update quantities
     for (const [itemId, qty] of Object.entries(quantities)) {
-      if (qty !== undefined && qty !== '') {
+      if (qty !== undefined) {
         await client.query(
           `UPDATE store_checklist_items SET quantity_to_bring = $1 WHERE id = $2 AND checklist_id = $3`,
-          [qty, itemId, checklistId]
+          [qty || '', itemId, checklistId]
         );
       }
     }
 
-    // Mark checklist as submitted
+    // Mark submitted
     await client.query(
       `UPDATE store_checklists SET status = 'submitted', submitted_at = NOW() WHERE id = $1`,
       [checklistId]
@@ -232,10 +258,7 @@ async function submitChecklist(managerId, checklistId, quantities) {
 }
 
 /**
- * Get all submitted checklists grouped by store (for warehouse manager).
- * @param {number} page
- * @param {number} limit
- * @returns {Promise<{ checklists: Array, total: number, byStore: Object }>}
+ * Get all submitted checklists (for warehouse manager).
  */
 async function getSubmittedChecklists(page = 1, limit = 50) {
   limit = Math.min(limit, 50);
@@ -259,7 +282,6 @@ async function getSubmittedChecklists(page = 1, limit = 50) {
     [limit, offset]
   );
 
-  // Group by store
   const byStore = {};
   res.rows.forEach(cl => {
     if (!byStore[cl.store_name]) byStore[cl.store_name] = [];
@@ -271,8 +293,6 @@ async function getSubmittedChecklists(page = 1, limit = 50) {
 
 /**
  * Get a specific checklist detail (for warehouse manager).
- * @param {string} checklistId
- * @returns {Promise<{ success: boolean, checklist?: object, error?: string }>}
  */
 async function getChecklistDetail(checklistId) {
   const res = await pool.query(
@@ -304,9 +324,6 @@ async function getChecklistDetail(checklistId) {
 
 /**
  * Mark a checklist as reviewed by warehouse manager.
- * @param {string} checklistId
- * @param {string} warehouseManagerId
- * @returns {Promise<{ success: boolean, error?: string }>}
  */
 async function markReviewed(checklistId, warehouseManagerId) {
   const res = await pool.query(

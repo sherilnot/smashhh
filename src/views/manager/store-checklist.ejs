@@ -10,12 +10,10 @@
   <% } else { %>
 
     <%
-      var now = new Date();
-      var isBeforeTenAm = now.getHours() < 10;
-      var dateLabel = isBeforeTenAm ? "Today's delivery" : "Tomorrow's delivery";
+      var isEditable = checklist.editable;
       var isSubmitted = checklist.status === 'submitted' || checklist.status === 'reviewed';
 
-      // Split items: active (has quantity) vs inactive (no quantity)
+      // Split items
       var activeItems = [];
       var inactiveItems = [];
       checklist.items.forEach(function(item) {
@@ -27,194 +25,137 @@
       });
     %>
 
-    <!-- Store / date banner -->
+    <!-- Banner -->
     <div style="background:var(--cream); border:1px solid var(--border); border-radius:12px; padding:0.75rem 1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
       <div>
-        <span style="font-weight:700; color:var(--bun-dark);"><%= checklist.storeName %></span>
-        <span style="color:var(--muted);"> — <%= formatDate(checklist.checkDate) %></span>
-        <div style="font-size:0.75rem; color:var(--muted); margin-top:0.2rem;"><%= dateLabel %></div>
+        <span style="font-weight:700; color:var(--bun-dark);"><%= checklist.dateLabel %></span>
+        <span style="color:var(--muted); font-size:0.85rem;"> · <%= checklist.storeName %></span>
+        <div style="font-size:0.72rem; color:var(--muted); margin-top:0.15rem;"><%= formatDate(checklist.checkDate) %></div>
       </div>
-      <% if (isSubmitted) { %>
-        <% if (checklist.status === 'reviewed') { %>
-          <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Reviewed by Warehouse</span>
-        <% } else { %>
-          <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Submitted</span>
-        <% } %>
+      <% if (checklist.status === 'reviewed') { %>
+        <span style="font-size:0.72rem; padding:0.25rem 0.6rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Reviewed</span>
+      <% } else if (isSubmitted) { %>
+        <span style="font-size:0.72rem; padding:0.25rem 0.6rem; background:#e8f5e9; color:#2e7d32; border-radius:8px; font-weight:700;">✓ Submitted</span>
+      <% } else if (isEditable) { %>
+        <span style="font-size:0.72rem; padding:0.25rem 0.6rem; background:#fef3e2; color:var(--bun-dark); border-radius:8px; font-weight:700;">✏ Editing</span>
       <% } else { %>
-        <span style="font-size:0.75rem; padding:0.25rem 0.7rem; background:#fef3e2; color:var(--bun-dark); border-radius:8px; font-weight:700;">Draft</span>
+        <span style="font-size:0.72rem; padding:0.25rem 0.6rem; background:#fce4ec; color:#c62828; border-radius:8px; font-weight:700;">🔒 Locked</span>
       <% } %>
     </div>
 
-    <!-- ═══ Active items (items with quantity) ═══ -->
+    <!-- ═══ Active items (have quantity) ═══ -->
     <% if (activeItems.length > 0) { %>
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
-      <!-- Header row -->
-      <div style="padding:0.55rem 1rem; background:#1a1a2e; display:grid; grid-template-columns:2rem 1fr 5rem 5rem; gap:0.4rem; align-items:center;">
-        <span style="font-size:0.65rem; font-weight:700; color:#999; text-transform:uppercase;">#</span>
-        <span style="font-size:0.65rem; font-weight:700; color:#999; text-transform:uppercase;">Product</span>
-        <span style="font-size:0.65rem; font-weight:700; color:#999; text-transform:uppercase; text-align:center;">Need</span>
-        <span style="font-size:0.65rem; font-weight:700; color:#999; text-transform:uppercase; text-align:center;">Send</span>
-      </div>
-
       <% activeItems.forEach(function(item, idx) { %>
         <div class="cl-row" data-id="<%= item.id %>"
-             style="display:grid; grid-template-columns:2rem 1fr 5rem 5rem; gap:0.4rem; align-items:center; padding:0.6rem 1rem; border-top:1px solid var(--border); background:<%= idx % 2 === 0 ? 'var(--warm-white)' : '#fff' %>;">
-          <span style="font-size:0.8rem; color:var(--muted); font-weight:600;"><%= idx + 1 %></span>
-          <span style="font-weight:600; font-size:0.88rem;"><%= item.product_name %></span>
-          <!-- Needed (editable) -->
-          <span class="needed-display" onclick="startNeededEdit(this)" title="Tap to edit"
-                style="text-align:center; padding:0.2rem 0.4rem; background:linear-gradient(135deg,#fef3e2,#fdefd8); border-radius:8px; font-size:0.8rem; font-weight:700; color:var(--bun-dark); cursor:pointer;">
-            <%= item.quantity_needed || '—' %>
-          </span>
-          <input type="text" class="needed-input" data-item-id="<%= item.id %>"
-                 value="<%= item.quantity_needed || '' %>" placeholder="0"
-                 style="display:none; width:100%; text-align:center; padding:0.25rem; border:2px solid #90caf9; border-radius:8px; font-size:0.8rem; font-weight:700; background:#e3f2fd;"
-                 onclick="event.stopPropagation()" onkeydown="handleKey(event,this,'needed')" onblur="commitNeededEdit(this)">
-          <!-- To send (editable) -->
-          <span class="qty-display" onclick="startQtyEdit(this)" title="Tap to edit"
-                style="text-align:center; font-size:0.9rem; font-weight:700; color:var(--bun-dark); cursor:pointer;">
-            <%= item.quantity_to_bring %>
-          </span>
-          <input type="text" class="qty-input" data-item-id="<%= item.id %>"
-                 value="<%= item.quantity_to_bring || '' %>" placeholder="0"
-                 style="display:none; width:100%; text-align:center; padding:0.25rem; border:2px solid var(--mustard,#f4a300); border-radius:8px; font-size:0.9rem; font-weight:700; background:#fffbf0;"
-                 onclick="event.stopPropagation()" onkeydown="handleKey(event,this,'qty')" onblur="commitQtyEdit(this)">
+             style="display:flex; align-items:center; padding:0.7rem 1rem; border-top:<%= idx > 0 ? '1px solid var(--border)' : 'none' %>; gap:0.75rem;">
+          <span style="width:1.5rem; font-size:0.8rem; color:var(--muted); font-weight:600;"><%= idx + 1 %></span>
+          <span style="flex:1; font-weight:600; font-size:0.9rem;"><%= item.product_name %></span>
+          <% if (isEditable) { %>
+            <input type="text" class="qty-input" data-item-id="<%= item.id %>"
+                   value="<%= item.quantity_to_bring %>"
+                   onfocus="this.select()"
+                   onchange="saveQty(this)"
+                   onkeydown="if(event.key==='Enter')this.blur()"
+                   style="width:52px; text-align:center; padding:0.35rem; border:2px solid var(--mustard,#f4a300); border-radius:8px; font-size:0.9rem; font-weight:700; background:#fffbf0;">
+          <% } else { %>
+            <span style="min-width:40px; text-align:center; padding:0.3rem 0.6rem; background:#fef3e2; border-radius:8px; font-size:0.88rem; font-weight:700; color:var(--bun-dark);"><%= item.quantity_to_bring %></span>
+          <% } %>
         </div>
       <% }); %>
     </div>
     <% } else { %>
-      <div class="empty" style="margin-bottom:1rem;">No items added yet. Tap "Add Items" below to start your order.</div>
+      <div class="empty" style="margin-bottom:1rem;">No items added yet. Tap "Add Items" below.</div>
     <% } %>
 
-    <!-- ═══ Add More Button ═══ -->
-    <% if (inactiveItems.length > 0) { %>
-    <button type="button" onclick="toggleMoreItems()"
+    <!-- ═══ Add Items Button ═══ -->
+    <% if (isEditable && inactiveItems.length > 0) { %>
+    <button type="button" onclick="togglePanel()"
             style="width:100%; padding:0.75rem; font-size:0.9rem; font-weight:700; background:var(--warm-white); color:var(--ink); border:1px solid var(--border); border-radius:12px; cursor:pointer; margin-bottom:0.75rem; display:flex; align-items:center; justify-content:center; gap:0.4rem;"
-            id="addMoreBtn">
-      <span id="addMoreIcon">＋</span> Add Items (<%= inactiveItems.length %> available)
+            id="addBtn">
+      <span id="addIcon">＋</span> Add Items (<%= inactiveItems.length %>)
     </button>
 
-    <!-- Hidden items list -->
-    <div id="moreItemsPanel" style="display:none; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
-      <div style="padding:0.5rem 1rem; background:#f7f9fc; font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--border);">
-        Select items to add to your order
+    <div id="addPanel" style="display:none; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:1rem;">
+      <div style="padding:0.5rem 1rem; background:#f7f9fc; font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; border-bottom:1px solid var(--border);">
+        Select items to add
       </div>
-      <% inactiveItems.forEach(function(item) { %>
-        <div class="more-item" data-id="<%= item.id %>"
-             style="display:flex; align-items:center; gap:0.75rem; padding:0.6rem 1rem; border-top:1px solid var(--border);">
-          <input type="checkbox" class="add-check" data-id="<%= item.id %>" data-needed="<%= item.quantity_needed || '1' %>"
-                 style="width:20px; height:20px; accent-color:var(--mustard); flex-shrink:0;">
-          <span style="font-weight:600; font-size:0.88rem; flex:1;"><%= item.product_name %></span>
-          <span style="font-size:0.75rem; color:var(--muted); background:#fef3e2; padding:0.2rem 0.5rem; border-radius:6px;">need: <%= item.quantity_needed || '—' %></span>
-        </div>
-      <% }); %>
-      <!-- Add Selected button -->
-      <div style="padding:0.75rem 1rem; border-top:1px solid var(--border); background:#f7f9fc;">
-        <button type="button" onclick="addSelectedItems()"
+      <div style="max-height:300px; overflow-y:auto;">
+        <% inactiveItems.forEach(function(item) { %>
+          <label style="display:flex; align-items:center; gap:0.75rem; padding:0.6rem 1rem; border-top:1px solid var(--border); cursor:pointer;">
+            <input type="checkbox" class="add-cb" data-id="<%= item.id %>" data-needed="<%= item.quantity_needed || '1' %>"
+                   style="width:20px; height:20px; accent-color:var(--mustard); flex-shrink:0;">
+            <span style="flex:1; font-weight:600; font-size:0.88rem;"><%= item.product_name %></span>
+            <span style="font-size:0.72rem; color:var(--muted);"><%= item.quantity_needed || '' %></span>
+          </label>
+        <% }); %>
+      </div>
+      <div style="padding:0.7rem 1rem; border-top:1px solid var(--border); background:#f7f9fc;">
+        <button type="button" onclick="addSelected()"
                 style="width:100%; padding:0.7rem; font-size:0.9rem; font-weight:700; background:linear-gradient(135deg,#f4a300,#e8950a); color:#1a1400; border:none; border-radius:10px; cursor:pointer;">
-          ✓ Add Selected Items
+          ✓ Add Selected
         </button>
       </div>
     </div>
     <% } %>
 
     <!-- ═══ Submit ═══ -->
-    <form method="POST" action="/manager/store-checklist/submit" id="checklistForm">
+    <% if (isEditable) { %>
+    <form method="POST" action="/manager/store-checklist/submit" id="clForm">
       <input type="hidden" name="checklistId" value="<%= checklist.id %>">
       <% checklist.items.forEach(function(item) { %>
-        <input type="hidden" name="qty_<%= item.id %>" class="hidden-qty" data-item-id="<%= item.id %>" value="<%= item.quantity_to_bring || '' %>">
+        <input type="hidden" name="qty_<%= item.id %>" class="hid-qty" data-item-id="<%= item.id %>" value="<%= item.quantity_to_bring || '' %>">
       <% }); %>
       <button type="submit" style="width:100%; padding:0.85rem; font-size:0.95rem; font-weight:700; background:linear-gradient(135deg,#8B6914,#A07D1A); color:white; border:none; border-radius:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        <%= isSubmitted ? 'Re-submit Checklist' : 'Submit to Warehouse' %>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        <%= isSubmitted ? 'Re-submit' : 'Submit to Warehouse' %>
       </button>
     </form>
+    <% } %>
 
-    <p style="font-size:0.72rem; color:var(--muted); text-align:center; margin-top:0.6rem;">Tap any value to edit · Changes save automatically</p>
+    <% if (!isEditable && !isSubmitted) { %>
+      <div class="info">⏰ This checklist is locked (past 10am cutoff). New checklist opens at noon.</div>
+    <% } %>
 
   <% } %>
 
   <script>
-    var CHECKLIST_ID = '<%= checklist ? checklist.id : "" %>';
-    var _timer = null;
+    var CL_ID = '<%= checklist ? checklist.id : "" %>';
 
-    function toggleMoreItems() {
-      var panel = document.getElementById('moreItemsPanel');
-      var icon = document.getElementById('addMoreIcon');
-      if (panel.style.display === 'none') { panel.style.display = 'block'; icon.textContent = '−'; }
-      else { panel.style.display = 'none'; icon.textContent = '＋'; }
+    function togglePanel() {
+      var p = document.getElementById('addPanel');
+      var i = document.getElementById('addIcon');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      i.textContent = p.style.display === 'none' ? '＋' : '−';
     }
 
-    // Add multiple selected items at once
-    function addSelectedItems() {
-      var checks = document.querySelectorAll('.add-check:checked');
-      if (checks.length === 0) { alert('Select at least one item'); return; }
-
-      checks.forEach(function(cb) {
-        var itemId = cb.dataset.id;
-        var needed = cb.dataset.needed;
-        var qty = needed === '—' ? '1' : needed;
-        var hidden = document.querySelector('.hidden-qty[data-item-id="' + itemId + '"]');
-        if (hidden) hidden.value = qty;
+    function addSelected() {
+      var cbs = document.querySelectorAll('.add-cb:checked');
+      if (cbs.length === 0) return;
+      cbs.forEach(function(cb) {
+        var h = document.querySelector('.hid-qty[data-item-id="' + cb.dataset.id + '"]');
+        if (h) h.value = cb.dataset.needed === '—' ? '1' : cb.dataset.needed;
       });
-
       doSave(function() { location.reload(); });
     }
 
-    /* ─── Needed edit ─── */
-    function startNeededEdit(span) {
-      var row = span.closest('.cl-row');
-      var inp = row.querySelector('.needed-input');
-      span.style.display = 'none'; inp.style.display = 'block'; inp.focus(); inp.select();
-    }
-    function commitNeededEdit(inp) {
-      var row = inp.closest('.cl-row');
-      var span = row.querySelector('.needed-display');
-      var val = inp.value.trim();
-      span.textContent = val || '—';
-      inp.style.display = 'none'; span.style.display = '';
-      scheduleSave();
+    function saveQty(input) {
+      var id = input.dataset.itemId;
+      var h = document.querySelector('.hid-qty[data-item-id="' + id + '"]');
+      if (h) h.value = input.value.trim();
+      doSave();
     }
 
-    /* ─── Qty (to send) edit ─── */
-    function startQtyEdit(span) {
-      var row = span.closest('.cl-row');
-      var inp = row.querySelector('.qty-input');
-      span.style.display = 'none'; inp.style.display = 'block'; inp.focus(); inp.select();
-    }
-    function commitQtyEdit(inp) {
-      var row = inp.closest('.cl-row');
-      var span = row.querySelector('.qty-display');
-      var val = inp.value.trim();
-      var itemId = inp.dataset.itemId;
-      span.textContent = val || '—';
-      span.style.color = (val && val !== '0') ? 'var(--bun-dark)' : 'var(--muted)';
-      inp.style.display = 'none'; span.style.display = '';
-      // Sync hidden form
-      var hidden = document.querySelector('.hidden-qty[data-item-id="' + itemId + '"]');
-      if (hidden) hidden.value = val;
-      scheduleSave();
-    }
-
-    function handleKey(e, inp, type) {
-      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-      if (e.key === 'Escape') { inp.value = inp.defaultValue; inp.blur(); }
-    }
-
-    function scheduleSave() { clearTimeout(_timer); _timer = setTimeout(function() { doSave(); }, 600); }
-
+    var _t;
     function doSave(cb) {
-      var data = { checklistId: CHECKLIST_ID };
+      clearTimeout(_t);
+      var data = { checklistId: CL_ID };
+      document.querySelectorAll('.hid-qty').forEach(function(h) {
+        data['qty_' + h.dataset.itemId] = h.value;
+      });
+      // Also grab inline inputs
       document.querySelectorAll('.qty-input').forEach(function(inp) {
         data['qty_' + inp.dataset.itemId] = inp.value.trim();
-      });
-      document.querySelectorAll('.needed-input').forEach(function(inp) {
-        data['needed_' + inp.dataset.itemId] = inp.value.trim();
-      });
-      // Also include hidden-only items (inactive ones set via addItem)
-      document.querySelectorAll('.hidden-qty').forEach(function(h) {
-        var key = 'qty_' + h.dataset.itemId;
-        if (!data[key]) data[key] = h.value;
       });
       fetch('/manager/store-checklist/save', {
         method: 'POST',

@@ -24,10 +24,10 @@ async function getRecentInvoicesForManager(managerId) {
     if (storeRes.rows.length === 0) return [];
     const storeId = storeRes.rows[0].store_id;
 
-    // Calculate yesterday, today, tomorrow in Melbourne time
+    // Calculate last 5 days + tomorrow in Melbourne time
     const melbNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
     const dates = [];
-    for (let offset = -1; offset <= 1; offset++) {
+    for (let offset = -4; offset <= 1; offset++) {
       const d = new Date(melbNow);
       d.setDate(d.getDate() + offset);
       dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);

@@ -21,21 +21,16 @@
             var statusBg = ri.status === 'submitted' ? '#e8f5e9' : ri.status === 'new' ? '#e3f2fd' : '#fef3e2';
             var statusColor = ri.status === 'submitted' ? '#2e7d32' : ri.status === 'new' ? '#1565c0' : '#e65100';
 
-            // Relative label: Yesterday / Today / Tomorrow
-            var melbNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
-            var todayStr = melbNow.getFullYear() + '-' + String(melbNow.getMonth()+1).padStart(2,'0') + '-' + String(melbNow.getDate()).padStart(2,'0');
-            var yest = new Date(melbNow); yest.setDate(yest.getDate()-1);
-            var yesterdayStr = yest.getFullYear() + '-' + String(yest.getMonth()+1).padStart(2,'0') + '-' + String(yest.getDate()).padStart(2,'0');
-            var tmrw = new Date(melbNow); tmrw.setDate(tmrw.getDate()+1);
-            var tomorrowStr = tmrw.getFullYear() + '-' + String(tmrw.getMonth()+1).padStart(2,'0') + '-' + String(tmrw.getDate()).padStart(2,'0');
-
-            var dayLabel = dateStr === todayStr ? "Today's Invoice" : dateStr === yesterdayStr ? "Yesterday's Invoice" : dateStr === tomorrowStr ? "Tomorrow's Invoice" : formatDate(dateStr);
+            // Weekday name for context
+            var dParts = dateStr.split('-');
+            var dObj = new Date(Number(dParts[0]), Number(dParts[1]) - 1, Number(dParts[2]));
+            var weekday = dObj.toLocaleDateString('en-AU', { weekday: 'long' });
           %>
           <a href="/manager/received-invoice?date=<%= dateStr %>"
              style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink); box-shadow:var(--shadow);">
             <div>
-              <div style="font-weight:700; font-size:0.95rem;"><%= dayLabel %></div>
-              <div style="font-size:0.72rem; color:var(--muted);"><%= formatDate(dateStr) %></div>
+              <div style="font-weight:700; font-size:0.95rem;"><%= formatDate(dateStr) %></div>
+              <div style="font-size:0.72rem; color:var(--muted);"><%= weekday %></div>
             </div>
             <span style="font-size:0.72rem; padding:0.2rem 0.6rem; background:<%= statusBg %>; color:<%= statusColor %>; border-radius:8px; font-weight:700;"><%= statusLabel %></span>
           </a>

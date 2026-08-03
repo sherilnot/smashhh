@@ -181,12 +181,34 @@ async function saveChecklist(managerId, checklistId, quantities, neededQtys = {}
       );
     }
 
-    for (const [itemId, val] of Object.entries(neededQtys)) {
-      if (val !== undefined) {
-        await client.query(
-          `UPDATE store_checklist_items SET quantity_needed = $1 WHERE id = $2 AND checklist_id = $3`,
+    // Update quantity_needed on the checklist AND cache it on the store template
+    // so future checklists start with the manager's preferred standard quantities.
+    if (Object.keys(neededQtys).length > 0) {
+      const storeIdRes = await client.query(
+        `SELECT store_id FROM store_checklists WHERE id = $1`,
+        [checklistId]
+      );
+      const storeId = storeIdRes.rows[0] ? storeIdRes.rows[0].store_id : null;
+
+      for (const [itemId, val] of Object.entries(neededQtys)) {
+        if (val === undefined) continue;
+
+        const updRes = await client.query(
+          `UPDATE store_checklist_items SET quantity_needed = $1
+           WHERE id = $2 AND checklist_id = $3
+           RETURNING product_name`,
           [val || '', itemId, checklistId]
         );
+
+        // Cache on the template for future checklists
+        if (storeId && updRes.rows.length > 0) {
+          await client.query(
+            `UPDATE store_checklist_templates
+             SET default_quantity = $1
+             WHERE store_id = $2 AND product_name = $3 AND is_active = true`,
+            [val || '0', storeId, updRes.rows[0].product_name]
+          );
+        }
       }
     }
 

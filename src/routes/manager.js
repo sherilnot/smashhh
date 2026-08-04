@@ -1568,7 +1568,16 @@ router.post('/received-invoice/add-item', async (req, res) => {
     if (!result.success) {
       return res.redirect(`/manager/received-invoice?error=${encodeURIComponent(result.error)}`);
     }
-    res.redirect('/manager/received-invoice');
+
+    // Redirect back to the same invoice (need the date)
+    const invRes = await pool.query(`SELECT invoice_date FROM received_invoices WHERE id = $1`, [invoiceId]);
+    const dateStr = invRes.rows[0]
+      ? (typeof invRes.rows[0].invoice_date === 'string'
+          ? invRes.rows[0].invoice_date.substring(0, 10)
+          : new Date(invRes.rows[0].invoice_date).toISOString().substring(0, 10))
+      : 'today';
+
+    res.redirect(`/manager/received-invoice?date=${dateStr}`);
   } catch (e) {
     console.error('[Manager] add invoice item error', e);
     res.redirect(`/manager/received-invoice?error=${encodeURIComponent('Failed to add item')}`);

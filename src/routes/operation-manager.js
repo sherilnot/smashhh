@@ -91,6 +91,81 @@ router.get('/invoices/:id/download', async (req, res) => {
   }
 });
 
+// ─── Bulk invoice downloads by week / month, per store ────────────────────────
+
+const { buildInvoicesCsv } = require('../services/exportService');
+
+// GET /operation-manager/invoices-export?store=Seaford&period=week|month&date=YYYY-MM-DD
+router.get('/invoices-export', async (req, res) => {
+  try {
+    const { store, period } = req.query;
+    const dateParam = req.query.date;
+
+    const base = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+      ? new Date(dateParam + 'T00:00:00')
+      : new Date();
+
+    let startStr, endStr, rangeLabel;
+
+    if (period === 'month') {
+      const y = base.getFullYear(), m = base.getMonth();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      startStr = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+      endStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      rangeLabel = base.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    } else {
+      // Week: Monday → Sunday containing `base`
+      const dow = base.getDay();
+      const offsetToMonday = dow === 0 ? -6 : 1 - dow;
+      const mon = new Date(base); mon.setDate(base.getDate() + offsetToMonday);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      startStr = fmt(mon);
+      endStr = fmt(sun);
+      rangeLabel = `Week ${startStr} to ${endStr}`;
+    }
+
+    // Fetch matching invoices
+    const params = [startStr, endStr];
+    let storeFilter = '';
+    if (store) { params.push(store); storeFilter = ` AND s.name = $3`; }
+
+    const invRes = await pool.query(
+      `SELECT ri.id, ri.invoice_date, ri.notes, s.name AS store_name
+       FROM received_invoices ri
+       JOIN stores s ON s.id = ri.store_id
+       WHERE ri.status = 'submitted'
+         AND ri.invoice_date >= $1 AND ri.invoice_date <= $2
+         ${storeFilter}
+       ORDER BY s.name, ri.invoice_date`,
+      params
+    );
+
+    // Attach items
+    const invoices = [];
+    for (const inv of invRes.rows) {
+      const itemsRes = await pool.query(
+        `SELECT product_name, quantity_ordered, quantity_received, unit_price, is_emergency
+         FROM received_invoice_items WHERE invoice_id = $1 ORDER BY sort_order`,
+        [inv.id]
+      );
+      invoices.push({ ...inv, items: itemsRes.rows });
+    }
+
+    const title = `Invoices — ${store || 'All Stores'} — ${rangeLabel}`;
+    const csv = buildInvoicesCsv(title, invoices);
+    const safeStore = (store || 'all_stores').replace(/\s+/g, '_');
+    const filename = `invoices_${safeStore}_${period === 'month' ? startStr.substring(0, 7) : startStr}.csv`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    console.error('[OperationManager] invoices-export error', e);
+    res.status(500).send('Failed to generate export');
+  }
+});
+
 // Download invoice as CSV (legacy)
 router.get('/invoices/:id/download-csv', async (req, res) => {
   try {

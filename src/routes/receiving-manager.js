@@ -467,6 +467,103 @@ router.get('/received-invoices/:id', async (req, res) => {
 
 module.exports = router;
 
+// ─── Timesheet Downloads (weekly + monthly Excel) ──────────────────────────────
+
+const { buildTimesheetCsv, buildMonthlyTimesheetCsv } = require('../services/exportService');
+
+// Download a single weekly timesheet as Excel/CSV
+router.get('/timesheets/:id/download', async (req, res) => {
+  try {
+    const result = await getTimesheetDetail(req.params.id);
+    if (!result.success) return res.status(404).send('Timesheet not found');
+
+    const ts = result.timesheet;
+
+    // Apply any weekend rate overrides so the export matches the on-screen values
+    const ovRes = await pool.query(
+      `SELECT employee_id, hourly_wage FROM timesheet_wage_overrides WHERE timesheet_id = $1`,
+      [req.params.id]
+    );
+    if (ovRes.rows.length > 0) {
+      const empRes = await pool.query(
+        `SELECT DISTINCT u.id, u.first_name, u.last_name
+         FROM timesheet_entries te JOIN users u ON u.id = te.employee_id
+         WHERE te.timesheet_id = $1`,
+        [req.params.id]
+      );
+      const nameToId = {};
+      empRes.rows.forEach(r => {
+        nameToId[r.last_name ? r.first_name + ' ' + r.last_name : r.first_name] = r.id;
+      });
+      const overrides = {};
+      ovRes.rows.forEach(r => { overrides[r.employee_id] = parseFloat(r.hourly_wage); });
+
+      ts.timesheetRows.forEach(row => {
+        const eid = nameToId[row.name];
+        if (eid && overrides[eid] !== undefined) {
+          row.hasOverride = true;
+          row.overrideRate = overrides[eid];
+        }
+      });
+    }
+
+    const csv = buildTimesheetCsv(ts);
+    const wk = String(ts.week_start).substring(0, 10);
+    const filename = `timesheet_${String(ts.store_name).replace(/\s+/g, '_')}_${wk}.csv`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    console.error('[ReceivingManager] timesheet download error', e);
+    res.status(500).send('Failed to generate download');
+  }
+});
+
+// Download all timesheets for a month as one Excel/CSV
+router.get('/timesheets-monthly/download', async (req, res) => {
+  try {
+    // month param: YYYY-MM (defaults to current month)
+    const monthParam = req.query.month;
+    let year, month;
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      [year, month] = monthParam.split('-').map(Number);
+    } else {
+      const now = new Date();
+      year = now.getFullYear();
+      month = now.getMonth() + 1;
+    }
+
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const listRes = await pool.query(
+      `SELECT t.id FROM timesheets t
+       WHERE t.week_start >= $1 AND t.week_start <= $2
+       ORDER BY t.week_start, t.store_id`,
+      [monthStart, monthEnd]
+    );
+
+    const weeks = [];
+    for (const row of listRes.rows) {
+      const d = await getTimesheetDetail(row.id);
+      if (d.success) weeks.push(d.timesheet);
+    }
+
+    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    const csv = buildMonthlyTimesheetCsv(monthLabel, weeks);
+    const filename = `timesheets_${year}-${String(month).padStart(2, '0')}.csv`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    console.error('[ReceivingManager] monthly timesheet download error', e);
+    res.status(500).send('Failed to generate download');
+  }
+});
+
 // ─── Cash Reports (Payroll receives cash submissions from shop managers) ───────
 
 router.get('/cash', async (req, res) => {

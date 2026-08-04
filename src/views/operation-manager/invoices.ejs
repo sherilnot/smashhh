@@ -22,6 +22,19 @@
             <span id="arrow-<%= storeIdx %>" style="font-size:1.1rem; color:var(--muted); transition:transform 0.2s;">▸</span>
           </div>
 
+          <!-- Per-store exports -->
+          <div style="display:flex; gap:0.4rem; flex-wrap:wrap; padding:0.5rem 1.1rem 0.7rem; border-top:1px solid var(--border); background:#f7f9fc;">
+            <span style="font-size:0.68rem; font-weight:700; color:var(--muted); text-transform:uppercase; align-self:center; margin-right:0.2rem;">Export:</span>
+            <a href="/operation-manager/invoices-export?store=<%= encodeURIComponent(storeName) %>&period=week"
+               style="padding:0.35rem 0.7rem; font-size:0.74rem; font-weight:700; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border-radius:6px; text-decoration:none;">
+              ⬇ This Week
+            </a>
+            <a href="/operation-manager/invoices-export?store=<%= encodeURIComponent(storeName) %>&period=month"
+               style="padding:0.35rem 0.7rem; font-size:0.74rem; font-weight:700; background:linear-gradient(135deg,#1f4e79,#2e75b6); color:#fff; border-radius:6px; text-decoration:none;">
+              ⬇ This Month
+            </a>
+          </div>
+
           <!-- Invoice list (collapsed by default) -->
           <div id="store-<%= storeIdx %>" style="display:none; border-top:1px solid var(--border);">
             <% invoices.forEach(function(inv) { %>

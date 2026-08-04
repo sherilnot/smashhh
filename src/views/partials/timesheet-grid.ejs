@@ -1,0 +1,136 @@
+<%
+  /* Reusable Excel-style timesheet grid.
+     Expects: timesheet { timesheetRows, dayLabels, dayDates, ... }
+     Optional: showCheckboxes (bool), showPay (bool) */
+  var showCb = (typeof showCheckboxes !== 'undefined') ? showCheckboxes : false;
+  var showPay = (typeof showPayColumn !== 'undefined') ? showPayColumn : false;
+  var fullDayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+%>
+
+<style>
+  .ts-grid { width:100%; border-collapse:collapse; font-family:'Aptos','Calibri','Segoe UI',Arial,sans-serif; font-size:0.76rem; margin:0; background:#fff; border:none; box-shadow:none; border-radius:0; min-width:1000px; }
+  .ts-grid th, .ts-grid td { border:1px solid #7f7f7f; padding:0.3rem 0.35rem; text-align:center; vertical-align:middle; }
+  .ts-grid .ts-date-row th { background:#1f4e79; color:#fff; font-weight:700; font-size:0.72rem; border-color:#1f4e79; }
+  .ts-grid .ts-day-row th { background:#2e75b6; color:#fff; font-weight:700; font-style:italic; font-size:0.75rem; border-color:#1f4e79; }
+  .ts-grid .ts-sub-row th { background:#ffc000; color:#1a1a1a; font-weight:700; font-size:0.7rem; border-color:#7f7f7f; }
+  .ts-grid .ts-corner { background:#1f4e79 !important; border-color:#1f4e79 !important; }
+  .ts-grid .ts-emp-head { background:#2e75b6; color:#fff; font-weight:700; font-style:italic; text-decoration:underline; font-size:0.78rem; border-color:#1f4e79; }
+  .ts-grid .ts-tot-head { background:#00b050; color:#fff; font-weight:700; font-size:0.7rem; border-color:#1f4e79; }
+  .ts-grid .ts-tot-sub { background:#fff; color:#1a1a1a; font-weight:700; font-size:0.68rem; text-decoration:underline; }
+  .ts-grid tbody td { background:#fff; font-size:0.76rem; }
+  .ts-grid tbody td.ts-name { text-align:left; font-weight:600; white-space:nowrap; padding-left:0.5rem; }
+  .ts-grid tbody td.ts-sno { width:2.2rem; color:#555; }
+  .ts-grid tbody td.ts-time { min-width:2.9rem; font-variant-numeric:tabular-nums; }
+  .ts-grid tbody td.ts-wknd { background:#fffef5; }
+  .ts-grid tbody td.ts-total { font-weight:700; font-variant-numeric:tabular-nums; background:#f2f7f2; }
+  .ts-grid tfoot td { background:#e8eef5; font-weight:800; font-size:0.78rem; border-color:#1f4e79; }
+  .ts-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #7f7f7f; }
+
+  @media print {
+    .topbar,.sidebar,.sidebar-overlay,.menu-toggle,.ts-actions,.no-print { display:none !important; }
+    .layout { display:block !important; }
+    .content { padding:0 !important; max-width:100% !important; }
+    .ts-wrap { overflow:visible; border:none; }
+    .ts-grid { font-size:0.62rem; min-width:0; width:100%; }
+    .ts-grid th, .ts-grid td { padding:0.15rem 0.2rem; }
+    @page { size: A4 landscape; margin: 10mm; }
+  }
+</style>
+
+<div class="ts-wrap">
+  <table class="ts-grid">
+    <thead>
+      <!-- Row 1: dates -->
+      <tr class="ts-date-row">
+        <% if (showCb) { %><th class="ts-corner" rowspan="3" style="width:1.8rem;"></th><% } %>
+        <th class="ts-corner" rowspan="3" style="width:2.2rem;">S.no</th>
+        <th class="ts-emp-head" rowspan="3" style="min-width:8rem;">Employee name</th>
+        <% timesheet.dayDates.forEach(function(d) { %>
+          <%
+            var dp = String(d).substring(0,10).split('-');
+            var dObj = new Date(Number(dp[0]), Number(dp[1])-1, Number(dp[2]));
+            var dLabel = String(dObj.getDate()).padStart(2,'0') + '-' + dObj.toLocaleDateString('en-AU',{month:'short'});
+          %>
+          <th colspan="2"><%= dLabel %></th>
+        <% }); %>
+        <th class="ts-tot-head" colspan="<%= showPay ? 2 : 1 %>">Total Hours</th>
+        <th class="ts-tot-head" colspan="<%= showPay ? 2 : 1 %>">Total Hours</th>
+      </tr>
+
+      <!-- Row 2: day names -->
+      <tr class="ts-day-row">
+        <% fullDayNames.forEach(function(dn) { %>
+          <th colspan="2"><%= dn %></th>
+        <% }); %>
+        <th class="ts-tot-sub" colspan="<%= showPay ? 2 : 1 %>">Monday to Friday</th>
+        <th class="ts-tot-sub" colspan="<%= showPay ? 2 : 1 %>">Weekends</th>
+      </tr>
+
+      <!-- Row 3: Start / Finish -->
+      <tr class="ts-sub-row">
+        <% for (var i = 0; i < 7; i++) { %>
+          <th>Start</th>
+          <th>Finish</th>
+        <% } %>
+        <th class="ts-tot-sub">Hours</th>
+        <% if (showPay) { %><th class="ts-tot-sub">Pay</th><% } %>
+        <th class="ts-tot-sub">Hours</th>
+        <% if (showPay) { %><th class="ts-tot-sub">Pay</th><% } %>
+      </tr>
+    </thead>
+
+    <tbody>
+      <%
+        var gTotWeekday = 0, gTotWeekend = 0, gTotWeekdayPay = 0, gTotWeekendPay = 0;
+      %>
+      <% timesheet.timesheetRows.forEach(function(row, rIdx) { %>
+        <%
+          var rate = parseFloat(row.hourly_wage || 0);
+          var wkndRate = row.hasOverride ? row.overrideRate : rate;
+          var wdPay = row.weekdayHours * rate;
+          var wePay = row.weekendHours * wkndRate;
+          gTotWeekday += row.weekdayHours;
+          gTotWeekend += row.weekendHours;
+          gTotWeekdayPay += wdPay;
+          gTotWeekendPay += wePay;
+        %>
+        <tr>
+          <% if (showCb) { %>
+            <td style="padding:0.2rem;">
+              <input type="checkbox" class="emp-cb" data-name="<%= row.name %>" onchange="if(typeof updateCount==='function')updateCount()" style="width:14px;height:14px;">
+            </td>
+          <% } %>
+          <td class="ts-sno"><%= rIdx + 1 %></td>
+          <td class="ts-name"><%= row.name %></td>
+
+          <% row.byDay.forEach(function(cell, dIdx) { %>
+            <% var wkCls = dIdx >= 5 ? ' ts-wknd' : ''; %>
+            <td class="ts-time<%= wkCls %>"><%= cell ? cell.startLabel : '' %></td>
+            <td class="ts-time<%= wkCls %>"><%= cell ? cell.endLabel : '' %></td>
+          <% }); %>
+
+          <td class="ts-total"><%= row.weekdayHours > 0 ? row.weekdayHours.toFixed(2) : '' %></td>
+          <% if (showPay) { %>
+            <td class="ts-total"><%= wdPay > 0 ? wdPay.toFixed(2) : '' %></td>
+          <% } %>
+          <td class="ts-total"><%= row.weekendHours > 0 ? row.weekendHours.toFixed(2) : '' %></td>
+          <% if (showPay) { %>
+            <td class="ts-total"><%= wePay > 0 ? wePay.toFixed(2) : '' %></td>
+          <% } %>
+        </tr>
+      <% }); %>
+    </tbody>
+
+    <tfoot>
+      <tr>
+        <% if (showCb) { %><td></td><% } %>
+        <td colspan="2" style="text-align:right; padding-right:0.5rem;">TOTAL</td>
+        <td colspan="14"></td>
+        <td><%= gTotWeekday.toFixed(2) %></td>
+        <% if (showPay) { %><td>$<%= gTotWeekdayPay.toFixed(2) %></td><% } %>
+        <td><%= gTotWeekend.toFixed(2) %></td>
+        <% if (showPay) { %><td>$<%= gTotWeekendPay.toFixed(2) %></td><% } %>
+      </tr>
+    </tfoot>
+  </table>
+</div>

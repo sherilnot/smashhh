@@ -8,94 +8,48 @@
   <% if (timesheet) { %>
 
     <!-- Week info -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.6rem 0.75rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-      <strong style="font-size: 0.9rem; color: var(--bun-dark);"><%= timesheet.store_name %></strong>
-      <span style="font-size: 0.85rem; color: var(--muted);"><%= formatDate(timesheet.week_start) %> — <%= formatDate(timesheet.week_end) %></span>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; padding:0.6rem 0.85rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px; flex-wrap:wrap; gap:0.5rem;">
+      <div>
+        <strong style="font-size:0.95rem; color:var(--bun-dark);"><%= timesheet.store_name %></strong>
+        <div style="font-size:0.78rem; color:var(--muted);"><%= formatDate(timesheet.week_start) %> — <%= formatDate(timesheet.week_end) %></div>
+      </div>
+      <span style="font-size:0.7rem; padding:0.2rem 0.55rem; background:<%= timesheet.status === 'confirmed' ? '#e8f5e9' : '#fff3e0' %>; color:<%= timesheet.status === 'confirmed' ? '#2e7d32' : '#e65100' %>; border-radius:8px; font-weight:700;">
+        <%= timesheet.status === 'confirmed' ? '✓ CONFIRMED' : 'SUBMITTED' %>
+      </span>
     </div>
 
     <% if (timesheet.timesheetRows && timesheet.timesheetRows.length > 0) { %>
 
-      <!-- Weekend Multiplier Controls -->
-      <div style="margin-bottom: 0.75rem; padding: 0.6rem 0.75rem; background: linear-gradient(135deg, #fef3e2, #fdefd8); border-radius: 10px; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-        <input type="checkbox" id="selectAllCb" onchange="toggleAll()" style="width: 16px; height: 16px; accent-color: var(--charcoal);">
-        <span style="font-size: 0.8rem; font-weight: 600;">Weekend rate:</span>
-        <button type="button" onclick="applyWeekendRate(1.5)" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: #2e7d32; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">1.5x</button>
-        <button type="button" onclick="applyWeekendRate(2.0)" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: #1565c0; color: white; border: none; border-radius: 6px; font-weight: 700; cursor: pointer;">2.0x</button>
-        <button type="button" onclick="resetAll()" style="padding: 0.3rem 0.7rem; font-size: 0.75rem; background: white; color: #666; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">Reset</button>
-        <span id="selectedCount" style="font-size: 0.7rem; color: var(--muted); margin-left: auto;">0</span>
+      <!-- Actions -->
+      <div class="ts-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.85rem;">
+        <a href="/receiving-manager/timesheets/<%= timesheet.id %>/download"
+           style="padding:0.6rem 1rem; font-size:0.84rem; font-weight:700; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border-radius:9px; text-decoration:none;">
+          ⬇ Download Excel
+        </a>
+        <button onclick="window.print()"
+                style="padding:0.6rem 1rem; font-size:0.84rem; font-weight:700; background:linear-gradient(135deg,#1f4e79,#2e75b6); color:#fff; border:none; border-radius:9px; cursor:pointer;">
+          🖨 Print
+        </button>
       </div>
 
-      <!-- Table (same layout as manager timesheet) -->
-      <div style="overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 10px;">
-        <table style="width: 100%; min-width: 700px; margin: 0; border: none; box-shadow: none;">
-          <thead>
-            <tr>
-              <th style="width: 30px; position: sticky; left: 0; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 2;"></th>
-              <th style="position: sticky; left: 30px; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 2; min-width: 80px; font-size: 0.65rem;">EMPLOYEE</th>
-              <% timesheet.dayLabels.forEach(function(label, i) { %>
-                <th style="text-align: center; font-size: 0.65rem; padding: 0.5rem 0.3rem; <%= i >= 5 ? 'background: rgba(244,163,0,0.08);' : '' %>">
-                  <div><%= label %></div>
-                  <div style="font-weight: 400; color: var(--muted);"><%= formatDateShort(timesheet.dayDates[i]) %></div>
-                </th>
-              <% }) %>
-              <th style="text-align: right; font-size: 0.65rem; min-width: 45px;">HRS</th>
-              <th style="text-align: right; font-size: 0.65rem; min-width: 50px;">PAY</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% timesheet.timesheetRows.forEach(function(row) { %>
-              <tr>
-                <td style="position: sticky; left: 0; background: var(--warm-white); z-index: 1; padding: 0.3rem;">
-                  <input type="checkbox" class="emp-cb" data-name="<%= row.name %>" onchange="updateCount()" style="width: 15px; height: 15px; accent-color: var(--charcoal);">
-                </td>
-                <td style="position: sticky; left: 30px; background: var(--warm-white); z-index: 1; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border);">
-                  <div style="font-weight: 700; font-size: 0.75rem; white-space: nowrap;"><%= row.name %></div>
-                  <div style="font-size: 0.6rem; color: var(--muted);">
-                    $<%= parseFloat(row.hourly_wage || 0).toFixed(0) %>/h
-                    <% if (row.hasOverride) { %>
-                      <span style="color: #d32f2f;">→ $<%= row.overrideRate.toFixed(0) %> wknd</span>
-                    <% } %>
-                  </div>
-                </td>
-                <% row.byDay.forEach(function(cell, i) { %>
-                  <td style="text-align: center; padding: 0.25rem; vertical-align: top; border-bottom: 1px solid var(--border); <%= i >= 5 ? 'background: rgba(244,163,0,0.04);' : '' %>">
-                    <% if (cell) { %>
-                      <div style="padding: 0.2rem; border-radius: 5px; background: <%= cell.color %>; font-size: 0.7rem; border: 1px solid rgba(0,0,0,0.05);">
-                        <div style="font-weight: 600; color: #333;"><%= cell.startLabel %></div>
-                        <div style="color: #555;"><%= cell.endLabel %></div>
-                        <div style="font-weight: 700; color: var(--green); margin-top: 0.1rem;"><%= cell.hours_worked.toFixed(1) %>h</div>
-                      </div>
-                    <% } else { %>
-                      <span style="color: var(--muted); font-size: 0.7rem;">—</span>
-                    <% } %>
-                  </td>
-                <% }); %>
-                <td style="text-align: right; padding: 0.3rem 0.4rem; font-weight: 800; font-size: 0.85rem; border-bottom: 1px solid var(--border);">
-                  <%= row.totalHours.toFixed(1) %>
-                </td>
-                <td style="text-align: right; padding: 0.3rem 0.4rem; font-weight: 800; font-size: 0.85rem; color: var(--green); border-bottom: 1px solid var(--border);">
-                  $<%= row.totalEarned.toFixed(0) %>
-                </td>
-              </tr>
-            <% }); %>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td></td>
-              <td style="position: sticky; left: 30px; background: linear-gradient(135deg, #fef3e2, #fdefd8); z-index: 1; font-weight: 700; font-size: 0.7rem; padding: 0.5rem;">TOTAL (<%= timesheet.employee_count %>)</td>
-              <% timesheet.dayLabels.forEach(function() { %><td></td><% }) %>
-              <td style="text-align: right; font-weight: 800; font-size: 0.9rem; padding: 0.4rem;"><%= parseFloat(timesheet.total_hours).toFixed(1) %>h</td>
-              <td style="text-align: right; font-weight: 800; font-size: 0.9rem; padding: 0.4rem; color: var(--green);">$<%= parseFloat(timesheet.total_wages || 0).toFixed(0) %></td>
-            </tr>
-          </tfoot>
-        </table>
+      <!-- Weekend Multiplier Controls -->
+      <div class="ts-actions" style="margin-bottom:0.75rem; padding:0.6rem 0.75rem; background:linear-gradient(135deg,#fef3e2,#fdefd8); border-radius:10px; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <input type="checkbox" id="selectAllCb" onchange="toggleAll()" style="width:16px; height:16px; accent-color:var(--charcoal);">
+        <span style="font-size:0.8rem; font-weight:600;">Weekend rate:</span>
+        <button type="button" onclick="applyWeekendRate(1.5)" style="padding:0.3rem 0.7rem; font-size:0.75rem; background:#2e7d32; color:white; border:none; border-radius:6px; font-weight:700; cursor:pointer;">1.5x</button>
+        <button type="button" onclick="applyWeekendRate(2.0)" style="padding:0.3rem 0.7rem; font-size:0.75rem; background:#1565c0; color:white; border:none; border-radius:6px; font-weight:700; cursor:pointer;">2.0x</button>
+        <button type="button" onclick="resetAll()" style="padding:0.3rem 0.7rem; font-size:0.75rem; background:white; color:#666; border:1px solid var(--border); border-radius:6px; cursor:pointer;">Reset</button>
+        <span id="selectedCount" style="font-size:0.7rem; color:var(--muted); margin-left:auto;">0 selected</span>
       </div>
+
+      <!-- Excel-style grid -->
+      <%- include('../partials/timesheet-grid', { timesheet: timesheet, showCheckboxes: true, showPayColumn: true }) %>
 
     <% } else { %>
       <div class="empty">No shifts in this timesheet.</div>
     <% } %>
 
-    <p style="margin-top: 1rem;"><a href="/receiving-manager/timesheets" style="color: var(--lettuce-dark); font-weight: 700; font-size: 0.85rem;">← All Timesheets</a></p>
+    <p style="margin-top:1rem;" class="no-print"><a href="/receiving-manager/timesheets" style="color:var(--lettuce-dark); font-weight:700; font-size:0.85rem;">← All Timesheets</a></p>
   <% } %>
 
   <script>
@@ -103,7 +57,8 @@
 
     function updateCount() {
       var count = document.querySelectorAll('.emp-cb:checked').length;
-      document.getElementById('selectedCount').textContent = count + ' selected';
+      var el = document.getElementById('selectedCount');
+      if (el) el.textContent = count + ' selected';
     }
 
     function toggleAll() {

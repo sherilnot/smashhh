@@ -4,6 +4,17 @@
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
+  <!-- Monthly export -->
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; padding:0.7rem 0.9rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px;">
+    <span style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Monthly Export</span>
+    <input type="month" id="monthPick" value="<%= new Date().toISOString().substring(0,7) %>"
+           style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:7px; font-size:0.82rem;">
+    <button type="button" onclick="downloadMonth()"
+            style="padding:0.45rem 0.9rem; font-size:0.8rem; font-weight:700; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border:none; border-radius:7px; cursor:pointer;">
+      ⬇ Download Month
+    </button>
+  </div>
+
   <% if (timesheets.length === 0 && !error) { %>
     <div class="empty">No timesheets submitted yet.</div>
   <% } else if (timesheets.length > 0) { %>
@@ -24,6 +35,9 @@
           <% } else { %>
             <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fef3e2; color: var(--bun-dark); border-radius: 6px; font-weight: 600; flex-shrink: 0;">DRAFT</span>
           <% } %>
+          <span onclick="event.preventDefault(); event.stopPropagation(); window.location='/receiving-manager/timesheets/<%= ts.id %>/download';"
+                title="Download this week as Excel"
+                style="font-size:0.68rem; padding:0.25rem 0.5rem; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border-radius:6px; font-weight:700; flex-shrink:0; cursor:pointer;">⬇</span>
           <span style="color: var(--muted); font-size: 1rem;">›</span>
         </a>
       <% }) %>
@@ -41,5 +55,13 @@
       </div>
     <% } %>
   <% } %>
+
+  <script>
+    function downloadMonth() {
+      var m = document.getElementById('monthPick').value;
+      if (!m) { alert('Pick a month first'); return; }
+      window.location = '/receiving-manager/timesheets-monthly/download?month=' + m;
+    }
+  </script>
 
 <%- include('../partials/footer') %>

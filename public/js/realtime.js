@@ -13,6 +13,20 @@
  * user-visible behaviour is the same either way.
  */
 (function () {
+  if (!window.EventSource) return; // Very old browser — silently skip.
+
+  /** Temporary debug badge — remove once realtime is confirmed working on iOS. */
+  function showDebug(msg) {
+    var el = document.getElementById('rt-debug');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'rt-debug';
+      el.style.cssText = 'position:fixed;top:4px;right:4px;background:rgba(0,0,0,0.8);color:#0f0;font-size:10px;padding:3px 7px;border-radius:4px;z-index:99999;font-family:monospace;pointer-events:none;max-width:200px;word-break:break-all;';
+      document.body.appendChild(el);
+    }
+    el.textContent = 'RT: ' + msg;
+  }
+
   var POLL_MS = 12000;           // How often to poll when SSE isn't usable.
   var SSE_PROVE_MS = 6000;       // Stream must say hello within this window.
   var RECONNECT_BASE_MS = 2000;
@@ -40,7 +54,12 @@
   }
 
   var topics = topicsForPage();
-  if (topics.length === 0) return; // This page doesn't want live updates.
+  if (topics.length === 0) {
+    showDebug('no topics — inactive');
+    return; // This page doesn't want live updates.
+  }
+
+  showDebug('topics: ' + topics.join(', '));
 
   function showToast(message) {
     var existing = document.getElementById('rt-toast');
@@ -161,6 +180,7 @@
     source.addEventListener('ready', function () {
       clearTimeout(proveTimer);
       reconnectDelay = RECONNECT_BASE_MS;
+      showDebug('SSE connected ✓');
     });
 
     source.addEventListener('update', function (e) {
@@ -197,6 +217,7 @@
     if (usingPolling) return;
     usingPolling = true;
     teardownSse();
+    showDebug('polling mode');
 
     clearInterval(pollTimer);
     pollTimer = setInterval(pollOnce, POLL_MS);
@@ -220,6 +241,7 @@
   /* ── Lifecycle ──────────────────────────────────────────────────── */
 
   function start() {
+    showDebug('connecting...');
     if (window.EventSource) startSse();
     else startPolling();
   }

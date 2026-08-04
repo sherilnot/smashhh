@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getAvailableShifts, bookShift, cancelShift, getEmployeeShifts } = require('../services/shiftService');
-const { getEmployeeWageEntries, totalWage } = require('../services/wageService');
+
 const { savePushSubscription, removePushSubscription, getNotificationData } = require('../services/notificationService');
 const { getVapidPublicKey, saveWebPushSubscription, removeWebPushSubscription, sendPushNotification } = require('../services/webPushService');
 const { hasSubmittedThisWeek, recordSubmission, getSubmissionStatus } = require('../services/weeklySubmissionService');
@@ -13,25 +13,35 @@ router.use(requireAuth, roleGuard('employee'));
 // Dashboard - shows the employee's own completed-shift wage entries and total
 router.get('/dashboard', async (req, res) => {
   try {
-    const { entries } = await getEmployeeWageEntries(req.user.userId);
-    const total = totalWage(entries);
-
     const { pool } = require('../config/database');
 
-    // Fetch current shift (happening right now)
+    // Current shift happening right now (live view)
     const currentRes = await pool.query(
-      `SELECT s.start_time, s.end_time, s.store_location
+      `SELECT s.start_time, s.end_time, s.store_location, sb.actual_clock_in
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        WHERE sb.employee_id = $1
-         AND sb.booking_status = 'confirmed'
+         AND sb.booking_status IN ('confirmed', 'completed')
          AND s.start_time <= NOW()
          AND s.end_time >= NOW()
        LIMIT 1`,
       [req.user.userId]
     );
 
-    // Fetch upcoming confirmed shifts
+    // Next shift (for the countdown when not currently on shift)
+    const nextRes = await pool.query(
+      `SELECT s.start_time, s.end_time, s.store_location
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       WHERE sb.employee_id = $1
+         AND sb.booking_status = 'confirmed'
+         AND s.start_time > NOW()
+       ORDER BY s.start_time ASC
+       LIMIT 1`,
+      [req.user.userId]
+    );
+
+    // Upcoming confirmed shifts
     const upcomingRes = await pool.query(
       `SELECT s.start_time, s.end_time, s.store_location
        FROM shift_bookings sb
@@ -44,15 +54,42 @@ router.get('/dashboard', async (req, res) => {
       [req.user.userId]
     );
 
+    // Hours + shift count for the current week (no wages shown)
+    const statsRes = await pool.query(
+      `SELECT COUNT(*) AS shift_count,
+              COALESCE(SUM(
+                EXTRACT(EPOCH FROM (
+                  CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time
+                       THEN sb.completed_at ELSE s.end_time END - s.start_time
+                )) / 3600
+              ), 0) AS total_hours
+       FROM shift_bookings sb
+       JOIN shifts s ON s.id = sb.shift_id
+       WHERE sb.employee_id = $1
+         AND sb.booking_status = 'completed'
+         AND s.start_time >= date_trunc('week', NOW())`,
+      [req.user.userId]
+    );
+
     res.render('employee/dashboard', {
       user: req.user,
-      wageEntries: entries,
-      wageTotal: total,
       currentShift: currentRes.rows[0] || null,
-      upcomingShifts: upcomingRes.rows
+      nextShift: nextRes.rows[0] || null,
+      upcomingShifts: upcomingRes.rows,
+      weekStats: {
+        shiftCount: parseInt(statsRes.rows[0].shift_count, 10) || 0,
+        totalHours: Math.round((parseFloat(statsRes.rows[0].total_hours) || 0) * 10) / 10
+      }
     });
   } catch (e) {
-    res.render('employee/dashboard', { user: req.user, wageEntries: [], wageTotal: 0, currentShift: null, upcomingShifts: [] });
+    console.error('[Employee] dashboard error', e);
+    res.render('employee/dashboard', {
+      user: req.user,
+      currentShift: null,
+      nextShift: null,
+      upcomingShifts: [],
+      weekStats: { shiftCount: 0, totalHours: 0 }
+    });
   }
 });
 

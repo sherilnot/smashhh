@@ -325,27 +325,27 @@ router.get('/cash/:id', async (req, res) => {
 
 // ─── Maintenance Reports ──────────────────────────────────────────────────────
 
-// List all maintenance reports from shop managers
+// List all maintenance reports from shop managers — grouped by store
 router.get('/maintenance', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const { submissions, total } = await getAllMaintenanceReports(page, 50);
-    const totalPages = Math.ceil(total / 50);
+    const { submissions, total } = await getAllMaintenanceReports(1, 200);
+
+    const byStore = {};
+    submissions.forEach(r => {
+      if (!byStore[r.store_name]) byStore[r.store_name] = [];
+      byStore[r.store_name].push(r);
+    });
 
     res.render('operation-manager/maintenance', {
       user: req.user,
-      reports: submissions,
-      page,
-      totalPages,
+      byStore,
       total
     });
   } catch (e) {
     console.error('[OperationManager] maintenance list error', e);
     res.render('operation-manager/maintenance', {
       user: req.user,
-      reports: [],
-      page: 1,
-      totalPages: 0,
+      byStore: {},
       total: 0
     });
   }

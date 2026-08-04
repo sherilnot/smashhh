@@ -3,71 +3,103 @@
   <h1>Dashboard</h1>
 
   <%
-    var entries = (typeof wageEntries !== 'undefined' && wageEntries) ? wageEntries : [];
-    var total = Number(typeof wageTotal !== 'undefined' ? wageTotal : 0);
-    var totalHours = entries.reduce(function(sum, e) { return sum + (e.hoursWorked || 0); }, 0);
+    var current = (typeof currentShift !== 'undefined') ? currentShift : null;
+    var next = (typeof nextShift !== 'undefined') ? nextShift : null;
+    var stats = (typeof weekStats !== 'undefined') ? weekStats : { shiftCount: 0, totalHours: 0 };
+    var upcoming = (typeof upcomingShifts !== 'undefined' && upcomingShifts) ? upcomingShifts : [];
   %>
 
-  <!-- Stats Cards -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
-    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
-      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Total Earned</div>
-      <div style="font-size: 1.5rem; font-weight: 800; color: #f4a300;">$<%= total.toFixed(2) %></div>
+  <style>
+    @keyframes livePulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.35; transform:scale(0.85); } }
+    .live-dot { display:inline-block; width:9px; height:9px; background:#4caf50; border-radius:50%; animation:livePulse 1.4s infinite; }
+    .live-card { background:linear-gradient(135deg,#12241a,#1e3a28); border-radius:16px; padding:1.2rem 1.3rem; color:#fff; margin-bottom:1.25rem; box-shadow:0 6px 24px rgba(18,36,26,0.25); }
+    .live-timer { font-size:2.4rem; font-weight:800; color:#69f0ae; font-variant-numeric:tabular-nums; letter-spacing:1px; line-height:1.1; }
+    .live-bar-track { height:7px; background:rgba(255,255,255,0.15); border-radius:99px; overflow:hidden; margin-top:0.85rem; }
+    .live-bar-fill { height:100%; background:linear-gradient(90deg,#69f0ae,#00c853); border-radius:99px; transition:width 1s linear; }
+    .off-card { background:linear-gradient(135deg,#1a1a1a,#2a1507); border-radius:16px; padding:1.2rem 1.3rem; color:#fff; margin-bottom:1.25rem; }
+    .countdown { font-size:1.6rem; font-weight:800; color:#f4a300; font-variant-numeric:tabular-nums; }
+  </style>
+
+  <!-- ═══ LIVE SHIFT VIEW ═══ -->
+  <% if (current) { %>
+    <div class="live-card"
+         data-start="<%= new Date(current.start_time).toISOString() %>"
+         data-end="<%= new Date(current.end_time).toISOString() %>"
+         id="liveShift">
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+        <span class="live-dot"></span>
+        <span style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; color:#69f0ae; font-weight:800;">On Shift Now</span>
+        <span style="margin-left:auto; font-size:0.75rem; color:rgba(255,255,255,0.55);"><%= current.store_location %></span>
+      </div>
+
+      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.6px; color:rgba(255,255,255,0.5);">Time elapsed</div>
+      <div class="live-timer" id="liveElapsed">--:--:--</div>
+
+      <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:rgba(255,255,255,0.7); margin-top:0.65rem;">
+        <span><%= new Date(current.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></span>
+        <span id="liveRemaining" style="font-weight:700; color:#f4a300;">—</span>
+        <span><%= new Date(current.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></span>
+      </div>
+
+      <div class="live-bar-track"><div class="live-bar-fill" id="liveBar" style="width:0%;"></div></div>
     </div>
-    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
-      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Hours Worked</div>
-      <div style="font-size: 1.5rem; font-weight: 800; color: #4fc3f7;"><%= totalHours.toFixed(1) %>h</div>
+
+  <% } else if (next) { %>
+    <div class="off-card" id="nextShift" data-start="<%= new Date(next.start_time).toISOString() %>">
+      <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.5); font-weight:700; margin-bottom:0.45rem;">Next Shift</div>
+      <div style="font-size:1.05rem; font-weight:700; color:#fff;">
+        <%= new Date(next.start_time).toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'short' }) %>
+      </div>
+      <div style="font-size:0.85rem; color:rgba(255,255,255,0.6); margin-bottom:0.7rem;">
+        <%= new Date(next.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(next.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> · <%= next.store_location %>
+      </div>
+      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.6px; color:rgba(255,255,255,0.5);">Starts in</div>
+      <div class="countdown" id="nextCountdown">—</div>
     </div>
-    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1.1rem; color: white;">
-      <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">Shifts Done</div>
-      <div style="font-size: 1.5rem; font-weight: 800; color: #81c784;"><%= entries.length %></div>
+
+  <% } else { %>
+    <div class="off-card">
+      <div style="font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.5); font-weight:700;">Status</div>
+      <div style="font-size:1.15rem; font-weight:700; color:#fff; margin-top:0.25rem;">No shift scheduled</div>
+      <a href="/employee/shifts" style="display:inline-block; margin-top:0.8rem; padding:0.5rem 1rem; font-size:0.82rem; font-weight:700; background:#f4a300; color:#1a1400; border-radius:9px; text-decoration:none;">Book Shifts →</a>
+    </div>
+  <% } %>
+
+  <!-- ═══ This week stats (no wages) ═══ -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.75rem; margin-bottom:1.5rem;">
+    <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:14px; padding:1rem 1.1rem;">
+      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Hours This Week</div>
+      <div style="font-size:1.5rem; font-weight:800; color:var(--bun-dark); margin-top:0.15rem;"><%= stats.totalHours.toFixed(1) %>h</div>
+    </div>
+    <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:14px; padding:1rem 1.1rem;">
+      <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700;">Shifts This Week</div>
+      <div style="font-size:1.5rem; font-weight:800; color:var(--bun-dark); margin-top:0.15rem;"><%= stats.shiftCount %></div>
     </div>
   </div>
 
-  <!-- Current Shift -->
-  <%
-    var current = (typeof currentShift !== 'undefined') ? currentShift : null;
-  %>
-  <% if (current) { %>
-    <div style="background: linear-gradient(135deg, #1a1a1a, #2a1507); border-radius: 14px; padding: 1rem; margin-bottom: 1.25rem; color: white;">
-      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
-        <span style="display: inline-block; width: 8px; height: 8px; background: #4caf50; border-radius: 50%; animation: pulse 1.5s infinite;"></span>
-        <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: #4caf50; font-weight: 700;">On Shift Now</span>
-      </div>
-      <div style="font-size: 1.2rem; font-weight: 800; color: #f4a300;">
-        <%= new Date(current.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(current.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
-      </div>
-      <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-top: 0.2rem;"><%= current.store_location %></div>
-    </div>
-    <style>@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }</style>
-  <% } %>
-
-  <!-- Upcoming Shifts Banner -->
-  <%
-    var upcoming = (typeof upcomingShifts !== 'undefined' && upcomingShifts) ? upcomingShifts : [];
-  %>
+  <!-- Upcoming Shifts -->
   <% if (upcoming.length > 0) { %>
-    <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border: 1px solid rgba(45,156,90,0.2); border-radius: 14px; padding: 1rem; margin-bottom: 1.5rem;">
-      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
-        <span style="font-size: 1.1rem;">✅</span>
-        <strong style="font-size: 0.9rem; color: #1b5e20;">Upcoming Confirmed Shifts</strong>
+    <div style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border:1px solid rgba(45,156,90,0.2); border-radius:14px; padding:1rem; margin-bottom:1.5rem;">
+      <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.6rem;">
+        <span style="font-size:1.1rem;">✅</span>
+        <strong style="font-size:0.9rem; color:#1b5e20;">Upcoming Confirmed Shifts</strong>
       </div>
-      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+      <div style="display:flex; flex-direction:column; gap:0.4rem;">
         <% upcoming.forEach(function(s) { %>
           <%
             var d = new Date(s.start_time);
             var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
           %>
-          <div style="display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.7); border-radius: 8px;">
-            <div style="min-width: 40px; text-align: center;">
-              <div style="font-weight: 800; font-size: 1rem; color: #2e7d32; line-height: 1.1;"><%= d.getDate() %></div>
-              <div style="font-size: 0.65rem; color: #388e3c;"><%= dayNames[d.getDay()] %></div>
+          <div style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem; background:rgba(255,255,255,0.7); border-radius:8px;">
+            <div style="min-width:40px; text-align:center;">
+              <div style="font-weight:800; font-size:1rem; color:#2e7d32; line-height:1.1;"><%= d.getDate() %></div>
+              <div style="font-size:0.65rem; color:#388e3c;"><%= dayNames[d.getDay()] %></div>
             </div>
-            <div style="flex: 1;">
-              <div style="font-weight: 600; font-size: 0.88rem; color: #1b5e20;">
+            <div style="flex:1;">
+              <div style="font-weight:600; font-size:0.88rem; color:#1b5e20;">
                 <%= new Date(s.start_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %> – <%= new Date(s.end_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %>
               </div>
-              <div style="font-size: 0.75rem; color: #388e3c;"><%= s.store_location %></div>
+              <div style="font-size:0.75rem; color:#388e3c;"><%= s.store_location %></div>
             </div>
           </div>
         <% }); %>
@@ -76,50 +108,90 @@
   <% } %>
 
   <!-- Quick Actions -->
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1.5rem;">
-    <a href="/employee/shifts" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
-      <span style="font-size: 1.3rem;">📅</span>
-      <span style="font-weight: 600; font-size: 0.85rem;">Book Shifts</span>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:1.5rem;">
+    <a href="/employee/shifts" style="display:flex; align-items:center; gap:0.6rem; padding:0.85rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink);">
+      <span style="font-size:1.3rem;">📅</span>
+      <span style="font-weight:600; font-size:0.85rem;">Book Shifts</span>
     </a>
-    <a href="/employee/my-roster" style="display: flex; align-items: center; gap: 0.6rem; padding: 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink);">
-      <span style="font-size: 1.3rem;">📋</span>
-      <span style="font-weight: 600; font-size: 0.85rem;">My Roster</span>
+    <a href="/employee/my-roster" style="display:flex; align-items:center; gap:0.6rem; padding:0.85rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink);">
+      <span style="font-size:1.3rem;">📋</span>
+      <span style="font-weight:600; font-size:0.85rem;">My Roster</span>
     </a>
   </div>
 
-  <!-- Wage History -->
-  <h2 style="font-size: 1rem; color: var(--muted); margin-bottom: 0.5rem;">Recent Wages</h2>
-  <% if (entries.length === 0) { %>
-    <div class="empty">No wage entries yet. Complete shifts to see earnings.</div>
-  <% } else { %>
-    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-      <% entries.slice(-10).reverse().forEach(function(entry) { %>
-        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.85rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 10px;">
-          <div style="flex: 1;">
-            <div style="font-weight: 600; font-size: 0.9rem;"><%= formatDate(entry.date) %></div>
-            <div style="font-size: 0.75rem; color: var(--muted);"><%= entry.hoursWorked %>h worked</div>
-          </div>
-          <strong style="color: var(--green); font-size: 0.95rem;">$<%= Number(entry.wageEarned).toFixed(2) %></strong>
-        </div>
-      <% }); %>
-    </div>
-  <% } %>
-
   <!-- Notification Settings -->
-  <div style="margin-top: 1.5rem; padding: 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px;">
-    <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem;">
-      <span style="font-size: 1.2rem;">🔔</span>
-      <strong style="font-size: 0.9rem;">Push Notifications</strong>
+  <div style="padding:1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px;">
+    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem;">
+      <span style="font-size:1.2rem;">🔔</span>
+      <strong style="font-size:0.9rem;">Push Notifications</strong>
     </div>
-    <div id="notification-status" style="font-size: 0.85rem; color: var(--muted); margin-bottom: 0.5rem;">
+    <div id="notification-status" style="font-size:0.85rem; color:var(--muted); margin-bottom:0.5rem;">
       <span id="status-text">Checking...</span>
     </div>
-    <button id="toggle-notifications" style="padding: 0.4rem 1rem; font-size: 0.8rem; background: #667eea; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+    <button id="toggle-notifications" style="padding:0.4rem 1rem; font-size:0.8rem; background:#667eea; color:white; border:none; border-radius:8px; font-weight:600; cursor:pointer;">
       Enable
     </button>
   </div>
 
   <script>
+    /* ── Live shift ticker ── */
+    (function() {
+      var card = document.getElementById('liveShift');
+      if (!card) return;
+      var start = new Date(card.dataset.start).getTime();
+      var end = new Date(card.dataset.end).getTime();
+      var elapsedEl = document.getElementById('liveElapsed');
+      var remainEl = document.getElementById('liveRemaining');
+      var barEl = document.getElementById('liveBar');
+
+      function pad(n) { return String(n).padStart(2, '0'); }
+
+      function tick() {
+        var now = Date.now();
+        var elapsed = Math.max(0, now - start);
+        var totalMs = Math.max(1, end - start);
+        var remaining = Math.max(0, end - now);
+
+        var h = Math.floor(elapsed / 3600000);
+        var m = Math.floor((elapsed % 3600000) / 60000);
+        var s = Math.floor((elapsed % 60000) / 1000);
+        elapsedEl.textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+
+        var rh = Math.floor(remaining / 3600000);
+        var rm = Math.floor((remaining % 3600000) / 60000);
+        remainEl.textContent = remaining <= 0
+          ? 'Shift ended'
+          : rh + 'h ' + pad(rm) + 'm left';
+
+        var pct = Math.min(100, (elapsed / totalMs) * 100);
+        barEl.style.width = pct.toFixed(2) + '%';
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    })();
+
+    /* ── Next shift countdown ── */
+    (function() {
+      var card = document.getElementById('nextShift');
+      if (!card) return;
+      var start = new Date(card.dataset.start).getTime();
+      var el = document.getElementById('nextCountdown');
+
+      function tick() {
+        var diff = Math.max(0, start - Date.now());
+        var d = Math.floor(diff / 86400000);
+        var h = Math.floor((diff % 86400000) / 3600000);
+        var m = Math.floor((diff % 3600000) / 60000);
+        if (diff <= 0) { el.textContent = 'Starting now'; return; }
+        el.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2, '0') + 'm';
+      }
+
+      tick();
+      setInterval(tick, 30000);
+    })();
+
+    /* ── Notifications ── */
     async function updateNotificationStatus() {
       var statusText = document.getElementById('status-text');
       var toggleBtn = document.getElementById('toggle-notifications');

@@ -1,43 +1,86 @@
 <%- include('../partials/header', { title: 'Maintenance Reports', role: 'operation_manager', active: 'maintenance' }) %>
 
-  <h1>Maintenance</h1>
+  <h1>Maintenance by Store</h1>
 
-  <% if (reports.length === 0) { %>
+  <% var storeNames = Object.keys(byStore); %>
+
+  <% if (storeNames.length === 0) { %>
     <div class="empty">No maintenance reports submitted yet.</div>
   <% } else { %>
-    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-      <% reports.forEach(function(report) { %>
-        <a href="/operation-manager/maintenance/<%= report.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow);">
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 700; font-size: 0.95rem;"><%= report.store_name %></div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= report.description %></div>
-            <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem;">
-              <%= formatDateTime(report.submitted_at) %> · <%= report.first_name %> <%= report.last_name %> · 📷 <%= report.image_count %> photo<%= parseInt(report.image_count) !== 1 ? 's' : '' %><% if (parseInt(report.video_count) > 0) { %> · 🎥 <%= report.video_count %> video<%= parseInt(report.video_count) !== 1 ? 's' : '' %><% } %>
+
+    <%
+      var totalPending = 0;
+      storeNames.forEach(function(sn) {
+        byStore[sn].forEach(function(r) { if (r.status !== 'reviewed') totalPending++; });
+      });
+    %>
+
+    <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
+      <%= total %> report<%= total !== 1 ? 's' : '' %> total<% if (totalPending > 0) { %> · <strong style="color:#c62828;"><%= totalPending %> new</strong><% } %> · Tap a store to expand
+    </p>
+
+    <div style="display:flex; flex-direction:column; gap:0.6rem;">
+      <% storeNames.forEach(function(storeName, sIdx) { %>
+        <% var list = byStore[storeName]; %>
+        <% var pending = list.filter(function(r) { return r.status !== 'reviewed'; }).length; %>
+        <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
+
+          <!-- Store header -->
+          <div onclick="toggleStore('<%= sIdx %>')" style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; cursor:pointer; user-select:none;">
+            <div>
+              <span style="font-weight:700; font-size:1rem; color:var(--bun-dark);"><%= storeName %></span>
+              <span style="font-size:0.78rem; color:var(--muted); margin-left:0.5rem;">(<%= list.length %>)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <% if (pending > 0) { %>
+                <span style="font-size:0.68rem; padding:0.18rem 0.5rem; background:#c62828; color:#fff; border-radius:20px; font-weight:700;"><%= pending %> new</span>
+              <% } else { %>
+                <span style="font-size:0.68rem; padding:0.18rem 0.5rem; background:#2e7d32; color:#fff; border-radius:20px; font-weight:700;">All reviewed</span>
+              <% } %>
+              <span id="arrow-<%= sIdx %>" style="font-size:1.1rem; color:var(--muted); transition:transform 0.2s;">▸</span>
             </div>
           </div>
-          <div style="flex-shrink: 0;">
-            <% if (report.status === 'reviewed') { %>
-              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600;">REVIEWED</span>
-            <% } else { %>
-              <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fce4ec; color: #c62828; border-radius: 6px; font-weight: 600;">NEW</span>
-            <% } %>
+
+          <!-- Reports list -->
+          <div id="store-<%= sIdx %>" style="display:none; border-top:1px solid var(--border);">
+            <% list.forEach(function(report) { %>
+              <a href="/operation-manager/maintenance/<%= report.id %>"
+                 style="display:flex; align-items:center; gap:0.75rem; padding:0.7rem 1.1rem; border-top:1px solid var(--border); text-decoration:none; color:var(--ink);">
+                <div style="flex:1; min-width:0;">
+                  <div style="font-weight:600; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><%= report.description %></div>
+                  <div style="font-size:0.72rem; color:var(--muted); margin-top:0.15rem;">
+                    <%= formatDateTime(report.submitted_at) %> · <%= report.first_name %> <%= report.last_name %>
+                    <% if (parseInt(report.image_count) > 0) { %> · 📷 <%= report.image_count %><% } %>
+                    <% if (parseInt(report.video_count) > 0) { %> · 🎥 <%= report.video_count %><% } %>
+                  </div>
+                </div>
+                <% if (report.status === 'reviewed') { %>
+                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#e8f5e9; color:#2e7d32; border-radius:6px; font-weight:700; flex-shrink:0;">REVIEWED</span>
+                <% } else { %>
+                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#fce4ec; color:#c62828; border-radius:6px; font-weight:700; flex-shrink:0;">NEW</span>
+                <% } %>
+                <span style="color:var(--muted); font-size:0.95rem;">›</span>
+              </a>
+            <% }); %>
           </div>
-          <span style="color: var(--muted); font-size: 1rem;">›</span>
-        </a>
+        </div>
       <% }); %>
     </div>
-
-    <% if (totalPages > 1) { %>
-      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
-        <% if (page > 1) { %>
-          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
-        <% } %>
-        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
-        <% if (page < totalPages) { %>
-          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
-        <% } %>
-      </div>
-    <% } %>
   <% } %>
+
+  <script>
+    function toggleStore(idx) {
+      var panel = document.getElementById('store-' + idx);
+      var arrow = document.getElementById('arrow-' + idx);
+      if (!panel) return;
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+      } else {
+        panel.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+  </script>
 
 <%- include('../partials/footer') %>

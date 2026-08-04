@@ -23,7 +23,13 @@
   function topicsForPage() {
     if (Array.isArray(window.REALTIME_TOPICS)) return window.REALTIME_TOPICS;
     var attr = document.body && document.body.getAttribute('data-realtime');
-    return attr ? attr.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    if (!attr) return [];
+    return attr
+      .split(',')
+      // Strip surrounding quotes defensively — a templating slip can leave
+      // stray quote characters in the attribute value.
+      .map(function (s) { return s.trim().replace(/^["']+|["']+$/g, ''); })
+      .filter(Boolean);
   }
 
   var topics = topicsForPage();

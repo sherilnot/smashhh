@@ -68,9 +68,9 @@
      topics) into this header include. Example:
        include('../partials/header', { ..., live: 'checklist:submitted' })
      The realtime client only connects when at least one topic is present. */
-  var liveTopics = (typeof live !== 'undefined' && live) ? live : '';
+  var liveTopics = (typeof live !== 'undefined' && live) ? String(live) : '';
 %>
-<body<%= liveTopics ? ' data-realtime="' + liveTopics + '"' : '' %>>
+<body<% if (liveTopics) { %> data-realtime="<%= liveTopics %>"<% } %>>
   <header class="topbar">
     <% if (items.length) { %>
     <button class="menu-toggle" id="menuToggle" aria-label="Open menu">

@@ -1,66 +1,110 @@
 <%- include('../partials/header', { title: 'Timesheets', role: 'receiving_manager', active: 'timesheets' }) %>
 
-  <h1>Timesheets</h1>
+  <h1>Timesheets by Store</h1>
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
 
-  <!-- Monthly export -->
-  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; padding:0.7rem 0.9rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px;">
-    <span style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Monthly Export</span>
-    <input type="month" id="monthPick" value="<%= new Date().toISOString().substring(0,7) %>"
-           style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:7px; font-size:0.82rem;">
-    <button type="button" onclick="downloadMonth()"
-            style="padding:0.45rem 0.9rem; font-size:0.8rem; font-weight:700; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border:none; border-radius:7px; cursor:pointer;">
-      ⬇ Download Month
-    </button>
-  </div>
+  <% var storeNames = Object.keys(byStore); %>
 
-  <% if (timesheets.length === 0 && !error) { %>
+  <% if (storeNames.length === 0 && !error) { %>
     <div class="empty">No timesheets submitted yet.</div>
-  <% } else if (timesheets.length > 0) { %>
-    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-      <% timesheets.forEach(ts => { %>
-        <a href="/receiving-manager/timesheets/<%= ts.id %>" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: var(--ink); box-shadow: var(--shadow);">
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 700; font-size: 0.95rem;"><%= ts.store_name %></div>
-            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem;">
-              <%= formatDate(ts.week_start) %> — <%= formatDate(ts.week_end) %>
-            </div>
-            <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.1rem;">
-              <%= ts.employee_count %> employees · <%= parseFloat(ts.total_hours).toFixed(1) %>h · <%= formatDateShort(ts.submitted_at) %>
-            </div>
-          </div>
-          <% if (ts.status === 'confirmed') { %>
-            <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-weight: 600; flex-shrink: 0;">CONFIRMED</span>
-          <% } else { %>
-            <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: #fef3e2; color: var(--bun-dark); border-radius: 6px; font-weight: 600; flex-shrink: 0;">DRAFT</span>
-          <% } %>
-          <span onclick="event.preventDefault(); event.stopPropagation(); window.location='/receiving-manager/timesheets/<%= ts.id %>/download';"
-                title="Download this week as Excel"
-                style="font-size:0.68rem; padding:0.25rem 0.5rem; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border-radius:6px; font-weight:700; flex-shrink:0; cursor:pointer;">⬇</span>
-          <span style="color: var(--muted); font-size: 1rem;">›</span>
-        </a>
-      <% }) %>
+  <% } else { %>
+
+    <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;"><%= total %> timesheet<%= total !== 1 ? 's' : '' %> total · Tap a store to expand</p>
+
+    <!-- Month picker (applies to the per-store month buttons below) -->
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; padding:0.7rem 0.9rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px;">
+      <span style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Export month</span>
+      <input type="month" id="monthPick" value="<%= new Date().toISOString().substring(0,7) %>"
+             style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:7px; font-size:0.82rem;">
+      <button type="button" onclick="downloadMonth()"
+              style="padding:0.45rem 0.9rem; font-size:0.8rem; font-weight:700; background:linear-gradient(135deg,#1f4e79,#2e75b6); color:#fff; border:none; border-radius:7px; cursor:pointer;">
+        ⬇ All Stores
+      </button>
     </div>
 
-    <% if (totalPages > 1) { %>
-      <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">
-        <% if (page > 1) { %>
-          <a href="?page=<%= page - 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">← Prev</a>
-        <% } %>
-        <span style="padding: 0.4rem 0.75rem; color: var(--muted); font-size: 0.85rem;">Page <%= page %>/<%= totalPages %></span>
-        <% if (page < totalPages) { %>
-          <a href="?page=<%= page + 1 %>" style="padding: 0.4rem 1rem; background: var(--warm-white); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 0.85rem;">Next →</a>
-        <% } %>
-      </div>
-    <% } %>
+    <div style="display:flex; flex-direction:column; gap:0.6rem;">
+      <% storeNames.forEach(function(storeName, sIdx) { %>
+        <% var list = byStore[storeName]; %>
+        <%
+          var storeHours = 0;
+          list.forEach(function(t) { storeHours += parseFloat(t.total_hours) || 0; });
+        %>
+        <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
+
+          <!-- Store header -->
+          <div onclick="toggleStore('<%= sIdx %>')" style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; cursor:pointer; user-select:none;">
+            <div>
+              <span style="font-weight:700; font-size:1rem; color:var(--bun-dark);"><%= storeName %></span>
+              <span style="font-size:0.78rem; color:var(--muted); margin-left:0.5rem;">(<%= list.length %>)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span style="font-weight:700; font-size:0.9rem; color:var(--bun-dark);"><%= storeHours.toFixed(1) %>h</span>
+              <span id="arrow-<%= sIdx %>" style="font-size:1.1rem; color:var(--muted); transition:transform 0.2s;">▸</span>
+            </div>
+          </div>
+
+          <!-- Per-store month export -->
+          <div style="display:flex; gap:0.4rem; flex-wrap:wrap; padding:0.5rem 1.1rem 0.7rem; border-top:1px solid var(--border); background:#f7f9fc;">
+            <span style="font-size:0.68rem; font-weight:700; color:var(--muted); text-transform:uppercase; align-self:center; margin-right:0.2rem;">Export:</span>
+            <button type="button" onclick="downloadStoreMonth('<%= storeName.replace(/'/g, "\\'") %>')"
+                    style="padding:0.35rem 0.7rem; font-size:0.74rem; font-weight:700; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border:none; border-radius:6px; cursor:pointer;">
+              ⬇ This Store — Month
+            </button>
+          </div>
+
+          <!-- Weeks list -->
+          <div id="store-<%= sIdx %>" style="display:none; border-top:1px solid var(--border);">
+            <% list.forEach(function(ts) { %>
+              <div style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1.1rem; border-top:1px solid var(--border);">
+                <a href="/receiving-manager/timesheets/<%= ts.id %>" style="flex:1; min-width:0; text-decoration:none; color:var(--ink);">
+                  <div style="font-weight:600; font-size:0.88rem;"><%= formatDate(ts.week_start) %> — <%= formatDate(ts.week_end) %></div>
+                  <div style="font-size:0.72rem; color:var(--muted);">
+                    <%= ts.employee_count %> employees · <%= parseFloat(ts.total_hours).toFixed(1) %>h · <%= formatDateShort(ts.submitted_at) %>
+                  </div>
+                </a>
+                <% if (ts.status === 'confirmed') { %>
+                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#e8f5e9; color:#2e7d32; border-radius:6px; font-weight:700; flex-shrink:0;">CONFIRMED</span>
+                <% } else { %>
+                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#fef3e2; color:var(--bun-dark); border-radius:6px; font-weight:700; flex-shrink:0;">DRAFT</span>
+                <% } %>
+                <a href="/receiving-manager/timesheets/<%= ts.id %>/download" title="Download this week"
+                   style="font-size:0.68rem; padding:0.28rem 0.5rem; background:linear-gradient(135deg,#1d6f42,#217346); color:#fff; border-radius:6px; font-weight:700; flex-shrink:0; text-decoration:none;">⬇</a>
+                <a href="/receiving-manager/timesheets/<%= ts.id %>" style="color:var(--muted); font-size:0.95rem; text-decoration:none;">›</a>
+              </div>
+            <% }); %>
+          </div>
+        </div>
+      <% }); %>
+    </div>
   <% } %>
 
   <script>
+    function toggleStore(idx) {
+      var panel = document.getElementById('store-' + idx);
+      var arrow = document.getElementById('arrow-' + idx);
+      if (!panel) return;
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+      } else {
+        panel.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    function currentMonth() {
+      var el = document.getElementById('monthPick');
+      return el && el.value ? el.value : new Date().toISOString().substring(0, 7);
+    }
+
     function downloadMonth() {
-      var m = document.getElementById('monthPick').value;
-      if (!m) { alert('Pick a month first'); return; }
-      window.location = '/receiving-manager/timesheets-monthly/download?month=' + m;
+      window.location = '/receiving-manager/timesheets-monthly/download?month=' + currentMonth();
+    }
+
+    function downloadStoreMonth(store) {
+      window.location = '/receiving-manager/timesheets-monthly/download?month=' + currentMonth()
+        + '&store=' + encodeURIComponent(store);
     }
   </script>
 

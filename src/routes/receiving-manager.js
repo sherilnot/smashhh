@@ -24,19 +24,21 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// List submitted timesheets (paginated)
+// List submitted timesheets — grouped by store
 router.get('/timesheets', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = 50;
-    const { timesheets, total } = await getSubmittedTimesheets(page, limit);
-    const totalPages = Math.ceil(total / limit);
+    const { timesheets, total } = await getSubmittedTimesheets(1, 200);
+
+    // Group by store
+    const byStore = {};
+    timesheets.forEach(ts => {
+      if (!byStore[ts.store_name]) byStore[ts.store_name] = [];
+      byStore[ts.store_name].push(ts);
+    });
 
     res.render('receiving-manager/timesheets', {
       user: req.user,
-      timesheets,
-      page,
-      totalPages,
+      byStore,
       total,
       error: null
     });
@@ -44,9 +46,7 @@ router.get('/timesheets', async (req, res) => {
     console.error('[ReceivingManager] timesheets list error', e);
     res.render('receiving-manager/timesheets', {
       user: req.user,
-      timesheets: [],
-      page: 1,
-      totalPages: 0,
+      byStore: {},
       total: 0,
       error: 'Failed to load timesheets'
     });
@@ -471,6 +471,14 @@ module.exports = router;
 
 const { buildTimesheetCsv, buildMonthlyTimesheetCsv } = require('../services/exportService');
 
+/** Normalise a DB date (Date object or string) to YYYY-MM-DD. */
+function toDateOnly(d) {
+  if (!d) return '';
+  if (typeof d === 'string') return d.substring(0, 10);
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 // Download a single weekly timesheet as Excel/CSV
 router.get('/timesheets/:id/download', async (req, res) => {
   try {
@@ -508,7 +516,7 @@ router.get('/timesheets/:id/download', async (req, res) => {
     }
 
     const csv = buildTimesheetCsv(ts);
-    const wk = String(ts.week_start).substring(0, 10);
+    const wk = toDateOnly(ts.week_start);
     const filename = `timesheet_${String(ts.store_name).replace(/\s+/g, '_')}_${wk}.csv`;
 
     res.setHeader('Content-Type', 'application/octet-stream');
@@ -538,11 +546,18 @@ router.get('/timesheets-monthly/download', async (req, res) => {
     const lastDay = new Date(year, month, 0).getDate();
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
+    // Optional store filter
+    const store = req.query.store || null;
+    const params = [monthStart, monthEnd];
+    let storeFilter = '';
+    if (store) { params.push(store); storeFilter = ' AND s.name = $3'; }
+
     const listRes = await pool.query(
       `SELECT t.id FROM timesheets t
-       WHERE t.week_start >= $1 AND t.week_start <= $2
-       ORDER BY t.week_start, t.store_id`,
-      [monthStart, monthEnd]
+       JOIN stores s ON s.id = t.store_id
+       WHERE t.week_start >= $1 AND t.week_start <= $2${storeFilter}
+       ORDER BY s.name, t.week_start`,
+      params
     );
 
     const weeks = [];
@@ -551,9 +566,11 @@ router.get('/timesheets-monthly/download', async (req, res) => {
       if (d.success) weeks.push(d.timesheet);
     }
 
-    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+      + (store ? ` — ${store}` : '');
     const csv = buildMonthlyTimesheetCsv(monthLabel, weeks);
-    const filename = `timesheets_${year}-${String(month).padStart(2, '0')}.csv`;
+    const safeStore = store ? String(store).replace(/\s+/g, '_') + '_' : '';
+    const filename = `timesheets_${safeStore}${year}-${String(month).padStart(2, '0')}.csv`;
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

@@ -3,7 +3,7 @@
  * Provides offline caching and handles push events
  */
 
-const VERSION = 'v6.0.0';
+const VERSION = 'v7.0.0';
 const CACHE_NAME = `rizins-cache-${VERSION}`;
 
 // Assets to pre-cache on install (app shell)
@@ -46,6 +46,13 @@ self.addEventListener('fetch', event => {
 
   // Skip non-GET and cross-origin requests
   if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Never intercept the SSE stream or downloads — they must go straight to network.
+  if (request.url.includes('/events') ||
+      request.headers.get('accept') === 'text/event-stream' ||
+      request.url.includes('/download')) {
     return;
   }
 

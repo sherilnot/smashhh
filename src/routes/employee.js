@@ -296,6 +296,20 @@ router.post('/book-weekly-shifts', async (req, res) => {
     await recordSubmission(req.user.userId);
     console.log('[Employee] Recorded weekly submission for employee:', req.user.userId);
 
+    // Nudge this store's manager so the availability panel updates live
+    try {
+      const { broadcast } = require('../services/realtimeService');
+      const sRes = await pool.query(
+        `SELECT store_id FROM store_employee_assignments WHERE employee_id = $1 LIMIT 1`,
+        [req.user.userId]
+      );
+      broadcast('availability:submitted', {
+        roles: ['store_manager'],
+        storeId: sRes.rows[0] ? sRes.rows[0].store_id : null,
+        data: { message: 'New availability submitted' }
+      });
+    } catch (e) { /* non-fatal */ }
+
     return res.redirect('/employee/my-shifts?success=' + encodeURIComponent(`Successfully submitted ${bookedCount} shift request(s) for manager approval.`));
   } catch (e) {
     console.error('[Employee] book-weekly-shifts error', e);

@@ -12,6 +12,20 @@ const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotification
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
+const { broadcast } = require('../services/realtimeService');
+
+/** Resolve the store a manager belongs to (used to scope realtime events). */
+async function managerStoreId(managerId) {
+  try {
+    const r = await pool.query(
+      `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+      [managerId]
+    );
+    return r.rows[0] ? r.rows[0].store_id : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // Helper: get recent invoices + upcoming dates for a manager's store
 // Always shows yesterday, today, and tomorrow
@@ -595,6 +609,13 @@ router.post('/roster/publish', async (req, res) => {
         data: { url: '/employee/my-roster' }
       }).catch(() => {}); // Fire and forget
     }
+
+    // Tell this store's employees their roster is live
+    broadcast('roster:published', {
+      roles: ['employee'],
+      storeId,
+      data: { message: 'Your roster has been published' }
+    });
 
     res.redirect(`/manager/roster?date=${weekStart}&success=roster_published`);
   } catch (e) {
@@ -1396,6 +1417,13 @@ router.post('/store-checklist/submit', async (req, res) => {
     if (!result.success) {
       return res.redirect('/manager/store-checklist?error=' + encodeURIComponent(result.error));
     }
+
+    // Nudge the warehouse manager's order list
+    broadcast('checklist:submitted', {
+      roles: ['warehouse_manager'],
+      data: { message: 'New store order received' }
+    });
+
     res.redirect('/manager/store-checklist?success=1');
   } catch (e) {
     console.error('[Manager] store-checklist submit error', e);
@@ -1585,6 +1613,13 @@ router.post('/received-invoice/submit', async (req, res) => {
     if (!result.success) {
       return res.redirect('/manager/received-invoice?error=' + encodeURIComponent(result.error));
     }
+
+    // Nudge operations + payroll invoice lists
+    broadcast('invoice:submitted', {
+      roles: ['operation_manager', 'receiving_manager'],
+      data: { message: 'New invoice submitted' }
+    });
+
     res.redirect('/manager/received-invoice?success=1');
   } catch (e) {
     console.error('[Manager] submit invoice error', e);
@@ -1776,6 +1811,12 @@ router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
       return res.redirect('/manager/cash?error=' + encodeURIComponent(result.error));
     }
 
+    // Nudge payroll + operations cash lists
+    broadcast('cash:submitted', {
+      roles: ['receiving_manager', 'operation_manager'],
+      data: { message: 'New cash report received' }
+    });
+
     res.redirect('/manager/cash?success=1');
   } catch (e) {
     console.error('[Manager] cash submit error', e);
@@ -1830,6 +1871,13 @@ router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (
     if (!result.success) {
       return res.redirect('/manager/maintenance?error=' + encodeURIComponent(result.error));
     }
+
+    // Nudge the operations maintenance list
+    broadcast('maintenance:submitted', {
+      roles: ['operation_manager'],
+      data: { message: 'New maintenance report' }
+    });
+
     res.redirect('/manager/maintenance?success=1');
   } catch (e) {
     console.error('[Manager] maintenance submit error', e);

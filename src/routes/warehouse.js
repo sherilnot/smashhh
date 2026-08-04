@@ -1,6 +1,8 @@
 const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedChecklists, getChecklistDetail, markReviewed } = require('../services/storeChecklistService');
+const { broadcast } = require('../services/realtimeService');
+const { pool } = require('../config/database');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('warehouse_manager'));
@@ -52,6 +54,20 @@ router.get('/store-checklists/:id', async (req, res) => {
 router.post('/store-checklists/:id/review', async (req, res) => {
   try {
     await markReviewed(req.params.id, req.user.userId);
+
+    // Tell that store's manager their order was confirmed
+    let storeId = null;
+    try {
+      const r = await pool.query(`SELECT store_id FROM store_checklists WHERE id = $1`, [req.params.id]);
+      storeId = r.rows[0] ? r.rows[0].store_id : null;
+    } catch (e) { /* scoping is best-effort */ }
+
+    broadcast('checklist:reviewed', {
+      roles: ['store_manager'],
+      storeId,
+      data: { message: 'Warehouse reviewed your order' }
+    });
+
     res.redirect(`/warehouse/store-checklists/${req.params.id}`);
   } catch (e) {
     console.error('[Warehouse] review error', e);

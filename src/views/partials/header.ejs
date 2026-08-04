@@ -63,7 +63,14 @@
   <script src="/js/webpush-notifications.js"></script>
   <% } %>
 </head>
-<body>
+<%
+  /* Pages opt into live updates by passing `live` (a comma-separated list of
+     topics) into this header include. Example:
+       include('../partials/header', { ..., live: 'checklist:submitted' })
+     The realtime client only connects when at least one topic is present. */
+  var liveTopics = (typeof live !== 'undefined' && live) ? live : '';
+%>
+<body<%= liveTopics ? ' data-realtime="' + liveTopics + '"' : '' %>>
   <header class="topbar">
     <% if (items.length) { %>
     <button class="menu-toggle" id="menuToggle" aria-label="Open menu">

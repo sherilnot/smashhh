@@ -6,19 +6,26 @@
  *   <body data-realtime="checklist:submitted,checklist:reviewed">
  * or set window.REALTIME_TOPICS = ['checklist:submitted'] before this loads.
  *
- * When a matching topic arrives we re-fetch the current URL, parse it, and
- * swap in the fresh <main>/.content markup. The user keeps their scroll
- * position and any open panels are re-applied where possible.
+ * Transport: Server-Sent Events where available, with an automatic fall back
+ * to short polling. iOS Safari in particular can be unreliable with long-lived
+ * streams (it suspends them aggressively and sometimes never delivers), so if
+ * the stream doesn't prove itself quickly we quietly switch to polling. The
+ * user-visible behaviour is the same either way.
  */
 (function () {
-  if (!window.EventSource) return; // Very old browser — silently skip.
-
+  var POLL_MS = 12000;           // How often to poll when SSE isn't usable.
+  var SSE_PROVE_MS = 6000;       // Stream must say hello within this window.
   var RECONNECT_BASE_MS = 2000;
   var RECONNECT_MAX_MS = 30000;
+
   var reconnectDelay = RECONNECT_BASE_MS;
   var source = null;
   var refreshTimer = null;
+  var pollTimer = null;
+  var proveTimer = null;
   var isRefreshing = false;
+  var usingPolling = false;
+  var lastSeenStamp = 0;
 
   function topicsForPage() {
     if (Array.isArray(window.REALTIME_TOPICS)) return window.REALTIME_TOPICS;
@@ -48,7 +55,8 @@
       'border-radius:999px', 'font-size:0.82rem', 'font-weight:600',
       'box-shadow:0 6px 24px rgba(0,0,0,0.25)', 'z-index:9999',
       'opacity:0', 'transition:opacity 0.2s', 'pointer-events:none',
-      'font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif'
+      'font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif',
+      'max-width:90vw', 'text-align:center'
     ].join(';');
     document.body.appendChild(el);
     requestAnimationFrame(function () { el.style.opacity = '1'; });
@@ -77,7 +85,6 @@
     // Don't yank the page out from under someone who's mid-edit.
     var active = document.activeElement;
     if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
-      // Try again shortly — they may still be typing.
       scheduleRefresh(4000);
       return;
     }
@@ -87,7 +94,8 @@
 
     fetch(window.location.href, {
       headers: { 'X-Requested-With': 'realtime' },
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      cache: 'no-store'
     })
       .then(function (r) {
         if (!r.ok) throw new Error('bad status ' + r.status);
@@ -101,7 +109,6 @@
         target.current.innerHTML = target.incoming.innerHTML;
         window.scrollTo(0, scrollY);
 
-        // Re-run icon rendering if the theme uses Lucide.
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
           try { window.lucide.createIcons(); } catch (e) { /* non-fatal */ }
         }
@@ -109,7 +116,7 @@
         document.dispatchEvent(new CustomEvent('realtime:refreshed'));
       })
       .catch(function () {
-        /* Network hiccup — the next event or page load will catch us up. */
+        /* Network hiccup — the next event or poll will catch us up. */
       })
       .finally(function () {
         isRefreshing = false;
@@ -122,42 +129,129 @@
     refreshTimer = setTimeout(refreshNow, delay || 400);
   }
 
-  function connect() {
-    source = new EventSource('/events');
+  function handlePayload(payload) {
+    if (!payload || !payload.topic) return;
+    if (topics.indexOf(payload.topic) === -1) return;
+    if (payload.at && payload.at <= lastSeenStamp) return; // Already handled.
+    if (payload.at) lastSeenStamp = payload.at;
+
+    if (payload.data && payload.data.message) showToast(payload.data.message);
+    scheduleRefresh();
+  }
+
+  /* ── Transport A: Server-Sent Events ─────────────────────────────── */
+
+  function startSse() {
+    try {
+      source = new EventSource('/events');
+    } catch (e) {
+      startPolling();
+      return;
+    }
+
+    // If the stream doesn't greet us promptly, assume it won't work here
+    // (iOS Safari sometimes opens the connection but delivers nothing).
+    proveTimer = setTimeout(function () {
+      if (!usingPolling) {
+        teardownSse();
+        startPolling();
+      }
+    }, SSE_PROVE_MS);
 
     source.addEventListener('ready', function () {
-      reconnectDelay = RECONNECT_BASE_MS; // Healthy again.
+      clearTimeout(proveTimer);
+      reconnectDelay = RECONNECT_BASE_MS;
     });
 
     source.addEventListener('update', function (e) {
+      clearTimeout(proveTimer);
       var payload;
       try { payload = JSON.parse(e.data); } catch (err) { return; }
-      if (!payload || !payload.topic) return;
-      if (topics.indexOf(payload.topic) === -1) return;
-
-      if (payload.data && payload.data.message) showToast(payload.data.message);
-      scheduleRefresh();
+      handlePayload(payload);
     });
 
     source.onerror = function () {
-      // EventSource retries on its own, but if the server closed the stream
-      // we back off and rebuild it to avoid hammering a struggling server.
-      if (source.readyState === EventSource.CLOSED) {
-        setTimeout(connect, reconnectDelay);
+      if (source && source.readyState === EventSource.CLOSED) {
+        teardownSse();
+        // Back off, then try again. If it keeps failing we land on polling.
+        setTimeout(function () {
+          if (!usingPolling) startSse();
+        }, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
+        if (reconnectDelay >= RECONNECT_MAX_MS) startPolling();
       }
     };
   }
 
-  // Pause the stream while the tab is hidden to save battery and connections.
+  function teardownSse() {
+    clearTimeout(proveTimer);
+    if (source) {
+      try { source.close(); } catch (e) { /* ignore */ }
+      source = null;
+    }
+  }
+
+  /* ── Transport B: polling fallback ───────────────────────────────── */
+
+  function startPolling() {
+    if (usingPolling) return;
+    usingPolling = true;
+    teardownSse();
+
+    clearInterval(pollTimer);
+    pollTimer = setInterval(pollOnce, POLL_MS);
+    pollOnce();
+  }
+
+  function pollOnce() {
+    if (document.hidden) return;
+    fetch('/events/since?after=' + lastSeenStamp, {
+      credentials: 'same-origin',
+      cache: 'no-store'
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.events)) return;
+        data.events.forEach(handlePayload);
+      })
+      .catch(function () { /* try again next tick */ });
+  }
+
+  /* ── Lifecycle ──────────────────────────────────────────────────── */
+
+  function start() {
+    if (window.EventSource) startSse();
+    else startPolling();
+  }
+
+  function stop() {
+    teardownSse();
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  // iOS suspends background tabs hard. Rebuild the transport on return and
+  // catch up on anything missed while away.
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
-      if (source) { source.close(); source = null; }
-    } else if (!source) {
-      connect();
-      scheduleRefresh(200); // Catch up on anything missed while away.
+      stop();
+    } else {
+      usingPolling = false;
+      start();
+      scheduleRefresh(300);
     }
   });
 
-  connect();
+  // Safari fires pageshow when restoring from its back/forward cache, where
+  // visibilitychange alone isn't enough to notice we lost the connection.
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) {
+      stop();
+      usingPolling = false;
+      start();
+      scheduleRefresh(300);
+    }
+  });
+
+  start();
 })();

@@ -22,6 +22,41 @@ let nextClientId = 1;
 const HEARTBEAT_MS = 25000;
 
 /**
+ * Short history of recent events, so clients on the polling fallback (iOS
+ * Safari, or anything behind a proxy that kills long connections) can ask
+ * "what happened since timestamp X?" and not miss anything.
+ *
+ * Kept deliberately small and in-memory — this is a catch-up buffer, not a
+ * durable queue. Anything older than the window is assumed to have been
+ * picked up by a normal page load.
+ */
+const HISTORY_LIMIT = 100;
+const HISTORY_TTL_MS = 5 * 60 * 1000;
+const history = []; // { topic, at, roles, storeId, data }
+
+function recordHistory(entry) {
+  history.push(entry);
+  const cutoff = Date.now() - HISTORY_TTL_MS;
+  while (history.length && (history.length > HISTORY_LIMIT || history[0].at < cutoff)) {
+    history.shift();
+  }
+}
+
+/**
+ * Events a given viewer is allowed to see, newer than `after`.
+ * Mirrors the same role/store filtering used for live delivery.
+ */
+function eventsSince(after, viewer) {
+  const since = Number(after) || 0;
+  return history
+    .filter((e) => e.at > since)
+    .filter((e) => !e.roles || e.roles.includes(viewer.role))
+    .filter((e) => !(e.storeId && viewer.storeId && e.storeId !== viewer.storeId))
+    .filter((e) => !(e.exceptUserId && e.exceptUserId === viewer.userId))
+    .map((e) => ({ topic: e.topic, at: e.at, ...(e.data ? { data: e.data } : {}) }));
+}
+
+/**
  * Register a new SSE connection.
  * @param {object} opts
  * @param {import('express').Response} opts.res
@@ -70,7 +105,11 @@ function write(client, event, payload) {
  */
 function broadcast(topic, options = {}) {
   const { roles, storeId, exceptUserId, data } = options;
-  const payload = { topic, at: Date.now(), ...(data ? { data } : {}) };
+  const at = Date.now();
+  const payload = { topic, at, ...(data ? { data } : {}) };
+
+  // Keep a copy so polling clients can catch up.
+  recordHistory({ topic, at, roles, storeId, exceptUserId, data });
 
   const dead = [];
 
@@ -107,5 +146,6 @@ module.exports = {
   addClient,
   removeClient,
   clientCount,
-  broadcast
+  broadcast,
+  eventsSince
 };

@@ -7,7 +7,12 @@
     <div class="empty">No cash reports submitted yet.</div>
   <% } else { %>
 
-    <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;"><%= total %> report<%= total !== 1 ? 's' : '' %> total · Tap a store to expand</p>
+    <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
+      <%= total %> report<%= total !== 1 ? 's' : '' %> total · Tap a store to expand
+      <% if (typeof periodLabels !== 'undefined' && periodLabels.month) { %>
+        <br><span style="font-size:0.72rem;">Wage figures cover the week from <%= formatDate(periodLabels.week) %> and the month of <%= periodLabels.month %>.</span>
+      <% } %>
+    </p>
 
     <div style="display:flex; flex-direction:column; gap:0.6rem;">
       <% storeNames.forEach(function(storeName, storeIdx) { %>
@@ -26,6 +31,25 @@
             <div style="display:flex; align-items:center; gap:0.75rem;">
               <span style="font-weight:700; font-size:0.92rem; color:var(--bun-dark);">$<%= storeTotal.toFixed(2) %></span>
               <span id="arrow-<%= storeIdx %>" style="font-size:1.1rem; color:var(--muted); transition:transform 0.2s;">▸</span>
+            </div>
+          </div>
+
+          <!-- Wages for this store: current week + current month -->
+          <%
+            var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
+              ? wagesByStore[storeName]
+              : { weekPay: 0, weekHours: 0, monthPay: 0, monthHours: 0 };
+          %>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; padding:0.65rem 1.1rem 0.8rem; border-top:1px solid var(--border); background:#f7f9fc;">
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.5rem 0.7rem;">
+              <div style="font-size:0.6rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Wages This Week</div>
+              <div style="font-size:1rem; font-weight:800; color:#1b5e20; margin-top:0.1rem;">$<%= w.weekPay.toFixed(2) %></div>
+              <div style="font-size:0.66rem; color:var(--muted);"><%= w.weekHours.toFixed(1) %> hrs</div>
+            </div>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.5rem 0.7rem;">
+              <div style="font-size:0.6rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Wages This Month</div>
+              <div style="font-size:1rem; font-weight:800; color:#0d47a1; margin-top:0.1rem;">$<%= w.monthPay.toFixed(2) %></div>
+              <div style="font-size:0.66rem; color:var(--muted);"><%= w.monthHours.toFixed(1) %> hrs</div>
             </div>
           </div>
 

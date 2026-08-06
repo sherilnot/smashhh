@@ -19,8 +19,6 @@
  * De-duplication is by event timestamp, so an event arriving via both
  * transports only triggers one refresh.
  */
-console.log('[realtime] script loaded');
-
 (function () {
   var SSE_POLL_MS = 10000;   // Safety-net poll while SSE looks healthy.
   var FALLBACK_POLL_MS = 5000; // Faster poll once we've given up on SSE.
@@ -41,11 +39,12 @@ console.log('[realtime] script loaded');
 
   /* ── Optional on-screen status, for diagnosing on a phone ──────────
      Enable by adding ?rtdebug=1 to the URL, or localStorage.rtdebug = '1'. */
+  /**
+   * The on-screen status badge is opt-in, so normal users never see it.
+   * Enable it when diagnosing by adding ?rtdebug=1 to the URL, or by setting
+   * localStorage.rtdebug = '1' (which persists across navigation).
+   */
   function debugWanted() {
-    // TEMPORARY: always on while we confirm realtime works on iOS.
-    // Revert to the opt-in check below once verified.
-    return true;
-    /* eslint-disable no-unreachable */
     try {
       if (location.search.indexOf('rtdebug=1') !== -1) return true;
       return localStorage.getItem('rtdebug') === '1';
@@ -53,8 +52,8 @@ console.log('[realtime] script loaded');
   }
 
   function showDebug(msg) {
-    try { console.log('[realtime] ' + msg); } catch (e) { /* ignore */ }
     if (!debugEnabled) return;
+    try { console.log('[realtime] ' + msg); } catch (e) { /* ignore */ }
     var el = document.getElementById('rt-debug');
     if (!el) {
       el = document.createElement('div');

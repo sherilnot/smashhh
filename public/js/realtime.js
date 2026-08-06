@@ -6,31 +6,25 @@
  *   <body data-realtime="checklist:submitted,checklist:reviewed">
  * or set window.REALTIME_TOPICS = ['checklist:submitted'] before this loads.
  *
- * Transport: Server-Sent Events where available, with an automatic fall back
- * to short polling. iOS Safari in particular can be unreliable with long-lived
- * streams (it suspends them aggressively and sometimes never delivers), so if
- * the stream doesn't prove itself quickly we quietly switch to polling. The
- * user-visible behaviour is the same either way.
+ * Transport strategy — deliberately belt-and-braces:
+ *   1. Server-Sent Events for instant delivery where the browser cooperates.
+ *   2. A slow poll that runs *permanently alongside* the stream as a safety
+ *      net, so an update is never missed entirely.
+ *
+ * The second part matters because iOS Safari is unreliable with long-lived
+ * connections: it throttles them, suspends them when the tab isn't frontmost,
+ * and sometimes holds messages back. Rather than fight that, we accept a few
+ * seconds' latency there and guarantee correctness.
+ *
+ * De-duplication is by event timestamp, so an event arriving via both
+ * transports only triggers one refresh.
  */
 (function () {
-  if (!window.EventSource) return; // Very old browser — silently skip.
-
-  /** Temporary debug badge — remove once realtime is confirmed working on iOS. */
-  function showDebug(msg) {
-    var el = document.getElementById('rt-debug');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'rt-debug';
-      el.style.cssText = 'position:fixed;top:4px;right:4px;background:rgba(0,0,0,0.8);color:#0f0;font-size:10px;padding:3px 7px;border-radius:4px;z-index:99999;font-family:monospace;pointer-events:none;max-width:200px;word-break:break-all;';
-      document.body.appendChild(el);
-    }
-    el.textContent = 'RT: ' + msg;
-  }
-
-  var POLL_MS = 12000;           // How often to poll when SSE isn't usable.
-  var SSE_PROVE_MS = 6000;       // Stream must say hello within this window.
+  var SSE_POLL_MS = 10000;   // Safety-net poll while SSE looks healthy.
+  var FALLBACK_POLL_MS = 5000; // Faster poll once we've given up on SSE.
+  var SSE_PROVE_MS = 6000;   // Stream must greet us within this window.
   var RECONNECT_BASE_MS = 2000;
-  var RECONNECT_MAX_MS = 30000;
+  var RECONNECT_MAX_MS = 20000;
 
   var reconnectDelay = RECONNECT_BASE_MS;
   var source = null;
@@ -38,8 +32,33 @@
   var pollTimer = null;
   var proveTimer = null;
   var isRefreshing = false;
-  var usingPolling = false;
+  var sseHealthy = false;
+  var gaveUpOnSse = false;
   var lastSeenStamp = 0;
+  var debugEnabled = false;
+
+  /* ── Optional on-screen status, for diagnosing on a phone ──────────
+     Enable by adding ?rtdebug=1 to the URL, or localStorage.rtdebug = '1'. */
+  function debugWanted() {
+    try {
+      if (location.search.indexOf('rtdebug=1') !== -1) return true;
+      return localStorage.getItem('rtdebug') === '1';
+    } catch (e) { return false; }
+  }
+
+  function showDebug(msg) {
+    if (!debugEnabled) return;
+    var el = document.getElementById('rt-debug');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'rt-debug';
+      el.style.cssText = 'position:fixed;top:4px;right:4px;background:rgba(0,0,0,0.85);' +
+        'color:#0f0;font-size:10px;padding:3px 7px;border-radius:4px;z-index:99999;' +
+        'font-family:monospace;pointer-events:none;max-width:60vw;word-break:break-all;';
+      document.body.appendChild(el);
+    }
+    el.textContent = 'RT: ' + msg;
+  }
 
   function topicsForPage() {
     if (Array.isArray(window.REALTIME_TOPICS)) return window.REALTIME_TOPICS;
@@ -53,13 +72,15 @@
       .filter(Boolean);
   }
 
+  debugEnabled = debugWanted();
+
   var topics = topicsForPage();
   if (topics.length === 0) {
-    showDebug('no topics — inactive');
+    showDebug('inactive (no topics)');
     return; // This page doesn't want live updates.
   }
 
-  showDebug('topics: ' + topics.join(', '));
+  /* ── Toast ────────────────────────────────────────────────────────── */
 
   function showToast(message) {
     var existing = document.getElementById('rt-toast');
@@ -85,7 +106,8 @@
     }, 2200);
   }
 
-  /** Which containers we try to swap, most specific first. */
+  /* ── Partial page refresh ─────────────────────────────────────────── */
+
   var SWAP_SELECTORS = ['[data-live-region]', '.content', 'main'];
 
   function findSwapTarget(doc) {
@@ -123,7 +145,7 @@
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var target = findSwapTarget(doc);
-        if (!target) return; // Nothing safe to swap — leave the page alone.
+        if (!target) return;
 
         target.current.innerHTML = target.incoming.innerHTML;
         window.scrollTo(0, scrollY);
@@ -134,71 +156,67 @@
 
         document.dispatchEvent(new CustomEvent('realtime:refreshed'));
       })
-      .catch(function () {
-        /* Network hiccup — the next event or poll will catch us up. */
-      })
-      .finally(function () {
-        isRefreshing = false;
-      });
+      .catch(function () { /* next event or poll will catch us up */ })
+      .finally(function () { isRefreshing = false; });
   }
 
   function scheduleRefresh(delay) {
     clearTimeout(refreshTimer);
-    // Small debounce so a burst of events causes one refresh, not five.
+    // Debounce so a burst of events causes one refresh, not several.
     refreshTimer = setTimeout(refreshNow, delay || 400);
   }
 
+  /** Returns true if this event was new and acted upon. */
   function handlePayload(payload) {
-    if (!payload || !payload.topic) return;
-    if (topics.indexOf(payload.topic) === -1) return;
-    if (payload.at && payload.at <= lastSeenStamp) return; // Already handled.
+    if (!payload || !payload.topic) return false;
+    if (topics.indexOf(payload.topic) === -1) return false;
+    if (payload.at && payload.at <= lastSeenStamp) return false; // Already seen.
     if (payload.at) lastSeenStamp = payload.at;
 
     if (payload.data && payload.data.message) showToast(payload.data.message);
     scheduleRefresh();
+    return true;
   }
 
   /* ── Transport A: Server-Sent Events ─────────────────────────────── */
 
   function startSse() {
+    if (!window.EventSource || gaveUpOnSse) return;
+
     try {
       source = new EventSource('/events');
     } catch (e) {
-      startPolling();
+      giveUpOnSse('constructor threw');
       return;
     }
 
-    // If the stream doesn't greet us promptly, assume it won't work here
-    // (iOS Safari sometimes opens the connection but delivers nothing).
     proveTimer = setTimeout(function () {
-      if (!usingPolling) {
-        teardownSse();
-        startPolling();
-      }
+      if (!sseHealthy) giveUpOnSse('no greeting');
     }, SSE_PROVE_MS);
 
     source.addEventListener('ready', function () {
       clearTimeout(proveTimer);
+      sseHealthy = true;
       reconnectDelay = RECONNECT_BASE_MS;
-      showDebug('SSE connected ✓');
+      showDebug('live (stream)');
     });
 
     source.addEventListener('update', function (e) {
       clearTimeout(proveTimer);
+      sseHealthy = true;
       var payload;
       try { payload = JSON.parse(e.data); } catch (err) { return; }
-      handlePayload(payload);
+      if (handlePayload(payload)) showDebug('update via stream');
     });
 
     source.onerror = function () {
       if (source && source.readyState === EventSource.CLOSED) {
         teardownSse();
-        // Back off, then try again. If it keeps failing we land on polling.
-        setTimeout(function () {
-          if (!usingPolling) startSse();
-        }, reconnectDelay);
+        sseHealthy = false;
+        showDebug('stream dropped, retrying');
+        setTimeout(startSse, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
-        if (reconnectDelay >= RECONNECT_MAX_MS) startPolling();
+        if (reconnectDelay >= RECONNECT_MAX_MS) giveUpOnSse('kept dropping');
       }
     };
   }
@@ -211,17 +229,23 @@
     }
   }
 
-  /* ── Transport B: polling fallback ───────────────────────────────── */
-
-  function startPolling() {
-    if (usingPolling) return;
-    usingPolling = true;
+  function giveUpOnSse(reason) {
+    gaveUpOnSse = true;
+    sseHealthy = false;
     teardownSse();
-    showDebug('polling mode');
+    showDebug('live (polling — ' + reason + ')');
+    restartPoll();
+  }
 
+  /* ── Transport B: polling, always running as a safety net ────────── */
+
+  function pollInterval() {
+    return gaveUpOnSse ? FALLBACK_POLL_MS : SSE_POLL_MS;
+  }
+
+  function restartPoll() {
     clearInterval(pollTimer);
-    pollTimer = setInterval(pollOnce, POLL_MS);
-    pollOnce();
+    pollTimer = setInterval(pollOnce, pollInterval());
   }
 
   function pollOnce() {
@@ -233,7 +257,9 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !Array.isArray(data.events)) return;
-        data.events.forEach(handlePayload);
+        var acted = false;
+        data.events.forEach(function (ev) { if (handlePayload(ev)) acted = true; });
+        if (acted) showDebug('update via poll');
       })
       .catch(function () { /* try again next tick */ });
   }
@@ -241,9 +267,10 @@
   /* ── Lifecycle ──────────────────────────────────────────────────── */
 
   function start() {
-    showDebug('connecting...');
-    if (window.EventSource) startSse();
-    else startPolling();
+    showDebug('connecting');
+    startSse();
+    restartPoll();
+    pollOnce(); // Immediate catch-up on load.
   }
 
   function stop() {
@@ -252,28 +279,29 @@
     pollTimer = null;
   }
 
-  // iOS suspends background tabs hard. Rebuild the transport on return and
-  // catch up on anything missed while away.
+  function resume() {
+    // iOS may have frozen or killed the stream while we were away.
+    teardownSse();
+    sseHealthy = false;
+    if (!gaveUpOnSse) startSse();
+    restartPoll();
+    pollOnce();
+    scheduleRefresh(300);
+  }
+
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) {
-      stop();
-    } else {
-      usingPolling = false;
-      start();
-      scheduleRefresh(300);
-    }
+    if (document.hidden) stop();
+    else resume();
   });
 
-  // Safari fires pageshow when restoring from its back/forward cache, where
-  // visibilitychange alone isn't enough to notice we lost the connection.
+  // Safari restores pages from its back/forward cache without firing
+  // visibilitychange, so catch that separately.
   window.addEventListener('pageshow', function (e) {
-    if (e.persisted) {
-      stop();
-      usingPolling = false;
-      start();
-      scheduleRefresh(300);
-    }
+    if (e.persisted) resume();
   });
+
+  // Coming back online after a dropout.
+  window.addEventListener('online', resume);
 
   start();
 })();

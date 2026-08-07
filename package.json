@@ -11,6 +11,7 @@
     "db:reset-data": "node scripts/reset-data.js"
   },
   "dependencies": {
+    "archiver": "7.0.1",
     "bcrypt": "6.0.0",
     "body-parser": "1.20.5",
     "cookie-parser": "^1.4.7",

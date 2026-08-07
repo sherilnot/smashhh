@@ -95,12 +95,23 @@ router.get('/invoices/:id/download', async (req, res) => {
 // ─── Bulk invoice downloads by week / month, per store ────────────────────────
 
 const { buildInvoicesCsv } = require('../services/exportService');
+const { streamInvoiceZip } = require('../services/invoiceZipService');
 
-// GET /operation-manager/invoices-export?store=Seaford&period=week|month&date=YYYY-MM-DD
+/**
+ * GET /operation-manager/invoices-export
+ *   ?store=Seaford        optional — omit for all stores
+ *   &period=week|month
+ *   &date=YYYY-MM-DD      optional — defaults to today
+ *   &format=zip|csv       defaults to zip (a folder of PDFs)
+ *
+ * Default output is a ZIP containing one PDF per invoice, foldered by store.
+ * CSV remains available for anyone who wants the raw figures in a spreadsheet.
+ */
 router.get('/invoices-export', async (req, res) => {
   try {
     const { store, period } = req.query;
     const dateParam = req.query.date;
+    const format = req.query.format === 'csv' ? 'csv' : 'zip';
 
     const base = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
       ? new Date(dateParam + 'T00:00:00')
@@ -153,17 +164,24 @@ router.get('/invoices-export', async (req, res) => {
       invoices.push({ ...inv, items: itemsRes.rows });
     }
 
-    const title = `Invoices — ${store || 'All Stores'} — ${rangeLabel}`;
-    const csv = buildInvoicesCsv(title, invoices);
     const safeStore = (store || 'all_stores').replace(/\s+/g, '_');
-    const filename = `invoices_${safeStore}_${period === 'month' ? startStr.substring(0, 7) : startStr}.csv`;
+    const periodPart = period === 'month' ? startStr.substring(0, 7) : startStr;
 
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(csv);
+    if (format === 'csv') {
+      const title = `Invoices — ${store || 'All Stores'} — ${rangeLabel}`;
+      const csv = buildInvoicesCsv(title, invoices);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="invoices_${safeStore}_${periodPart}.csv"`);
+      return res.send(csv);
+    }
+
+    // ZIP of individual PDFs, foldered by store
+    await streamInvoiceZip(res, invoices, `invoices_${safeStore}_${periodPart}.zip`);
   } catch (e) {
     console.error('[OperationManager] invoices-export error', e);
-    res.status(500).send('Failed to generate export');
+    // Headers may already be sent once the archive starts streaming.
+    if (!res.headersSent) res.status(500).send('Failed to generate export');
+    else res.end();
   }
 });
 

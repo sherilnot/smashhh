@@ -17,14 +17,36 @@ function toCsv(rows) {
   return '\uFEFF' + rows.map(r => r.map(esc).join(',')).join('\r\n');
 }
 
-function shortDate(dateStr) {
-  const dp = String(dateStr).substring(0, 10).split('-');
+/**
+ * Normalise a date value to YYYY-MM-DD.
+ *
+ * Handles both the plain strings we build ourselves and the Date objects that
+ * node-postgres returns for DATE columns. Reads local calendar parts rather
+ * than using toISOString(), which would shift the day back in timezones ahead
+ * of UTC.
+ */
+function isoDate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.substring(0, 10);
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** e.g. "06-Aug" — used for the day columns in the timesheet grid. */
+function shortDate(value) {
+  const iso = isoDate(value);
+  if (!iso) return '';
+  const dp = iso.split('-');
   const d = new Date(Number(dp[0]), Number(dp[1]) - 1, Number(dp[2]));
   return String(d.getDate()).padStart(2, '0') + '-' + d.toLocaleDateString('en-AU', { month: 'short' });
 }
 
-function auDate(dateStr) {
-  const dp = String(dateStr).substring(0, 10).split('-');
+/** e.g. "06/08/2026" */
+function auDate(value) {
+  const iso = isoDate(value);
+  if (!iso) return '';
+  const dp = iso.split('-');
   return `${dp[2]}/${dp[1]}/${dp[0]}`;
 }
 

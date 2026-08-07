@@ -5,6 +5,7 @@ const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/time
 const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
 const { generateInvoicePdf } = require('../services/invoicePdfService');
 const { getAllMaintenanceReports, getMaintenanceReportDetail } = require('../services/maintenanceService');
+const { pool } = require('../config/database');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('operation_manager'));

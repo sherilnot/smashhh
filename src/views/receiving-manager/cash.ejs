@@ -1,134 +1,221 @@
 <%- include('../partials/header', { title: 'Cash Reports', role: 'receiving_manager', active: 'cash', live: 'cash:submitted' }) %>
 
-  <h1>Cash Reports by Store</h1>
+  <h1>Cash &amp; Wages by Store</h1>
 
   <% var storeNames = Object.keys(byStore); %>
+
   <% if (storeNames.length === 0) { %>
     <div class="empty">No cash reports submitted yet.</div>
   <% } else { %>
 
+  <style>
+    /* ── Store card ─────────────────────────────────────────────── */
+    .st-card { background:var(--warm-white); border:1px solid var(--border); border-radius:12px;
+               overflow:hidden; box-shadow:var(--shadow); }
+    .st-head { display:flex; align-items:center; justify-content:space-between; gap:0.75rem;
+               padding:0.85rem 1.1rem; cursor:pointer; user-select:none; }
+    .st-head:hover { background:rgba(0,0,0,0.015); }
+    .st-name { font-weight:700; font-size:1rem; color:var(--bun-dark); }
+    .st-count { font-size:0.75rem; color:var(--muted); margin-left:0.4rem; font-weight:500; }
+    .st-right { display:flex; align-items:center; gap:0.85rem; }
+    .st-cash { text-align:right; }
+    .st-cash-val { font-weight:700; font-size:0.95rem; color:var(--bun-dark); line-height:1.2; }
+    .st-cash-lbl { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+    .st-arrow { font-size:0.9rem; color:var(--muted); transition:transform 0.2s; }
+    .st-body { display:none; border-top:1px solid var(--border); }
+    .st-card.open .st-body { display:block; }
+    .st-card.open .st-arrow { transform:rotate(90deg); }
+
+    /* ── Tabs ───────────────────────────────────────────────────── */
+    .st-tabs { display:flex; gap:0; background:#f7f9fc; border-bottom:1px solid var(--border); }
+    .st-tab { flex:1; padding:0.55rem 0.5rem; font-size:0.73rem; font-weight:700; text-align:center;
+              color:var(--muted); background:transparent; border:none; cursor:pointer;
+              border-bottom:2px solid transparent; transition:color 0.15s, border-color 0.15s; }
+    .st-tab:hover { color:var(--ink); }
+    .st-tab.active { color:var(--bun-dark); border-bottom-color:var(--mustard, #f4a300); background:#fff; }
+    .st-pane { display:none; }
+    .st-pane.active { display:block; }
+
+    /* ── Data rows ──────────────────────────────────────────────── */
+    .st-scroll { max-height:270px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .st-row { display:grid; align-items:center; gap:0.6rem; padding:0.6rem 1.1rem;
+              border-bottom:1px solid #f2f2f2; text-decoration:none; color:var(--ink); }
+    .st-row:last-child { border-bottom:none; }
+    .st-row:hover { background:#fffdf7; }
+    .st-row-cash { grid-template-columns:1fr auto auto auto; }
+    .st-row-wage { grid-template-columns:1fr auto auto; }
+    .st-primary { font-weight:600; font-size:0.87rem; }
+    .st-sub { font-size:0.7rem; color:var(--muted); margin-top:0.1rem; }
+    .st-num { font-size:0.78rem; color:var(--muted); font-variant-numeric:tabular-nums; text-align:right; }
+    .st-money { font-size:0.87rem; font-weight:700; font-variant-numeric:tabular-nums; text-align:right;
+                min-width:5.2rem; }
+    .st-money.wk { color:#1b5e20; }
+    .st-money.mo { color:#0d47a1; }
+    .st-chev { color:var(--muted); font-size:0.9rem; }
+
+    /* Column header strip inside a pane */
+    .st-colhead { display:grid; gap:0.6rem; padding:0.4rem 1.1rem; background:#eef2f7;
+                  border-bottom:1px solid var(--border); font-size:0.6rem; font-weight:700;
+                  color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+    .st-colhead span:not(:first-child) { text-align:right; }
+
+    .st-badge { font-size:0.62rem; padding:0.15rem 0.42rem; border-radius:5px; font-weight:700;
+                white-space:nowrap; }
+    .st-badge.new { background:#fff3e0; color:#e65100; }
+    .st-badge.done { background:#e8f5e9; color:#2e7d32; }
+
+    .st-empty { padding:1.5rem 1rem; text-align:center; color:var(--muted); font-size:0.8rem; }
+
+    /* Totals footer inside a wage pane */
+    .st-total { display:grid; gap:0.6rem; padding:0.6rem 1.1rem; background:#f7f9fc;
+                border-top:2px solid var(--border-strong, rgba(61,30,6,0.12));
+                font-size:0.8rem; font-weight:800; }
+  </style>
+
     <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
-      <%= total %> report<%= total !== 1 ? 's' : '' %> total · Tap a store to expand
+      <%= total %> cash report<%= total !== 1 ? 's' : '' %> · Tap a store to see its reports and wage history
     </p>
 
     <div style="display:flex; flex-direction:column; gap:0.6rem;">
-      <% storeNames.forEach(function(storeName, storeIdx) { %>
-        <% var subs = byStore[storeName]; %>
+      <% storeNames.forEach(function(storeName, sIdx) { %>
         <%
-          var storeTotal = 0;
-          subs.forEach(function(s) { storeTotal += parseFloat(s.amount) || 0; });
+          var subs = byStore[storeName];
+          var cashTotal = 0;
+          subs.forEach(function(s) { cashTotal += parseFloat(s.amount) || 0; });
+
+          var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
+            ? wagesByStore[storeName] : { weeks: [], months: [] };
+
+          var wkTotalPay = 0, wkTotalHours = 0;
+          w.weeks.forEach(function(x) { wkTotalPay += x.pay; wkTotalHours += x.hours; });
+          var moTotalPay = 0, moTotalHours = 0;
+          w.months.forEach(function(x) { moTotalPay += x.pay; moTotalHours += x.hours; });
         %>
-        <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow);">
-          <!-- Store header -->
-          <div onclick="toggleStore('<%= storeIdx %>')" style="display:flex; align-items:center; justify-content:space-between; padding:0.85rem 1.1rem; cursor:pointer; user-select:none;">
+
+        <div class="st-card" id="card-<%= sIdx %>">
+
+          <!-- Header -->
+          <div class="st-head" onclick="toggleCard(<%= sIdx %>)">
             <div>
-              <span style="font-weight:700; font-size:1rem; color:var(--bun-dark);"><%= storeName %></span>
-              <span style="font-size:0.78rem; color:var(--muted); margin-left:0.5rem;">(<%= subs.length %>)</span>
+              <span class="st-name"><%= storeName %></span>
+              <span class="st-count"><%= subs.length %> report<%= subs.length !== 1 ? 's' : '' %></span>
             </div>
-            <div style="display:flex; align-items:center; gap:0.75rem;">
-              <span style="font-weight:700; font-size:0.92rem; color:var(--bun-dark);">$<%= storeTotal.toFixed(2) %></span>
-              <span id="arrow-<%= storeIdx %>" style="font-size:1.1rem; color:var(--muted); transition:transform 0.2s;">▸</span>
-            </div>
-          </div>
-
-          <!-- Wages history: weekly + monthly scrollable tables -->
-          <%
-            var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
-              ? wagesByStore[storeName]
-              : { weeks: [], months: [] };
-          %>
-          <div style="border-top:1px solid var(--border); background:#f7f9fc; padding:0.7rem 1.1rem;">
-            <!-- Weekly -->
-            <div style="font-size:0.62rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:0.3rem;">Weekly Wages</div>
-            <div style="max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fff; margin-bottom:0.6rem;">
-              <% if (w.weeks && w.weeks.length > 0) { %>
-                <table style="width:100%; border-collapse:collapse; margin:0; border:none; box-shadow:none; border-radius:0; font-size:0.78rem;">
-                  <thead>
-                    <tr>
-                      <th style="padding:0.35rem 0.6rem; text-align:left; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Week</th>
-                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Hours</th>
-                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Pay</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% w.weeks.forEach(function(wk) { %>
-                      <tr>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; font-weight:600;"><%= formatDate(wk.weekStart) %></td>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; color:var(--muted);"><%= wk.hours.toFixed(1) %>h</td>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; font-weight:700; color:#1b5e20;">$<%= wk.pay.toFixed(2) %></td>
-                      </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
-              <% } else { %>
-                <div style="padding:0.75rem; text-align:center; color:var(--muted); font-size:0.78rem;">No weekly data yet</div>
-              <% } %>
-            </div>
-
-            <!-- Monthly -->
-            <div style="font-size:0.62rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:0.3rem;">Monthly Wages</div>
-            <div style="max-height:130px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fff;">
-              <% if (w.months && w.months.length > 0) { %>
-                <table style="width:100%; border-collapse:collapse; margin:0; border:none; box-shadow:none; border-radius:0; font-size:0.78rem;">
-                  <thead>
-                    <tr>
-                      <th style="padding:0.35rem 0.6rem; text-align:left; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Month</th>
-                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Hours</th>
-                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Pay</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% w.months.forEach(function(mo) { %>
-                      <tr>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; font-weight:600;"><%= mo.label %></td>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; color:var(--muted);"><%= mo.hours.toFixed(1) %>h</td>
-                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; font-weight:700; color:#0d47a1;">$<%= mo.pay.toFixed(2) %></td>
-                      </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
-              <% } else { %>
-                <div style="padding:0.75rem; text-align:center; color:var(--muted); font-size:0.78rem;">No monthly data yet</div>
-              <% } %>
+            <div class="st-right">
+              <div class="st-cash">
+                <div class="st-cash-val">$<%= cashTotal.toFixed(2) %></div>
+                <div class="st-cash-lbl">Cash</div>
+              </div>
+              <span class="st-arrow">▸</span>
             </div>
           </div>
 
-          <!-- Submissions list -->
-          <div id="store-<%= storeIdx %>" style="display:none; border-top:1px solid var(--border);">
-            <% subs.forEach(function(sub) { %>
-              <a href="/receiving-manager/cash/<%= sub.id %>"
-                 style="display:flex; align-items:center; gap:0.75rem; padding:0.65rem 1.1rem; text-decoration:none; color:var(--ink); border-top:1px solid var(--border);">
-                <div style="flex:1; min-width:0;">
-                  <div style="font-weight:600; font-size:0.9rem;">$<%= parseFloat(sub.amount).toFixed(2) %></div>
-                  <div style="font-size:0.73rem; color:var(--muted);">
-                    <%= formatDateTime(sub.submitted_at) %> · <%= sub.first_name %> <%= sub.last_name %> · 📷 <%= sub.image_count %>
-                  </div>
+          <!-- Body -->
+          <div class="st-body">
+
+            <div class="st-tabs">
+              <button class="st-tab active" onclick="showTab(<%= sIdx %>, 0, this)">Cash</button>
+              <button class="st-tab" onclick="showTab(<%= sIdx %>, 1, this)">Weekly Wages</button>
+              <button class="st-tab" onclick="showTab(<%= sIdx %>, 2, this)">Monthly Wages</button>
+            </div>
+
+            <!-- Pane 0: cash reports -->
+            <div class="st-pane active" id="pane-<%= sIdx %>-0">
+              <% if (subs.length === 0) { %>
+                <div class="st-empty">No cash reports.</div>
+              <% } else { %>
+                <div class="st-scroll">
+                  <% subs.forEach(function(sub) { %>
+                    <a class="st-row st-row-cash" href="/receiving-manager/cash/<%= sub.id %>">
+                      <div>
+                        <div class="st-primary">$<%= parseFloat(sub.amount).toFixed(2) %></div>
+                        <div class="st-sub">
+                          <%= formatDateTime(sub.submitted_at) %> · <%= sub.first_name %> <%= sub.last_name %>
+                          <% if (parseInt(sub.image_count) > 0) { %> · 📷 <%= sub.image_count %><% } %>
+                        </div>
+                      </div>
+                      <span></span>
+                      <span class="st-badge <%= sub.status === 'reviewed' ? 'done' : 'new' %>">
+                        <%= sub.status === 'reviewed' ? 'REVIEWED' : 'NEW' %>
+                      </span>
+                      <span class="st-chev">›</span>
+                    </a>
+                  <% }); %>
                 </div>
-                <% if (sub.status === 'reviewed') { %>
-                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#e8f5e9; color:#2e7d32; border-radius:6px; font-weight:600;">REVIEWED</span>
-                <% } else { %>
-                  <span style="font-size:0.63rem; padding:0.15rem 0.4rem; background:#fef3e2; color:var(--bun-dark); border-radius:6px; font-weight:600;">NEW</span>
-                <% } %>
-                <span style="color:var(--muted); font-size:0.9rem;">›</span>
-              </a>
-            <% }); %>
+              <% } %>
+            </div>
+
+            <!-- Pane 1: weekly wages -->
+            <div class="st-pane" id="pane-<%= sIdx %>-1">
+              <% if (!w.weeks || w.weeks.length === 0) { %>
+                <div class="st-empty">No weekly wage data yet.</div>
+              <% } else { %>
+                <div class="st-colhead st-row-wage">
+                  <span>Week Starting</span><span>Hours</span><span>Wages</span>
+                </div>
+                <div class="st-scroll">
+                  <% w.weeks.forEach(function(wk) { %>
+                    <div class="st-row st-row-wage">
+                      <span class="st-primary"><%= formatDate(wk.weekStart) %></span>
+                      <span class="st-num"><%= wk.hours.toFixed(1) %>h</span>
+                      <span class="st-money wk">$<%= wk.pay.toFixed(2) %></span>
+                    </div>
+                  <% }); %>
+                </div>
+                <div class="st-total st-row-wage">
+                  <span>Total</span>
+                  <span class="st-num" style="color:var(--ink);"><%= wkTotalHours.toFixed(1) %>h</span>
+                  <span class="st-money wk">$<%= wkTotalPay.toFixed(2) %></span>
+                </div>
+              <% } %>
+            </div>
+
+            <!-- Pane 2: monthly wages -->
+            <div class="st-pane" id="pane-<%= sIdx %>-2">
+              <% if (!w.months || w.months.length === 0) { %>
+                <div class="st-empty">No monthly wage data yet.</div>
+              <% } else { %>
+                <div class="st-colhead st-row-wage">
+                  <span>Month</span><span>Hours</span><span>Wages</span>
+                </div>
+                <div class="st-scroll">
+                  <% w.months.forEach(function(mo) { %>
+                    <div class="st-row st-row-wage">
+                      <span class="st-primary"><%= mo.label %></span>
+                      <span class="st-num"><%= mo.hours.toFixed(1) %>h</span>
+                      <span class="st-money mo">$<%= mo.pay.toFixed(2) %></span>
+                    </div>
+                  <% }); %>
+                </div>
+                <div class="st-total st-row-wage">
+                  <span>Total</span>
+                  <span class="st-num" style="color:var(--ink);"><%= moTotalHours.toFixed(1) %>h</span>
+                  <span class="st-money mo">$<%= moTotalPay.toFixed(2) %></span>
+                </div>
+              <% } %>
+            </div>
+
           </div>
         </div>
       <% }); %>
     </div>
-
   <% } %>
 
   <script>
-    function toggleStore(idx) {
-      var panel = document.getElementById('store-' + idx);
-      var arrow = document.getElementById('arrow-' + idx);
-      if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
-      } else {
-        panel.style.display = 'none';
-        arrow.style.transform = 'rotate(0deg)';
+    function toggleCard(idx) {
+      var card = document.getElementById('card-' + idx);
+      if (card) card.classList.toggle('open');
+    }
+
+    function showTab(cardIdx, paneIdx, btn) {
+      // Switch the active tab button within this card.
+      var tabs = btn.parentNode.querySelectorAll('.st-tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      btn.classList.add('active');
+
+      // Show only the matching pane.
+      for (var p = 0; p < 3; p++) {
+        var pane = document.getElementById('pane-' + cardIdx + '-' + p);
+        if (pane) pane.classList.toggle('active', p === paneIdx);
       }
     }
   </script>

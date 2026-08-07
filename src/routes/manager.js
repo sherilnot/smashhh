@@ -27,6 +27,22 @@ async function managerStoreId(managerId) {
   }
 }
 
+/**
+ * Normalise a DB date value to a YYYY-MM-DD string.
+ *
+ * Important: this reads the local calendar parts rather than using
+ * toISOString(). node-postgres returns a DATE column as a JS Date at local
+ * midnight, and toISOString() converts to UTC — which lands on the previous
+ * day anywhere local time is ahead of UTC (Melbourne is +10/+11). That was
+ * causing invoice dates to jump back a day.
+ */
+function toDateOnly(d) {
+  if (!d) return '';
+  if (typeof d === 'string') return d.substring(0, 10);
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 // Helper: get recent invoices + upcoming dates for a manager's store
 // Always shows yesterday, today, and tomorrow
 async function getRecentInvoicesForManager(managerId) {
@@ -59,7 +75,7 @@ async function getRecentInvoicesForManager(managerId) {
     // Build the list: always show all 3 days
     const invoiceMap = {};
     res.rows.forEach(row => {
-      const ds = typeof row.invoice_date === 'string' ? row.invoice_date.substring(0, 10) : new Date(row.invoice_date).toISOString().substring(0, 10);
+      const ds = toDateOnly(row.invoice_date);
       invoiceMap[ds] = row;
     });
 
@@ -1569,13 +1585,9 @@ router.post('/received-invoice/add-item', async (req, res) => {
       return res.redirect(`/manager/received-invoice?error=${encodeURIComponent(result.error)}`);
     }
 
-    // Redirect back to the same invoice (need the date)
+    // Redirect back to the same invoice, keeping its exact date.
     const invRes = await pool.query(`SELECT invoice_date FROM received_invoices WHERE id = $1`, [invoiceId]);
-    const dateStr = invRes.rows[0]
-      ? (typeof invRes.rows[0].invoice_date === 'string'
-          ? invRes.rows[0].invoice_date.substring(0, 10)
-          : new Date(invRes.rows[0].invoice_date).toISOString().substring(0, 10))
-      : 'today';
+    const dateStr = invRes.rows[0] ? toDateOnly(invRes.rows[0].invoice_date) : 'today';
 
     res.redirect(`/manager/received-invoice?date=${dateStr}`);
   } catch (e) {
@@ -1728,9 +1740,7 @@ router.get('/received-invoice/download-draft', async (req, res) => {
     );
     invoice.items = itemsRes.rows;
 
-    const invoiceDate = typeof invoice.invoice_date === 'string'
-      ? invoice.invoice_date.substring(0, 10)
-      : new Date(invoice.invoice_date).toISOString().substring(0, 10);
+    const invoiceDate = toDateOnly(invoice.invoice_date);
     const filename = `invoice_${(invoice.store_name || 'store').replace(/\s+/g, '_')}_${invoiceDate}.pdf`;
 
     res.setHeader('Content-Type', 'application/octet-stream');

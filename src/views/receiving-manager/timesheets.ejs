@@ -15,7 +15,13 @@
     <!-- Month picker (applies to the per-store month buttons below) -->
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; padding:0.7rem 0.9rem; background:var(--warm-white); border:1px solid var(--border); border-radius:10px;">
       <span style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Export month</span>
-      <input type="month" id="monthPick" value="<%= new Date().toISOString().substring(0,7) %>"
+      <%
+        /* Build YYYY-MM from local parts — toISOString() would roll back to the
+           previous month when run on the 1st in a timezone ahead of UTC. */
+        var _now = new Date();
+        var _thisMonth = _now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0');
+      %>
+      <input type="month" id="monthPick" value="<%= _thisMonth %>"
              style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:7px; font-size:0.82rem;">
       <button type="button" onclick="downloadMonth()"
               style="padding:0.45rem 0.9rem; font-size:0.8rem; font-weight:700; background:linear-gradient(135deg,#1f4e79,#2e75b6); color:#fff; border:none; border-radius:7px; cursor:pointer;">
@@ -95,7 +101,9 @@
 
     function currentMonth() {
       var el = document.getElementById('monthPick');
-      return el && el.value ? el.value : new Date().toISOString().substring(0, 7);
+      if (el && el.value) return el.value;
+      var n = new Date();
+      return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
     }
 
     function downloadMonth() {

@@ -79,7 +79,14 @@ async function getOrCreateTodayInvoice(managerId, forDate) {
 
       if (latestChecklistRes.rows.length > 0) {
         const d = latestChecklistRes.rows[0].check_date;
-        today = typeof d === 'string' ? d.substring(0, 10) : new Date(d).toISOString().substring(0, 10);
+        // Read local calendar parts, not toISOString() — see note in
+        // routes/manager.js toDateOnly() for why UTC conversion breaks this.
+        if (typeof d === 'string') {
+          today = d.substring(0, 10);
+        } else {
+          const dt = new Date(d);
+          today = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        }
       } else {
         // Fallback to Melbourne today if no checklist exists at all
         const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));

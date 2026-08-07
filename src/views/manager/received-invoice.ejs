@@ -16,7 +16,15 @@
       <div style="display:flex; flex-direction:column; gap:0.4rem;">
         <% recent.forEach(function(ri) { %>
           <%
-            var dateStr = typeof ri.invoice_date === 'string' ? ri.invoice_date.substring(0,10) : new Date(ri.invoice_date).toISOString().substring(0,10);
+            // Use local calendar parts, not toISOString(), so the date doesn't
+            // shift back a day in timezones ahead of UTC.
+            var dateStr;
+            if (typeof ri.invoice_date === 'string') {
+              dateStr = ri.invoice_date.substring(0, 10);
+            } else {
+              var _d = new Date(ri.invoice_date);
+              dateStr = _d.getFullYear() + '-' + String(_d.getMonth() + 1).padStart(2, '0') + '-' + String(_d.getDate()).padStart(2, '0');
+            }
             var statusLabel = ri.status === 'submitted' ? '✓ Submitted' : ri.status === 'new' ? '+ New' : '✏ Draft';
             var statusBg = ri.status === 'submitted' ? '#e8f5e9' : ri.status === 'new' ? '#e3f2fd' : '#fef3e2';
             var statusColor = ri.status === 'submitted' ? '#2e7d32' : ri.status === 'new' ? '#1565c0' : '#e65100';

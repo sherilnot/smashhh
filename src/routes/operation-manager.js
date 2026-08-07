@@ -175,8 +175,13 @@ router.get('/invoices-export', async (req, res) => {
       return res.send(csv);
     }
 
-    // ZIP of individual PDFs, foldered by store
-    await streamInvoiceZip(res, invoices, `invoices_${safeStore}_${periodPart}.zip`);
+    // ZIP of individual PDFs, foldered as "<Store> - Week" / "<Store> - Month"
+    await streamInvoiceZip(
+      res,
+      invoices,
+      `invoices_${safeStore}_${periodPart}.zip`,
+      { period: period === 'month' ? 'month' : 'week' }
+    );
   } catch (e) {
     console.error('[OperationManager] invoices-export error', e);
     // Headers may already be sent once the archive starts streaming.

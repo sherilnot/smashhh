@@ -38,9 +38,12 @@ function safeName(value, fallback) {
  * @param {import('express').Response} res
  * @param {Array<object>} invoices - Each needs store_name, invoice_date, id, items
  * @param {string} filename - Download filename, e.g. invoices_Seaford_2026-08.zip
+ * @param {object} [options]
+ * @param {string} [options.period] - 'week' or 'month'; used in the folder name
  * @returns {Promise<void>} resolves once the archive has been fully written
  */
-function streamInvoiceZip(res, invoices, filename) {
+function streamInvoiceZip(res, invoices, filename, options = {}) {
+  const periodWord = options.period === 'month' ? 'Month' : 'Week';
   return new Promise((resolve, reject) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -61,14 +64,19 @@ function streamInvoiceZip(res, invoices, filename) {
     const usedNames = new Set();
 
     invoices.forEach((invoice) => {
+      // Folder is "<Store> - Week" / "<Store> - Month". Spaces and the hyphen
+      // are kept here because it's a display folder name, not a filename.
+      const storeLabel = String(invoice.store_name || 'Store').trim() || 'Store';
+      const folder = `${storeLabel} - ${periodWord}`;
+
       const store = safeName(invoice.store_name, 'store');
       const date = toDateOnly(invoice.invoice_date);
       const shortId = String(invoice.id || '').substring(0, 8).toUpperCase();
 
-      let entry = `${store}/${date}_${store}_${shortId}.pdf`;
+      let entry = `${folder}/${date}_${store}_${shortId}.pdf`;
       let suffix = 2;
       while (usedNames.has(entry)) {
-        entry = `${store}/${date}_${store}_${shortId}_${suffix}.pdf`;
+        entry = `${folder}/${date}_${store}_${shortId}_${suffix}.pdf`;
         suffix++;
       }
       usedNames.add(entry);

@@ -95,7 +95,7 @@ router.get('/invoices/:id/download', async (req, res) => {
 // ─── Bulk invoice downloads by week / month, per store ────────────────────────
 
 const { buildInvoicesCsv } = require('../services/exportService');
-const { streamInvoiceZip } = require('../services/invoiceZipService');
+const { streamInvoiceZip, periodLabel } = require('../services/invoiceZipService');
 
 /**
  * GET /operation-manager/invoices-export
@@ -164,24 +164,28 @@ router.get('/invoices-export', async (req, res) => {
       invoices.push({ ...inv, items: itemsRes.rows });
     }
 
-    const safeStore = (store || 'all_stores').replace(/\s+/g, '_');
-    const periodPart = period === 'month' ? startStr.substring(0, 7) : startStr;
+    const safeStore = (store || 'All Stores').replace(/\s+/g, '_');
+    const periodKind = period === 'month' ? 'month' : 'week';
+
+    // Readable period label, e.g. "August 2026" or "Week 3-9 Aug 2026"
+    const label = periodLabel(periodKind, startStr, endStr);
+    // Same label made filename-safe, collapsing any run of separators so a
+    // range like "29 Jul - 4 Aug" doesn't become "29-Jul---4-Aug".
+    const labelForFile = label
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
 
     if (format === 'csv') {
       const title = `Invoices — ${store || 'All Stores'} — ${rangeLabel}`;
       const csv = buildInvoicesCsv(title, invoices);
       res.setHeader('Content-Type', 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="invoices_${safeStore}_${periodPart}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeStore}_${labelForFile}.csv"`);
       return res.send(csv);
     }
 
-    // ZIP of individual PDFs, foldered as "<Store> - Week" / "<Store> - Month"
-    await streamInvoiceZip(
-      res,
-      invoices,
-      `invoices_${safeStore}_${periodPart}.zip`,
-      { period: period === 'month' ? 'month' : 'week' }
-    );
+    // ZIP of PDFs, foldered as "<Store> - August 2026" / "<Store> - Week 3-9 Aug 2026"
+    await streamInvoiceZip(res, invoices, `${safeStore}_${labelForFile}.zip`, { label });
   } catch (e) {
     console.error('[OperationManager] invoices-export error', e);
     // Headers may already be sent once the archive starts streaming.

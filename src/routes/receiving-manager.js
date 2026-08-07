@@ -594,85 +594,63 @@ router.get('/cash', async (req, res) => {
       byStore[sub.store_name].push(sub);
     });
 
-    // ─── Wages per store for the current week and month ─────────────────
-    // Shown alongside cash so payroll can compare money in against wages out.
+    // ─── Wages history per store: all weeks + all months ───────────────
     const toLocal = (d) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    // Current week (Monday → Sunday) in Melbourne time
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));
-    const dow = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow));
-    const weekStart = toLocal(monday);
-
-    // Previous week
-    const prevMonday = new Date(monday);
-    prevMonday.setDate(prevMonday.getDate() - 7);
-    const prevWeekStart = toLocal(prevMonday);
-
-    // Current month bounds
-    const monthStart = toLocal(new Date(now.getFullYear(), now.getMonth(), 1));
-    const monthEnd = toLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-
-    // Previous month bounds
-    const prevMonthStart = toLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-    const prevMonthEnd = toLocal(new Date(now.getFullYear(), now.getMonth(), 0));
-
-    const wageRes = await pool.query(
-      `SELECT s.name AS store_name,
-              COALESCE(SUM(CASE WHEN t.week_start = $1
-                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS week_pay,
-              COALESCE(SUM(CASE WHEN t.week_start = $1
-                                THEN te.hours_worked END), 0) AS week_hours,
-              COALESCE(SUM(CASE WHEN t.week_start = $2
-                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS prev_week_pay,
-              COALESCE(SUM(CASE WHEN t.week_start = $2
-                                THEN te.hours_worked END), 0) AS prev_week_hours,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $3 AND te.shift_date <= $4
-                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS month_pay,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $3 AND te.shift_date <= $4
-                                THEN te.hours_worked END), 0) AS month_hours,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $5 AND te.shift_date <= $6
-                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS prev_month_pay,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $5 AND te.shift_date <= $6
-                                THEN te.hours_worked END), 0) AS prev_month_hours
+    // All weeks that have timesheets, grouped by store
+    const weeklyWagesRes = await pool.query(
+      `SELECT s.name AS store_name, t.week_start,
+              SUM(te.hours_worked) AS hours,
+              SUM(te.hours_worked * COALESCE(u.hourly_wage, 0)) AS pay
        FROM timesheet_entries te
        JOIN timesheets t ON t.id = te.timesheet_id
        JOIN users u ON u.id = te.employee_id
        JOIN stores s ON s.id = t.store_id
-       GROUP BY s.name`,
-      [weekStart, prevWeekStart, monthStart, monthEnd, prevMonthStart, prevMonthEnd]
+       GROUP BY s.name, t.week_start
+       ORDER BY t.week_start DESC`
     );
 
-    const wagesByStore = {};
-    wageRes.rows.forEach(r => {
-      wagesByStore[r.store_name] = {
-        weekPay: Math.round((parseFloat(r.week_pay) || 0) * 100) / 100,
-        weekHours: Math.round((parseFloat(r.week_hours) || 0) * 10) / 10,
-        prevWeekPay: Math.round((parseFloat(r.prev_week_pay) || 0) * 100) / 100,
-        prevWeekHours: Math.round((parseFloat(r.prev_week_hours) || 0) * 10) / 10,
-        monthPay: Math.round((parseFloat(r.month_pay) || 0) * 100) / 100,
-        monthHours: Math.round((parseFloat(r.month_hours) || 0) * 10) / 10,
-        prevMonthPay: Math.round((parseFloat(r.prev_month_pay) || 0) * 100) / 100,
-        prevMonthHours: Math.round((parseFloat(r.prev_month_hours) || 0) * 10) / 10
-      };
-    });
+    // All months that have data, grouped by store
+    const monthlyWagesRes = await pool.query(
+      `SELECT s.name AS store_name,
+              date_trunc('month', te.shift_date) AS month_start,
+              SUM(te.hours_worked) AS hours,
+              SUM(te.hours_worked * COALESCE(u.hourly_wage, 0)) AS pay
+       FROM timesheet_entries te
+       JOIN timesheets t ON t.id = te.timesheet_id
+       JOIN users u ON u.id = te.employee_id
+       JOIN stores s ON s.id = t.store_id
+       GROUP BY s.name, date_trunc('month', te.shift_date)
+       ORDER BY month_start DESC`
+    );
 
-    const prevMonthLabel = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      .toLocaleDateString('en-AU', { month: 'long' });
+    // Group into { storeName: { weeks: [...], months: [...] } }
+    const wagesByStore = {};
+    weeklyWagesRes.rows.forEach(r => {
+      if (!wagesByStore[r.store_name]) wagesByStore[r.store_name] = { weeks: [], months: [] };
+      const ws = typeof r.week_start === 'string' ? r.week_start.substring(0, 10) : toLocal(new Date(r.week_start));
+      wagesByStore[r.store_name].weeks.push({
+        weekStart: ws,
+        hours: Math.round((parseFloat(r.hours) || 0) * 10) / 10,
+        pay: Math.round((parseFloat(r.pay) || 0) * 100) / 100
+      });
+    });
+    monthlyWagesRes.rows.forEach(r => {
+      if (!wagesByStore[r.store_name]) wagesByStore[r.store_name] = { weeks: [], months: [] };
+      const ms = new Date(r.month_start);
+      wagesByStore[r.store_name].months.push({
+        label: ms.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
+        hours: Math.round((parseFloat(r.hours) || 0) * 10) / 10,
+        pay: Math.round((parseFloat(r.pay) || 0) * 100) / 100
+      });
+    });
 
     res.render('receiving-manager/cash', {
       user: req.user,
       byStore,
       total,
-      wagesByStore,
-      periodLabels: {
-        week: weekStart,
-        prevWeek: prevWeekStart,
-        month: now.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
-        prevMonth: prevMonthLabel
-      }
+      wagesByStore
     });
   } catch (e) {
     console.error('[ReceivingManager] cash list error', e);
@@ -680,8 +658,7 @@ router.get('/cash', async (req, res) => {
       user: req.user,
       byStore: {},
       total: 0,
-      wagesByStore: {},
-      periodLabels: { week: '', prevWeek: '', month: '', prevMonth: '' }
+      wagesByStore: {}
     });
   }
 });

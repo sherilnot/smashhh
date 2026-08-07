@@ -9,9 +9,6 @@
 
     <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
       <%= total %> report<%= total !== 1 ? 's' : '' %> total · Tap a store to expand
-      <% if (typeof periodLabels !== 'undefined' && periodLabels.month) { %>
-        <br><span style="font-size:0.72rem;">Wage figures cover the week from <%= formatDate(periodLabels.week) %> and the month of <%= periodLabels.month %>.</span>
-      <% } %>
     </p>
 
     <div style="display:flex; flex-direction:column; gap:0.6rem;">
@@ -34,33 +31,65 @@
             </div>
           </div>
 
-          <!-- Wages for this store: current + previous week and month -->
+          <!-- Wages history: weekly + monthly scrollable tables -->
           <%
             var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
               ? wagesByStore[storeName]
-              : { weekPay: 0, weekHours: 0, prevWeekPay: 0, prevWeekHours: 0, monthPay: 0, monthHours: 0, prevMonthPay: 0, prevMonthHours: 0 };
-            var labels = (typeof periodLabels !== 'undefined') ? periodLabels : {};
+              : { weeks: [], months: [] };
           %>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; padding:0.55rem 1.1rem 0.7rem; border-top:1px solid var(--border); background:#f7f9fc;">
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
-              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;">This Week</div>
-              <div style="font-size:0.95rem; font-weight:800; color:#1b5e20; margin-top:0.1rem;">$<%= w.weekPay.toFixed(2) %></div>
-              <div style="font-size:0.62rem; color:var(--muted);"><%= w.weekHours.toFixed(1) %> hrs</div>
+          <div style="border-top:1px solid var(--border); background:#f7f9fc; padding:0.7rem 1.1rem;">
+            <!-- Weekly -->
+            <div style="font-size:0.62rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:0.3rem;">Weekly Wages</div>
+            <div style="max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fff; margin-bottom:0.6rem;">
+              <% if (w.weeks && w.weeks.length > 0) { %>
+                <table style="width:100%; border-collapse:collapse; margin:0; border:none; box-shadow:none; border-radius:0; font-size:0.78rem;">
+                  <thead>
+                    <tr>
+                      <th style="padding:0.35rem 0.6rem; text-align:left; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Week</th>
+                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Hours</th>
+                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Pay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% w.weeks.forEach(function(wk) { %>
+                      <tr>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; font-weight:600;"><%= formatDate(wk.weekStart) %></td>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; color:var(--muted);"><%= wk.hours.toFixed(1) %>h</td>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; font-weight:700; color:#1b5e20;">$<%= wk.pay.toFixed(2) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              <% } else { %>
+                <div style="padding:0.75rem; text-align:center; color:var(--muted); font-size:0.78rem;">No weekly data yet</div>
+              <% } %>
             </div>
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
-              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;">Last Week</div>
-              <div style="font-size:0.95rem; font-weight:800; color:#555; margin-top:0.1rem;">$<%= w.prevWeekPay.toFixed(2) %></div>
-              <div style="font-size:0.62rem; color:var(--muted);"><%= w.prevWeekHours.toFixed(1) %> hrs</div>
-            </div>
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
-              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;"><%= labels.month || 'This Month' %></div>
-              <div style="font-size:0.95rem; font-weight:800; color:#0d47a1; margin-top:0.1rem;">$<%= w.monthPay.toFixed(2) %></div>
-              <div style="font-size:0.62rem; color:var(--muted);"><%= w.monthHours.toFixed(1) %> hrs</div>
-            </div>
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
-              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;"><%= labels.prevMonth || 'Last Month' %></div>
-              <div style="font-size:0.95rem; font-weight:800; color:#555; margin-top:0.1rem;">$<%= w.prevMonthPay.toFixed(2) %></div>
-              <div style="font-size:0.62rem; color:var(--muted);"><%= w.prevMonthHours.toFixed(1) %> hrs</div>
+
+            <!-- Monthly -->
+            <div style="font-size:0.62rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:0.3rem;">Monthly Wages</div>
+            <div style="max-height:130px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fff;">
+              <% if (w.months && w.months.length > 0) { %>
+                <table style="width:100%; border-collapse:collapse; margin:0; border:none; box-shadow:none; border-radius:0; font-size:0.78rem;">
+                  <thead>
+                    <tr>
+                      <th style="padding:0.35rem 0.6rem; text-align:left; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Month</th>
+                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Hours</th>
+                      <th style="padding:0.35rem 0.6rem; text-align:right; background:#eef2f7; font-size:0.62rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--muted);">Pay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% w.months.forEach(function(mo) { %>
+                      <tr>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; font-weight:600;"><%= mo.label %></td>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; color:var(--muted);"><%= mo.hours.toFixed(1) %>h</td>
+                        <td style="padding:0.3rem 0.6rem; border-bottom:1px solid #f0f0f0; text-align:right; font-weight:700; color:#0d47a1;">$<%= mo.pay.toFixed(2) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              <% } else { %>
+                <div style="padding:0.75rem; text-align:center; color:var(--muted); font-size:0.78rem;">No monthly data yet</div>
+              <% } %>
             </div>
           </div>
 

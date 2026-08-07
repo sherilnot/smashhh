@@ -606,9 +606,18 @@ router.get('/cash', async (req, res) => {
     monday.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow));
     const weekStart = toLocal(monday);
 
+    // Previous week
+    const prevMonday = new Date(monday);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const prevWeekStart = toLocal(prevMonday);
+
     // Current month bounds
     const monthStart = toLocal(new Date(now.getFullYear(), now.getMonth(), 1));
     const monthEnd = toLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+    // Previous month bounds
+    const prevMonthStart = toLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const prevMonthEnd = toLocal(new Date(now.getFullYear(), now.getMonth(), 0));
 
     const wageRes = await pool.query(
       `SELECT s.name AS store_name,
@@ -616,16 +625,24 @@ router.get('/cash', async (req, res) => {
                                 THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS week_pay,
               COALESCE(SUM(CASE WHEN t.week_start = $1
                                 THEN te.hours_worked END), 0) AS week_hours,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $2 AND te.shift_date <= $3
+              COALESCE(SUM(CASE WHEN t.week_start = $2
+                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS prev_week_pay,
+              COALESCE(SUM(CASE WHEN t.week_start = $2
+                                THEN te.hours_worked END), 0) AS prev_week_hours,
+              COALESCE(SUM(CASE WHEN te.shift_date >= $3 AND te.shift_date <= $4
                                 THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS month_pay,
-              COALESCE(SUM(CASE WHEN te.shift_date >= $2 AND te.shift_date <= $3
-                                THEN te.hours_worked END), 0) AS month_hours
+              COALESCE(SUM(CASE WHEN te.shift_date >= $3 AND te.shift_date <= $4
+                                THEN te.hours_worked END), 0) AS month_hours,
+              COALESCE(SUM(CASE WHEN te.shift_date >= $5 AND te.shift_date <= $6
+                                THEN te.hours_worked * COALESCE(u.hourly_wage, 0) END), 0) AS prev_month_pay,
+              COALESCE(SUM(CASE WHEN te.shift_date >= $5 AND te.shift_date <= $6
+                                THEN te.hours_worked END), 0) AS prev_month_hours
        FROM timesheet_entries te
        JOIN timesheets t ON t.id = te.timesheet_id
        JOIN users u ON u.id = te.employee_id
        JOIN stores s ON s.id = t.store_id
        GROUP BY s.name`,
-      [weekStart, monthStart, monthEnd]
+      [weekStart, prevWeekStart, monthStart, monthEnd, prevMonthStart, prevMonthEnd]
     );
 
     const wagesByStore = {};
@@ -633,10 +650,17 @@ router.get('/cash', async (req, res) => {
       wagesByStore[r.store_name] = {
         weekPay: Math.round((parseFloat(r.week_pay) || 0) * 100) / 100,
         weekHours: Math.round((parseFloat(r.week_hours) || 0) * 10) / 10,
+        prevWeekPay: Math.round((parseFloat(r.prev_week_pay) || 0) * 100) / 100,
+        prevWeekHours: Math.round((parseFloat(r.prev_week_hours) || 0) * 10) / 10,
         monthPay: Math.round((parseFloat(r.month_pay) || 0) * 100) / 100,
-        monthHours: Math.round((parseFloat(r.month_hours) || 0) * 10) / 10
+        monthHours: Math.round((parseFloat(r.month_hours) || 0) * 10) / 10,
+        prevMonthPay: Math.round((parseFloat(r.prev_month_pay) || 0) * 100) / 100,
+        prevMonthHours: Math.round((parseFloat(r.prev_month_hours) || 0) * 10) / 10
       };
     });
+
+    const prevMonthLabel = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      .toLocaleDateString('en-AU', { month: 'long' });
 
     res.render('receiving-manager/cash', {
       user: req.user,
@@ -645,7 +669,9 @@ router.get('/cash', async (req, res) => {
       wagesByStore,
       periodLabels: {
         week: weekStart,
-        month: now.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+        prevWeek: prevWeekStart,
+        month: now.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
+        prevMonth: prevMonthLabel
       }
     });
   } catch (e) {
@@ -655,7 +681,7 @@ router.get('/cash', async (req, res) => {
       byStore: {},
       total: 0,
       wagesByStore: {},
-      periodLabels: { week: '', month: '' }
+      periodLabels: { week: '', prevWeek: '', month: '', prevMonth: '' }
     });
   }
 });

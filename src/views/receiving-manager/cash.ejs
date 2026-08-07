@@ -34,22 +34,33 @@
             </div>
           </div>
 
-          <!-- Wages for this store: current week + current month -->
+          <!-- Wages for this store: current + previous week and month -->
           <%
             var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
               ? wagesByStore[storeName]
-              : { weekPay: 0, weekHours: 0, monthPay: 0, monthHours: 0 };
+              : { weekPay: 0, weekHours: 0, prevWeekPay: 0, prevWeekHours: 0, monthPay: 0, monthHours: 0, prevMonthPay: 0, prevMonthHours: 0 };
+            var labels = (typeof periodLabels !== 'undefined') ? periodLabels : {};
           %>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; padding:0.65rem 1.1rem 0.8rem; border-top:1px solid var(--border); background:#f7f9fc;">
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.5rem 0.7rem;">
-              <div style="font-size:0.6rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Wages This Week</div>
-              <div style="font-size:1rem; font-weight:800; color:#1b5e20; margin-top:0.1rem;">$<%= w.weekPay.toFixed(2) %></div>
-              <div style="font-size:0.66rem; color:var(--muted);"><%= w.weekHours.toFixed(1) %> hrs</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; padding:0.55rem 1.1rem 0.7rem; border-top:1px solid var(--border); background:#f7f9fc;">
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
+              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;">This Week</div>
+              <div style="font-size:0.95rem; font-weight:800; color:#1b5e20; margin-top:0.1rem;">$<%= w.weekPay.toFixed(2) %></div>
+              <div style="font-size:0.62rem; color:var(--muted);"><%= w.weekHours.toFixed(1) %> hrs</div>
             </div>
-            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.5rem 0.7rem;">
-              <div style="font-size:0.6rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;">Wages This Month</div>
-              <div style="font-size:1rem; font-weight:800; color:#0d47a1; margin-top:0.1rem;">$<%= w.monthPay.toFixed(2) %></div>
-              <div style="font-size:0.66rem; color:var(--muted);"><%= w.monthHours.toFixed(1) %> hrs</div>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
+              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;">Last Week</div>
+              <div style="font-size:0.95rem; font-weight:800; color:#555; margin-top:0.1rem;">$<%= w.prevWeekPay.toFixed(2) %></div>
+              <div style="font-size:0.62rem; color:var(--muted);"><%= w.prevWeekHours.toFixed(1) %> hrs</div>
+            </div>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
+              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;"><%= labels.month || 'This Month' %></div>
+              <div style="font-size:0.95rem; font-weight:800; color:#0d47a1; margin-top:0.1rem;">$<%= w.monthPay.toFixed(2) %></div>
+              <div style="font-size:0.62rem; color:var(--muted);"><%= w.monthHours.toFixed(1) %> hrs</div>
+            </div>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:9px; padding:0.45rem 0.6rem;">
+              <div style="font-size:0.58rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px;"><%= labels.prevMonth || 'Last Month' %></div>
+              <div style="font-size:0.95rem; font-weight:800; color:#555; margin-top:0.1rem;">$<%= w.prevMonthPay.toFixed(2) %></div>
+              <div style="font-size:0.62rem; color:var(--muted);"><%= w.prevMonthHours.toFixed(1) %> hrs</div>
             </div>
           </div>
 

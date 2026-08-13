@@ -572,6 +572,21 @@ router.post('/payslips/send', async (req, res) => {
   }
 });
 
+// Send a single payslip to one employee
+router.post('/payslips/send-one', async (req, res) => {
+  try {
+    const { payslipId, weekStart } = req.body;
+    await pool.query(
+      `UPDATE payslips SET status = 'sent', sent_at = NOW() WHERE id = $1 AND status = 'draft'`,
+      [payslipId]
+    );
+    res.redirect(`/receiving-manager/payslips/${weekStart}?success=1`);
+  } catch (e) {
+    console.error('[Payslips] send-one error', e);
+    res.redirect(`/receiving-manager/payslips/${req.body.weekStart}?error=Failed+to+send`);
+  }
+});
+
 // Download a single payslip as PDF
 router.get('/payslips/download/:id', async (req, res) => {
   try {

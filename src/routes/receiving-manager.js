@@ -594,55 +594,66 @@ router.get('/cash', async (req, res) => {
       byStore[sub.store_name].push(sub);
     });
 
-    // ─── Wages history per store: all weeks + all months ───────────────
-    const toLocal = (d) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    // All weeks that have timesheets, grouped by store
-    const weeklyWagesRes = await pool.query(
-      `SELECT s.name AS store_name, t.week_start,
-              SUM(te.hours_worked) AS hours,
-              SUM(te.hours_worked * COALESCE(u.hourly_wage, 0)) AS pay
-       FROM timesheet_entries te
-       JOIN timesheets t ON t.id = te.timesheet_id
-       JOIN users u ON u.id = te.employee_id
-       JOIN stores s ON s.id = t.store_id
-       GROUP BY s.name, t.week_start
-       ORDER BY t.week_start DESC`
+    // ─── Cash totals per store, grouped by week and by month ───────────
+    // date_trunc('week') in Postgres starts on Monday, matching the rest of
+    // the app. Only submitted cash counts toward these totals.
+    const weeklyCashRes = await pool.query(
+      `SELECT s.name AS store_name,
+              date_trunc('week', cs.submitted_at) AS week_start,
+              COUNT(*) AS report_count,
+              SUM(cs.amount) AS total
+       FROM cash_submissions cs
+       JOIN stores s ON s.id = cs.store_id
+       GROUP BY s.name, date_trunc('week', cs.submitted_at)
+       ORDER BY week_start DESC`
     );
 
-    // All months that have data, grouped by store
-    const monthlyWagesRes = await pool.query(
+    const monthlyCashRes = await pool.query(
       `SELECT s.name AS store_name,
-              date_trunc('month', te.shift_date) AS month_start,
-              SUM(te.hours_worked) AS hours,
-              SUM(te.hours_worked * COALESCE(u.hourly_wage, 0)) AS pay
-       FROM timesheet_entries te
-       JOIN timesheets t ON t.id = te.timesheet_id
-       JOIN users u ON u.id = te.employee_id
-       JOIN stores s ON s.id = t.store_id
-       GROUP BY s.name, date_trunc('month', te.shift_date)
+              date_trunc('month', cs.submitted_at) AS month_start,
+              COUNT(*) AS report_count,
+              SUM(cs.amount) AS total
+       FROM cash_submissions cs
+       JOIN stores s ON s.id = cs.store_id
+       GROUP BY s.name, date_trunc('month', cs.submitted_at)
        ORDER BY month_start DESC`
     );
 
+    /** Format a week's Monday into "3-9 Aug 2026", spelling out boundaries. */
+    const weekLabel = (weekStartValue) => {
+      const start = new Date(weekStartValue);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const mon = (d) => d.toLocaleDateString('en-AU', { month: 'short' });
+      if (start.getFullYear() !== end.getFullYear()) {
+        return `${start.getDate()} ${mon(start)} ${start.getFullYear()} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
+      }
+      if (start.getMonth() !== end.getMonth()) {
+        return `${start.getDate()} ${mon(start)} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
+      }
+      return `${start.getDate()}-${end.getDate()} ${mon(start)} ${start.getFullYear()}`;
+    };
+
     // Group into { storeName: { weeks: [...], months: [...] } }
-    const wagesByStore = {};
-    weeklyWagesRes.rows.forEach(r => {
-      if (!wagesByStore[r.store_name]) wagesByStore[r.store_name] = { weeks: [], months: [] };
-      const ws = typeof r.week_start === 'string' ? r.week_start.substring(0, 10) : toLocal(new Date(r.week_start));
-      wagesByStore[r.store_name].weeks.push({
-        weekStart: ws,
-        hours: Math.round((parseFloat(r.hours) || 0) * 10) / 10,
-        pay: Math.round((parseFloat(r.pay) || 0) * 100) / 100
+    const cashPeriods = {};
+    const ensure = (name) => {
+      if (!cashPeriods[name]) cashPeriods[name] = { weeks: [], months: [] };
+      return cashPeriods[name];
+    };
+
+    weeklyCashRes.rows.forEach(r => {
+      ensure(r.store_name).weeks.push({
+        label: weekLabel(r.week_start),
+        count: parseInt(r.report_count, 10) || 0,
+        total: Math.round((parseFloat(r.total) || 0) * 100) / 100
       });
     });
-    monthlyWagesRes.rows.forEach(r => {
-      if (!wagesByStore[r.store_name]) wagesByStore[r.store_name] = { weeks: [], months: [] };
-      const ms = new Date(r.month_start);
-      wagesByStore[r.store_name].months.push({
-        label: ms.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
-        hours: Math.round((parseFloat(r.hours) || 0) * 10) / 10,
-        pay: Math.round((parseFloat(r.pay) || 0) * 100) / 100
+
+    monthlyCashRes.rows.forEach(r => {
+      ensure(r.store_name).months.push({
+        label: new Date(r.month_start).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
+        count: parseInt(r.report_count, 10) || 0,
+        total: Math.round((parseFloat(r.total) || 0) * 100) / 100
       });
     });
 
@@ -650,7 +661,7 @@ router.get('/cash', async (req, res) => {
       user: req.user,
       byStore,
       total,
-      wagesByStore
+      cashPeriods
     });
   } catch (e) {
     console.error('[ReceivingManager] cash list error', e);
@@ -658,7 +669,7 @@ router.get('/cash', async (req, res) => {
       user: req.user,
       byStore: {},
       total: 0,
-      wagesByStore: {}
+      cashPeriods: {}
     });
   }
 });

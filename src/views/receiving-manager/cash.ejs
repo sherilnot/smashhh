@@ -1,6 +1,6 @@
 <%- include('../partials/header', { title: 'Cash Reports', role: 'receiving_manager', active: 'cash', live: 'cash:submitted' }) %>
 
-  <h1>Cash &amp; Wages by Store</h1>
+  <h1>Cash Reports by Store</h1>
 
   <% var storeNames = Object.keys(byStore); %>
 
@@ -73,7 +73,7 @@
   </style>
 
     <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">
-      <%= total %> cash report<%= total !== 1 ? 's' : '' %> · Tap a store to see its reports and wage history
+      <%= total %> cash report<%= total !== 1 ? 's' : '' %> · Tap a store to see its reports and weekly or monthly totals
     </p>
 
     <div style="display:flex; flex-direction:column; gap:0.6rem;">
@@ -83,13 +83,13 @@
           var cashTotal = 0;
           subs.forEach(function(s) { cashTotal += parseFloat(s.amount) || 0; });
 
-          var w = (typeof wagesByStore !== 'undefined' && wagesByStore[storeName])
-            ? wagesByStore[storeName] : { weeks: [], months: [] };
+          var p = (typeof cashPeriods !== 'undefined' && cashPeriods[storeName])
+            ? cashPeriods[storeName] : { weeks: [], months: [] };
 
-          var wkTotalPay = 0, wkTotalHours = 0;
-          w.weeks.forEach(function(x) { wkTotalPay += x.pay; wkTotalHours += x.hours; });
-          var moTotalPay = 0, moTotalHours = 0;
-          w.months.forEach(function(x) { moTotalPay += x.pay; moTotalHours += x.hours; });
+          var wkSum = 0, wkCount = 0;
+          p.weeks.forEach(function(x) { wkSum += x.total; wkCount += x.count; });
+          var moSum = 0, moCount = 0;
+          p.months.forEach(function(x) { moSum += x.total; moCount += x.count; });
         %>
 
         <div class="st-card" id="card-<%= sIdx %>">
@@ -113,9 +113,9 @@
           <div class="st-body">
 
             <div class="st-tabs">
-              <button class="st-tab active" onclick="showTab(<%= sIdx %>, 0, this)">Cash</button>
-              <button class="st-tab" onclick="showTab(<%= sIdx %>, 1, this)">Weekly Wages</button>
-              <button class="st-tab" onclick="showTab(<%= sIdx %>, 2, this)">Monthly Wages</button>
+              <button class="st-tab active" onclick="showTab(<%= sIdx %>, 0, this)">All Reports</button>
+              <button class="st-tab" onclick="showTab(<%= sIdx %>, 1, this)">Weekly</button>
+              <button class="st-tab" onclick="showTab(<%= sIdx %>, 2, this)">Monthly</button>
             </div>
 
             <!-- Pane 0: cash reports -->
@@ -144,52 +144,52 @@
               <% } %>
             </div>
 
-            <!-- Pane 1: weekly wages -->
+            <!-- Pane 1: cash totals by week -->
             <div class="st-pane" id="pane-<%= sIdx %>-1">
-              <% if (!w.weeks || w.weeks.length === 0) { %>
-                <div class="st-empty">No weekly wage data yet.</div>
+              <% if (!p.weeks || p.weeks.length === 0) { %>
+                <div class="st-empty">No cash reports yet.</div>
               <% } else { %>
                 <div class="st-colhead st-row-wage">
-                  <span>Week Starting</span><span>Hours</span><span>Wages</span>
+                  <span>Week</span><span>Reports</span><span>Cash</span>
                 </div>
                 <div class="st-scroll">
-                  <% w.weeks.forEach(function(wk) { %>
+                  <% p.weeks.forEach(function(wk) { %>
                     <div class="st-row st-row-wage">
-                      <span class="st-primary"><%= formatDate(wk.weekStart) %></span>
-                      <span class="st-num"><%= wk.hours.toFixed(1) %>h</span>
-                      <span class="st-money wk">$<%= wk.pay.toFixed(2) %></span>
+                      <span class="st-primary"><%= wk.label %></span>
+                      <span class="st-num"><%= wk.count %></span>
+                      <span class="st-money wk">$<%= wk.total.toFixed(2) %></span>
                     </div>
                   <% }); %>
                 </div>
                 <div class="st-total st-row-wage">
                   <span>Total</span>
-                  <span class="st-num" style="color:var(--ink);"><%= wkTotalHours.toFixed(1) %>h</span>
-                  <span class="st-money wk">$<%= wkTotalPay.toFixed(2) %></span>
+                  <span class="st-num" style="color:var(--ink);"><%= wkCount %></span>
+                  <span class="st-money wk">$<%= wkSum.toFixed(2) %></span>
                 </div>
               <% } %>
             </div>
 
-            <!-- Pane 2: monthly wages -->
+            <!-- Pane 2: cash totals by month -->
             <div class="st-pane" id="pane-<%= sIdx %>-2">
-              <% if (!w.months || w.months.length === 0) { %>
-                <div class="st-empty">No monthly wage data yet.</div>
+              <% if (!p.months || p.months.length === 0) { %>
+                <div class="st-empty">No cash reports yet.</div>
               <% } else { %>
                 <div class="st-colhead st-row-wage">
-                  <span>Month</span><span>Hours</span><span>Wages</span>
+                  <span>Month</span><span>Reports</span><span>Cash</span>
                 </div>
                 <div class="st-scroll">
-                  <% w.months.forEach(function(mo) { %>
+                  <% p.months.forEach(function(mo) { %>
                     <div class="st-row st-row-wage">
                       <span class="st-primary"><%= mo.label %></span>
-                      <span class="st-num"><%= mo.hours.toFixed(1) %>h</span>
-                      <span class="st-money mo">$<%= mo.pay.toFixed(2) %></span>
+                      <span class="st-num"><%= mo.count %></span>
+                      <span class="st-money mo">$<%= mo.total.toFixed(2) %></span>
                     </div>
                   <% }); %>
                 </div>
                 <div class="st-total st-row-wage">
                   <span>Total</span>
-                  <span class="st-num" style="color:var(--ink);"><%= moTotalHours.toFixed(1) %>h</span>
-                  <span class="st-money mo">$<%= moTotalPay.toFixed(2) %></span>
+                  <span class="st-num" style="color:var(--ink);"><%= moCount %></span>
+                  <span class="st-money mo">$<%= moSum.toFixed(2) %></span>
                 </div>
               <% } %>
             </div>

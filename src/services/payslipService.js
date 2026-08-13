@@ -264,15 +264,24 @@ function generatePayslipPdf(slip) {
   const barY = 220;
   doc.moveTo(leftX, barY).lineTo(rightX, barY).strokeColor(lineColor).lineWidth(0.5).stroke();
 
-  /** Format a date value to DD/MM/YYYY using local calendar parts (avoids UTC shift). */
+  /** Format a date value to DD/MM/YYYY. Handles both strings and Date objects
+      safely regardless of server timezone by extracting from the ISO string. */
   const formatAU = (d) => {
     if (!d) return '';
+    // Get YYYY-MM-DD reliably: if it's a Date object, use toISOString which is
+    // always UTC and the DB stores dates at UTC midnight. If it's a string,
+    // just take the first 10 chars.
+    let iso;
     if (typeof d === 'string') {
-      const parts = d.substring(0, 10).split('-');
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      iso = d.substring(0, 10);
+    } else if (d instanceof Date) {
+      iso = d.toISOString().substring(0, 10);
+    } else {
+      iso = String(d).substring(0, 10);
     }
-    const dt = new Date(d);
-    return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+    const parts = iso.split('-');
+    if (parts.length !== 3) return String(d);
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
   doc.fontSize(7.5).font('Helvetica').fillColor(lightGray);

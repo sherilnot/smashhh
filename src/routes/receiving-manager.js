@@ -504,13 +504,17 @@ router.post('/payslips/generate', async (req, res) => {
     if (!weekStart) return res.redirect('/receiving-manager/payslips?error=Missing+week');
 
     // week end = weekStart + 6 days, payment date = weekEnd + 4 (Wednesday after)
-    const ws = new Date(weekStart + 'T00:00:00');
-    const we = new Date(ws); we.setDate(ws.getDate() + 6);
-    const pd = new Date(we); pd.setDate(we.getDate() + 4);
+    // Parse as plain date parts to avoid any timezone shifting.
+    const [y, m, d] = weekStart.split('-').map(Number);
+    const wsDate = new Date(y, m - 1, d);
+    const weDate = new Date(y, m - 1, d + 6);
+    const pdDate = new Date(y, m - 1, d + 10);
 
-    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    const weekEnd = fmt(weDate);
+    const paymentDate = fmt(pdDate);
 
-    const result = await generateWeeklyPayslips(weekStart, fmt(we), fmt(pd), req.user.userId);
+    const result = await generateWeeklyPayslips(weekStart, weekEnd, paymentDate, req.user.userId);
     if (!result.success) {
       return res.redirect(`/receiving-manager/payslips?error=${encodeURIComponent(result.error)}`);
     }

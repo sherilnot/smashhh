@@ -1,0 +1,35 @@
+<%- include('../partials/header', { title: 'My Payslips', role: 'employee', active: 'payslips' }) %>
+
+  <h1>My Payslips</h1>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+
+  <% if (payslips.length === 0) { %>
+    <div class="empty">No payslips yet. They appear here after your payroll manager processes the week's pay.</div>
+  <% } else { %>
+    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+      <% payslips.forEach(function(p) { %>
+        <%
+          var ws = typeof p.week_start === 'string' ? p.week_start.substring(0,10) : new Date(p.week_start).toISOString().substring(0,10);
+          var we = typeof p.week_end === 'string' ? p.week_end.substring(0,10) : new Date(p.week_end).toISOString().substring(0,10);
+        %>
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.85rem 1.1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:700; font-size:0.92rem;"><%= formatDate(ws) %> — <%= formatDate(we) %></div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:0.15rem;">
+              <%= p.store_name %> · <%= Number(p.ordinary_hours).toFixed(1) %>h · Gross $<%= Number(p.gross_pay).toFixed(2) %>
+            </div>
+          </div>
+          <div style="text-align:right; margin-right:0.5rem;">
+            <div style="font-weight:800; font-size:1rem; color:var(--green);">$<%= Number(p.net_pay).toFixed(2) %></div>
+            <div style="font-size:0.65rem; color:var(--muted);">Net Pay</div>
+          </div>
+          <a href="/employee/payslips/<%= p.id %>/download" title="Download PDF"
+             style="padding:0.5rem 0.75rem; font-size:0.78rem; font-weight:700; background:linear-gradient(135deg,#1565c0,#1976d2); color:#fff; border-radius:8px; text-decoration:none; flex-shrink:0;">
+            📥 PDF
+          </a>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

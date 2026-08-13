@@ -1,0 +1,94 @@
+<%- include('../partials/header', { title: 'Payslips — Week', role: 'receiving_manager', active: 'payslips' }) %>
+
+  <h1>Payslips</h1>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success) { %><div class="msg">✅ Payslips sent to employees!</div><% } %>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <a href="/receiving-manager/payslips" style="font-size:0.82rem; color:var(--muted); text-decoration:none;">← All Weeks</a>
+      <h2 style="margin:0.2rem 0 0; font-size:1.05rem;">Week of <%= formatDate(weekStart) %></h2>
+    </div>
+    <% if (payslips.length > 0 && !payslips.every(function(p) { return p.status === 'sent'; })) { %>
+      <form method="POST" action="/receiving-manager/payslips/send">
+        <input type="hidden" name="weekStart" value="<%= weekStart %>">
+        <button type="submit" style="padding:0.6rem 1.2rem; font-size:0.88rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; border:none; border-radius:10px; cursor:pointer;">
+          📤 Send All to Employees
+        </button>
+      </form>
+    <% } %>
+  </div>
+
+  <% if (payslips.length === 0) { %>
+    <div class="empty">No payslips for this week.</div>
+  <% } else { %>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; min-width:700px;">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Store</th>
+            <th style="text-align:right;">Hours</th>
+            <th style="text-align:right;">Gross</th>
+            <th style="text-align:right;">Tax (editable)</th>
+            <th style="text-align:right;">Super</th>
+            <th style="text-align:right;">Net Pay</th>
+            <th style="text-align:center;">Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% payslips.forEach(function(p) { %>
+            <tr>
+              <td style="font-weight:600;"><%= p.first_name %> <%= p.last_name || '' %></td>
+              <td style="font-size:0.8rem; color:var(--muted);"><%= p.store_name %></td>
+              <td style="text-align:right;"><%= Number(p.ordinary_hours).toFixed(1) %></td>
+              <td style="text-align:right; font-weight:600;">$<%= Number(p.gross_pay).toFixed(2) %></td>
+              <td style="text-align:right;">
+                <input type="number" step="0.01" min="0"
+                       value="<%= Number(p.tax_amount).toFixed(2) %>"
+                       data-id="<%= p.id %>"
+                       onchange="updateTax(this)"
+                       style="width:80px; text-align:right; padding:0.3rem; border:1.5px solid var(--border); border-radius:6px; font-size:0.82rem; font-weight:600;"
+                       <%= p.status === 'sent' ? 'disabled' : '' %>>
+              </td>
+              <td style="text-align:right; font-size:0.82rem;">$<%= Number(p.super_amount).toFixed(2) %></td>
+              <td style="text-align:right; font-weight:700; color:var(--green);">$<%= Number(p.net_pay).toFixed(2) %></td>
+              <td style="text-align:center;">
+                <% if (p.status === 'sent') { %>
+                  <span style="font-size:0.62rem; padding:0.15rem 0.4rem; background:#e8f5e9; color:#2e7d32; border-radius:5px; font-weight:700;">SENT</span>
+                <% } else { %>
+                  <span style="font-size:0.62rem; padding:0.15rem 0.4rem; background:#fef3e2; color:var(--bun-dark); border-radius:5px; font-weight:700;">DRAFT</span>
+                <% } %>
+              </td>
+              <td>
+                <a href="/receiving-manager/payslips/download/<%= p.id %>" title="Download PDF"
+                   style="font-size:0.78rem; padding:0.3rem 0.5rem; background:linear-gradient(135deg,#1565c0,#1976d2); color:#fff; border-radius:6px; text-decoration:none; font-weight:700;">PDF</a>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <script>
+    async function updateTax(input) {
+      var id = input.dataset.id;
+      var val = input.value;
+      var res = await fetch('/receiving-manager/payslips/update-tax', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payslipId: id, taxAmount: val })
+      });
+      var data = await res.json();
+      if (data.success) {
+        // Refresh the row's net pay
+        var row = input.closest('tr');
+        var netCell = row.querySelectorAll('td')[6];
+        if (netCell && data.payslip) netCell.textContent = '$' + Number(data.payslip.net_pay).toFixed(2);
+      }
+    }
+  </script>
+
+<%- include('../partials/footer') %>

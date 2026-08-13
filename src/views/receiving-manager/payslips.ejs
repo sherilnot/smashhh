@@ -1,0 +1,40 @@
+<%- include('../partials/header', { title: 'Payslips', role: 'receiving_manager', active: 'payslips' }) %>
+
+  <h1>Payslips</h1>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+
+  <!-- Generate for a week -->
+  <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:12px; padding:0.85rem 1rem; margin-bottom:1.25rem;">
+    <div style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:0.5rem;">Generate Payslips</div>
+    <form method="POST" action="/receiving-manager/payslips/generate" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+      <label style="font-size:0.82rem; font-weight:600;">Week starting:</label>
+      <input type="date" name="weekStart" required style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:7px; font-size:0.85rem;">
+      <button type="submit" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; border:none; border-radius:8px; cursor:pointer;">
+        Generate
+      </button>
+    </form>
+  </div>
+
+  <!-- List of existing weeks -->
+  <% if (weeks.length === 0) { %>
+    <div class="empty">No payslips generated yet. Select a week above and click Generate.</div>
+  <% } else { %>
+    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+      <% weeks.forEach(function(w) { %>
+        <a href="/receiving-manager/payslips/<%= typeof w.week_start === 'string' ? w.week_start.substring(0,10) : new Date(w.week_start).toISOString().substring(0,10) %>"
+           style="display:flex; align-items:center; justify-content:space-between; padding:0.8rem 1.1rem; background:var(--warm-white); border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink); box-shadow:var(--shadow);">
+          <div>
+            <div style="font-weight:700; font-size:0.92rem;"><%= formatDate(w.week_start) %> — <%= formatDate(w.week_end) %></div>
+            <div style="font-size:0.73rem; color:var(--muted);"><%= w.emp_count %> employees · $<%= Number(w.total_gross).toFixed(2) %> gross</div>
+          </div>
+          <% if (w.all_sent) { %>
+            <span style="font-size:0.65rem; padding:0.18rem 0.5rem; background:#e8f5e9; color:#2e7d32; border-radius:6px; font-weight:700;">SENT</span>
+          <% } else { %>
+            <span style="font-size:0.65rem; padding:0.18rem 0.5rem; background:#fef3e2; color:var(--bun-dark); border-radius:6px; font-weight:700;">DRAFT</span>
+          <% } %>
+        </a>
+      <% }); %>
+    </div>
+  <% } %>
+
+<%- include('../partials/footer') %>

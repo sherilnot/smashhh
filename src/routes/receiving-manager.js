@@ -465,7 +465,131 @@ router.get('/received-invoices/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
+// ─── Payslips ──────────────────────────────────────────────────────────────────
+
+const {
+  generateWeeklyPayslips,
+  getWeekPayslips,
+  updatePayslipTax,
+  updatePayslipSuper,
+  sendWeekPayslips,
+  generatePayslipPdf,
+  getPayslipById
+} = require('../services/payslipService');
+
+// List weeks that have payslips
+router.get('/payslips', async (req, res) => {
+  try {
+    const weeksRes = await pool.query(
+      `SELECT DISTINCT week_start, week_end,
+              COUNT(*) AS emp_count,
+              SUM(gross_pay) AS total_gross,
+              bool_and(status = 'sent') AS all_sent
+       FROM payslips
+       GROUP BY week_start, week_end
+       ORDER BY week_start DESC
+       LIMIT 52`
+    );
+    res.render('receiving-manager/payslips', { user: req.user, weeks: weeksRes.rows, error: null });
+  } catch (e) {
+    console.error('[Payslips] list error', e);
+    res.render('receiving-manager/payslips', { user: req.user, weeks: [], error: 'Failed to load' });
+  }
+});
+
+// Generate payslips for a week
+router.post('/payslips/generate', async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+    if (!weekStart) return res.redirect('/receiving-manager/payslips?error=Missing+week');
+
+    // week end = weekStart + 6 days, payment date = weekEnd + 4 (Wednesday after)
+    const ws = new Date(weekStart + 'T00:00:00');
+    const we = new Date(ws); we.setDate(ws.getDate() + 6);
+    const pd = new Date(we); pd.setDate(we.getDate() + 4);
+
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const result = await generateWeeklyPayslips(weekStart, fmt(we), fmt(pd), req.user.userId);
+    if (!result.success) {
+      return res.redirect(`/receiving-manager/payslips?error=${encodeURIComponent(result.error)}`);
+    }
+    res.redirect(`/receiving-manager/payslips/${weekStart}`);
+  } catch (e) {
+    console.error('[Payslips] generate error', e);
+    res.redirect('/receiving-manager/payslips?error=Failed+to+generate');
+  }
+});
+
+// View/edit payslips for a specific week
+router.get('/payslips/:weekStart', async (req, res) => {
+  try {
+    const payslips = await getWeekPayslips(req.params.weekStart);
+    res.render('receiving-manager/payslip-week', {
+      user: req.user,
+      payslips,
+      weekStart: req.params.weekStart,
+      error: req.query.error || null,
+      success: req.query.success === '1'
+    });
+  } catch (e) {
+    console.error('[Payslips] week view error', e);
+    res.render('receiving-manager/payslip-week', { user: req.user, payslips: [], weekStart: req.params.weekStart, error: 'Failed to load', success: false });
+  }
+});
+
+// Update tax for a payslip (AJAX)
+router.post('/payslips/update-tax', async (req, res) => {
+  try {
+    const { payslipId, taxAmount } = req.body;
+    const result = await updatePayslipTax(payslipId, taxAmount);
+    res.json(result);
+  } catch (e) {
+    res.json({ success: false, error: 'Failed' });
+  }
+});
+
+// Update super rate for a payslip (AJAX)
+router.post('/payslips/update-super', async (req, res) => {
+  try {
+    const { payslipId, superRate } = req.body;
+    const result = await updatePayslipSuper(payslipId, superRate);
+    res.json(result);
+  } catch (e) {
+    res.json({ success: false, error: 'Failed' });
+  }
+});
+
+// Send all payslips for a week
+router.post('/payslips/send', async (req, res) => {
+  try {
+    const { weekStart } = req.body;
+    await sendWeekPayslips(weekStart);
+    res.redirect(`/receiving-manager/payslips/${weekStart}?success=1`);
+  } catch (e) {
+    console.error('[Payslips] send error', e);
+    res.redirect(`/receiving-manager/payslips/${req.body.weekStart}?error=Failed+to+send`);
+  }
+});
+
+// Download a single payslip as PDF
+router.get('/payslips/download/:id', async (req, res) => {
+  try {
+    const slip = await getPayslipById(req.params.id);
+    if (!slip) return res.status(404).send('Not found');
+
+    const name = `${slip.first_name}_${(slip.last_name || '').replace(/\s+/g, '_')}`;
+    const ws = typeof slip.week_start === 'string' ? slip.week_start.substring(0, 10) : toDateOnly(slip.week_start);
+    const filename = `PaySlip_${name}_${ws}.pdf`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    generatePayslipPdf(slip).pipe(res);
+  } catch (e) {
+    console.error('[Payslips] download error', e);
+    res.status(500).send('Failed to generate PDF');
+  }
+});
 
 // ─── Timesheet Downloads (weekly + monthly Excel) ──────────────────────────────
 

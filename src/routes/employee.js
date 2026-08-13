@@ -640,4 +640,34 @@ router.get('/notifications/debug', async (req, res) => {
   }
 });
 
+// ─── Payslips (Employee downloads their weekly pay slips) ──────────────────────
+
+router.get('/payslips', async (req, res) => {
+  try {
+    const { getEmployeePayslips } = require('../services/payslipService');
+    const payslips = await getEmployeePayslips(req.user.userId);
+    res.render('employee/payslips', { user: req.user, payslips, error: null });
+  } catch (e) {
+    console.error('[Employee] payslips error', e);
+    res.render('employee/payslips', { user: req.user, payslips: [], error: 'Failed to load payslips' });
+  }
+});
+
+router.get('/payslips/:id/download', async (req, res) => {
+  try {
+    const { getPayslipById, generatePayslipPdf } = require('../services/payslipService');
+    const slip = await getPayslipById(req.params.id);
+    if (!slip || slip.employee_id !== req.user.userId) return res.status(404).send('Not found');
+
+    const ws = typeof slip.week_start === 'string' ? slip.week_start.substring(0, 10) : new Date(slip.week_start).toISOString().substring(0, 10);
+    const filename = `PaySlip_${ws}.pdf`;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    generatePayslipPdf(slip).pipe(res);
+  } catch (e) {
+    console.error('[Employee] payslip download error', e);
+    res.status(500).send('Failed to generate PDF');
+  }
+});
+
 module.exports = router;

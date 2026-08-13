@@ -1,4 +1,4 @@
-<%- include('../partials/header', { title: 'My Payslips', role: 'employee', active: 'payslips' }) %>
+<%- include('../partials/header', { title: 'My Payslips', role: 'employee', active: 'payslips', live: 'payslip:sent' }) %>
 
   <h1>My Payslips</h1>
   <% if (error) { %><div class="error"><%= error %></div><% } %>

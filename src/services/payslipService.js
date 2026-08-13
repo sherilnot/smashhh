@@ -264,8 +264,13 @@ function generatePayslipPdf(slip) {
   const barY = 220;
   doc.moveTo(leftX, barY).lineTo(rightX, barY).strokeColor(lineColor).lineWidth(0.5).stroke();
 
+  /** Format a date value to DD/MM/YYYY using local calendar parts (avoids UTC shift). */
   const formatAU = (d) => {
     if (!d) return '';
+    if (typeof d === 'string') {
+      const parts = d.substring(0, 10).split('-');
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
     const dt = new Date(d);
     return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
   };

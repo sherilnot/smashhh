@@ -565,6 +565,11 @@ router.post('/payslips/send', async (req, res) => {
   try {
     const { weekStart } = req.body;
     await sendWeekPayslips(weekStart);
+
+    // Nudge employees so their payslips page updates
+    const { broadcast } = require('../services/realtimeService');
+    broadcast('payslip:sent', { roles: ['employee'], data: { message: 'New payslip available' } });
+
     res.redirect(`/receiving-manager/payslips/${weekStart}?success=1`);
   } catch (e) {
     console.error('[Payslips] send error', e);
@@ -580,6 +585,10 @@ router.post('/payslips/send-one', async (req, res) => {
       `UPDATE payslips SET status = 'sent', sent_at = NOW() WHERE id = $1 AND status = 'draft'`,
       [payslipId]
     );
+
+    const { broadcast } = require('../services/realtimeService');
+    broadcast('payslip:sent', { roles: ['employee'], data: { message: 'New payslip available' } });
+
     res.redirect(`/receiving-manager/payslips/${weekStart}?success=1`);
   } catch (e) {
     console.error('[Payslips] send-one error', e);

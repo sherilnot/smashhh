@@ -143,6 +143,11 @@
                   <% shifts_in_day.filter(function(s) { return s.booking_status !== 'cancelled'; }).forEach(function(shift) { %>
                     <div style="padding: 0.25rem 0.2rem; border-radius: 5px; background: <%= shift.color %>; font-size: 0.7rem; border: 1px solid rgba(0,0,0,0.05); margin-bottom: 0.2rem;">
                       <div style="font-weight: 600; color: #333;"><%= shift.label %></div>
+                      <% if (shift.is_temporary_assignment && shift.from_store_name) { %>
+                        <div style="font-size: 0.55rem; color: #ff9800; font-weight: 600; background: #fff3e0; padding: 0.1rem 0.2rem; border-radius: 3px; margin: 0.1rem 0;" title="Temporary from <%= shift.from_store_name %>">
+                          📥 From <%= shift.from_store_name %>
+                        </div>
+                      <% } %>
                       <% if (shift.actual_clock_in) { %>
                         <div style="color: var(--green); font-size: 0.6rem;">In: <%= shift.actual_clock_in %></div>
                       <% } %>

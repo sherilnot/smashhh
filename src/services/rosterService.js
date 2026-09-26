@@ -133,10 +133,14 @@ async function getRoster(managerId, weekStart, weekEnd) {
        u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
        s.id AS shift_id, s.start_time, s.end_time, s.store_location,
        sb.id AS booking_id, sb.booking_status, sb.actual_clock_in, sb.actual_clock_out,
-       s.store_id
+       sb.is_temporary_assignment,
+       s.store_id,
+       CASE WHEN ta.id IS NOT NULL THEN from_store.name ELSE NULL END AS from_store_name
      FROM shift_bookings sb
      JOIN shifts s ON s.id = sb.shift_id
      JOIN users u ON u.id = sb.employee_id
+     LEFT JOIN temporary_store_assignments ta ON ta.shift_booking_id = sb.id
+     LEFT JOIN stores from_store ON ta.from_store_id = from_store.id
      WHERE s.store_id = ANY($1)
        AND sb.booking_status = 'confirmed'
        AND s.start_time >= $2
@@ -179,7 +183,9 @@ async function getRoster(managerId, weekStart, weekEnd) {
       end_time: row.end_time,
       store_location: row.store_location,
       actual_clock_in: row.actual_clock_in,
-      actual_clock_out: row.actual_clock_out
+      actual_clock_out: row.actual_clock_out,
+      is_temporary_assignment: row.is_temporary_assignment || false,
+      from_store_name: row.from_store_name || null
     });
   }
 

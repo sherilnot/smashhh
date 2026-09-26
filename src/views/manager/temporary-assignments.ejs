@@ -1,0 +1,185 @@
+<%- include('../partials/header', { title: 'Temporary Assignments', role: 'store_manager', active: 'temporary-assignments' }) %>
+
+  <h1>Temporary Assignments</h1>
+  <p style="color: var(--muted); margin-bottom: 1.5rem; font-size: 0.9rem;">
+    Need extra help? Temporarily bring employees from other stores to work shifts at your store.
+  </p>
+
+  <!-- Success/Error Messages -->
+  <% if (error) { %>
+    <div style="background: #ffe6e6; border: 1px solid #ff4444; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; color: #d00;">
+      <%= error %>
+    </div>
+  <% } %>
+  <% if (success) { %>
+    <div style="background: #e6ffe6; border: 1px solid #44ff44; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; color: #090;">
+      <%= success %>
+    </div>
+  <% } %>
+
+  <!-- Create New Assignment -->
+  <div style="background: var(--warm-white); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow);">
+    <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--ink);">Bring Employee to Your Store</h2>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem;">
+      Assign an employee from another store to work a shift at your store temporarily.
+    </p>
+    
+    <form method="POST" action="/manager/temporary-assignments/create" style="display: flex; flex-direction: column; gap: 1rem;">
+      <!-- Employee Selection -->
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem; color: var(--text-secondary);">
+          1. Select Employee from Another Store
+        </label>
+        <select name="employeeId" id="employeeSelect" required style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; background: white;">
+          <option value="">-- Choose an employee --</option>
+          <% 
+            const employeesByStore = {};
+            employees.forEach(emp => {
+              if (!employeesByStore[emp.store_name]) {
+                employeesByStore[emp.store_name] = [];
+              }
+              employeesByStore[emp.store_name].push(emp);
+            });
+            Object.keys(employeesByStore).sort().forEach(storeName => {
+          %>
+            <optgroup label="<%= storeName %>">
+              <% employeesByStore[storeName].forEach(emp => { %>
+                <option value="<%= emp.id %>"><%= emp.first_name %> <%= emp.last_name %><% if (emp.employment_type) { %> (<%= emp.employment_type %>)<% } %></option>
+              <% }) %>
+            </optgroup>
+          <% }) %>
+        </select>
+      </div>
+
+      <!-- Shift Selection -->
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem; color: var(--text-secondary);">
+          2. Select Shift at YOUR Store
+        </label>
+        <select name="shiftId" id="shiftSelect" required style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; background: white;">
+          <option value="">-- Choose a shift --</option>
+          <% shifts.forEach(shift => { %>
+            <option value="<%= shift.id %>">
+              <%= new Date(shift.start_time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %> – 
+              <%= new Date(shift.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) %>
+              (<%= shift.capacity - shift.current_bookings %> spots available)
+            </option>
+          <% }) %>
+        </select>
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem; color: var(--text-secondary);">
+          3. Reason (optional)
+        </label>
+        <textarea name="notes" rows="2" placeholder="e.g., Need extra help for busy period, covering for sick staff..." style="width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical;"></textarea>
+      </div>
+
+      <button type="submit" style="padding: 0.8rem 1.5rem; background: linear-gradient(135deg, #f4a300, #e8950a); color: var(--bun-dark); border: none; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; align-self: flex-start;">
+        ✓ Assign Employee to My Store
+      </button>
+    </form>
+  </div>
+
+  <!-- Incoming Assignments (Employees coming to your store) -->
+  <div style="margin-bottom: 2rem;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--ink);">📥 Incoming Assignments</h2>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 0.8rem;">
+      Employees from other stores assigned to work at your store
+    </p>
+    
+    <% if (incoming.length === 0) { %>
+      <div class="empty">No incoming temporary assignments.</div>
+    <% } else { %>
+      <div style="display: flex; flex-direction: column; gap: 0.7rem;">
+        <% incoming.forEach(assignment => { %>
+          <div style="background: var(--warm-white); border: 1px solid var(--border); border-left: 4px solid #4CAF50; border-radius: 12px; padding: 1rem; box-shadow: var(--shadow);">
+            <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 0.5rem;">
+              <div style="flex: 1; min-width: 200px;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--ink);">
+                  <%= assignment.first_name %> <%= assignment.last_name %>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  From: <strong><%= assignment.from_store_name %></strong>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  Shift: <%= new Date(assignment.start_time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %> – 
+                  <%= new Date(assignment.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) %>
+                </div>
+                <% if (assignment.notes) { %>
+                  <div style="font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; padding: 0.4rem 0.6rem; background: #f9f9f9; border-radius: 6px;">
+                    💬 <%= assignment.notes %>
+                  </div>
+                <% } %>
+                <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem;">
+                  Status: <span style="<%= assignment.booking_status === 'completed' ? 'color: #4CAF50; font-weight: 600;' : 'color: #ff9800; font-weight: 600;' %>">
+                    <%= assignment.booking_status.toUpperCase() %>
+                  </span>
+                </div>
+              </div>
+              <% if (assignment.booking_status !== 'completed' && new Date(assignment.start_time) > new Date()) { %>
+                <form method="POST" action="/manager/temporary-assignments/cancel/<%= assignment.id %>" style="margin: 0;" onsubmit="return confirm('Cancel this temporary assignment?')">
+                  <button type="submit" style="padding: 0.5rem 1rem; background: #ff4444; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                    Cancel
+                  </button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Outgoing Assignments (Your employees going to other stores) -->
+  <div style="margin-bottom: 2rem;">
+    <h2 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--ink);">📤 Outgoing Assignments</h2>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 0.8rem;">
+      Your employees assigned to work at other stores
+    </p>
+    
+    <% if (outgoing.length === 0) { %>
+      <div class="empty">No outgoing temporary assignments.</div>
+    <% } else { %>
+      <div style="display: flex; flex-direction: column; gap: 0.7rem;">
+        <% outgoing.forEach(assignment => { %>
+          <div style="background: var(--warm-white); border: 1px solid var(--border); border-left: 4px solid #ff9800; border-radius: 12px; padding: 1rem; box-shadow: var(--shadow);">
+            <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 0.5rem;">
+              <div style="flex: 1; min-width: 200px;">
+                <div style="font-weight: 700; font-size: 1rem; color: var(--ink);">
+                  <%= assignment.first_name %> <%= assignment.last_name %>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  To: <strong><%= assignment.to_store_name %></strong>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                  Shift: <%= new Date(assignment.start_time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %> – 
+                  <%= new Date(assignment.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) %>
+                </div>
+                <% if (assignment.notes) { %>
+                  <div style="font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; padding: 0.4rem 0.6rem; background: #f9f9f9; border-radius: 6px;">
+                    💬 <%= assignment.notes %>
+                  </div>
+                <% } %>
+                <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem;">
+                  Status: <span style="<%= assignment.booking_status === 'completed' ? 'color: #4CAF50; font-weight: 600;' : 'color: #ff9800; font-weight: 600;' %>">
+                    <%= assignment.booking_status.toUpperCase() %>
+                  </span>
+                </div>
+              </div>
+              <% if (assignment.booking_status !== 'completed' && new Date(assignment.start_time) > new Date()) { %>
+                <form method="POST" action="/manager/temporary-assignments/cancel/<%= assignment.id %>" style="margin: 0;" onsubmit="return confirm('Cancel this temporary assignment?')">
+                  <button type="submit" style="padding: 0.5rem 1rem; background: #ff4444; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer;">
+                    Cancel
+                  </button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+
+<%- include('../partials/footer') %>

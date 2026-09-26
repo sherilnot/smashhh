@@ -13,6 +13,13 @@ const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoic
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
 const { broadcast } = require('../services/realtimeService');
+const { 
+  createTemporaryAssignment, 
+  getIncomingAssignments, 
+  getOutgoingAssignments,
+  cancelTemporaryAssignment,
+  getAvailableEmployees 
+} = require('../services/temporaryAssignmentService');
 
 /** Resolve the store a manager belongs to (used to scope realtime events). */
 async function managerStoreId(managerId) {
@@ -345,11 +352,15 @@ router.get('/roster', async (req, res) => {
     const bookingsRes = await pool.query(
       `SELECT
          sb.id AS booking_id, sb.employee_id, sb.actual_clock_in, sb.booking_status,
-         u.first_name, u.last_name,
-         s.id AS shift_id, s.start_time, s.end_time
+         sb.is_temporary_assignment,
+         u.first_name, u.last_name, u.employment_type,
+         s.id AS shift_id, s.start_time, s.end_time,
+         CASE WHEN ta.id IS NOT NULL THEN from_store.name ELSE NULL END AS from_store_name
        FROM shift_bookings sb
        JOIN shifts s ON s.id = sb.shift_id
        JOIN users u ON u.id = sb.employee_id
+       LEFT JOIN temporary_store_assignments ta ON ta.shift_booking_id = sb.id
+       LEFT JOIN stores from_store ON ta.from_store_id = from_store.id
        WHERE s.store_id = $1
          AND sb.booking_status IN ('confirmed', 'completed')
          AND s.start_time >= $2
@@ -359,13 +370,28 @@ router.get('/roster', async (req, res) => {
     );
 
     // Build roster data: employees × days with shift info
+    // Include both permanent employees AND employees with temporary assignments
     const employeesRes = await pool.query(
       `SELECT DISTINCT u.id, u.user_id, u.first_name, u.last_name, u.employment_type, u.priority_score
        FROM users u
-       JOIN store_employee_assignments sea ON sea.employee_id = u.id
-       WHERE sea.store_id = $1 AND u.is_active = true AND u.role = 'employee'
+       LEFT JOIN store_employee_assignments sea ON sea.employee_id = u.id AND sea.store_id = $1
+       WHERE u.is_active = true 
+       AND u.role = 'employee'
+       AND (
+         sea.store_id = $1 
+         OR u.id IN (
+           SELECT sb.employee_id 
+           FROM shift_bookings sb
+           JOIN shifts s ON sb.shift_id = s.id
+           WHERE s.store_id = $1
+           AND sb.booking_status IN ('confirmed', 'completed')
+           AND s.start_time >= $2
+           AND s.start_time <= $3
+           AND sb.is_temporary_assignment = true
+         )
+       )
        ORDER BY u.last_name, u.first_name`,
-      [storeId]
+      [storeId, weekStart, weekEnd]
     );
 
     const rosterRows = employeesRes.rows.map(emp => {
@@ -402,7 +428,9 @@ router.get('/roster', async (req, res) => {
             color,
             shiftType,
             booking_status: b.booking_status,
-            actual_clock_in: b.actual_clock_in ? new Date(b.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null
+            actual_clock_in: b.actual_clock_in ? new Date(b.actual_clock_in).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) : null,
+            is_temporary_assignment: b.is_temporary_assignment || false,
+            from_store_name: b.from_store_name || null
           };
         });
       });
@@ -1047,6 +1075,11 @@ router.get('/timesheet', async (req, res) => {
             }
           });
 
+          // Use different color for temporary assignments
+          if (shift.is_temporary_assignment) {
+            color = '#FFE0B2'; // Light orange for temp assignments
+          }
+
           byDay[dayIdx] = {
             booking_id: shift.booking_id,
             startLabel,
@@ -1056,7 +1089,9 @@ router.get('/timesheet', async (req, res) => {
             hours_worked: shift.hours_worked,
             no_show: shift.no_show,
             adjusted: shift.adjusted,
-            has_actual_times: !!(shift.actual_clock_in || shift.actual_clock_out)
+            has_actual_times: !!(shift.actual_clock_in || shift.actual_clock_out),
+            is_temporary_assignment: shift.is_temporary_assignment || false,
+            worked_at_store_name: shift.worked_at_store_name || null
           };
 
           if (dayIdx >= 5) {
@@ -1901,6 +1936,132 @@ router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (
   } catch (e) {
     console.error('[Manager] maintenance submit error', e);
     res.redirect('/manager/maintenance?error=' + encodeURIComponent('Failed to submit'));
+  }
+});
+
+// ─── Temporary Store Assignments ─────────────────────────────────────────────
+
+// View temporary assignments page
+router.get('/temporary-assignments', async (req, res) => {
+  try {
+    const [incoming, outgoing, employees, shifts] = await Promise.all([
+      getIncomingAssignments(req.user.userId),
+      getOutgoingAssignments(req.user.userId),
+      getAvailableEmployees(req.user.userId),
+      // Get available shifts for the next 2 weeks at the manager's store
+      pool.query(
+        `SELECT s.id, s.start_time, s.end_time, s.store_location, s.capacity,
+                COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) AS current_bookings
+         FROM shifts s
+         LEFT JOIN shift_bookings sb ON sb.shift_id = s.id
+         WHERE s.store_id = (SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1)
+         AND s.start_time > NOW()
+         AND s.start_time < NOW() + INTERVAL '14 days'
+         GROUP BY s.id
+         HAVING COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) < s.capacity
+         ORDER BY s.start_time ASC`,
+        [req.user.userId]
+      )
+    ]);
+
+    res.render('manager/temporary-assignments', {
+      user: req.user,
+      incoming,
+      outgoing,
+      employees,
+      shifts: shifts.rows,
+      error: req.query.error || null,
+      success: req.query.success || null
+    });
+  } catch (e) {
+    console.error('[Manager] temporary-assignments page error', e);
+    res.render('manager/temporary-assignments', {
+      user: req.user,
+      incoming: [],
+      outgoing: [],
+      employees: [],
+      shifts: [],
+      error: 'Failed to load page',
+      success: null
+    });
+  }
+});
+
+// API: Get shifts from a specific store for temporary assignment
+router.get('/api/temporary-assignments/shifts/:storeId', async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT s.id, s.start_time, s.end_time, s.store_location, s.capacity,
+              COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) AS current_bookings,
+              st.name AS store_name
+       FROM shifts s
+       JOIN stores st ON s.store_id = st.id
+       LEFT JOIN shift_bookings sb ON sb.shift_id = s.id
+       WHERE s.store_id = $1
+       AND s.start_time > NOW()
+       AND s.start_time < NOW() + INTERVAL '14 days'
+       GROUP BY s.id, st.name
+       HAVING COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) < s.capacity
+       ORDER BY s.start_time ASC`,
+      [storeId]
+    );
+
+    res.json({ success: true, shifts: result.rows });
+  } catch (e) {
+    console.error('[Manager] get shifts by store error', e);
+    res.status(500).json({ success: false, error: 'Failed to fetch shifts' });
+  }
+});
+
+// Create a temporary assignment
+router.post('/temporary-assignments/create', async (req, res) => {
+  try {
+    const { employeeId, shiftId, notes } = req.body;
+
+    if (!employeeId || !shiftId) {
+      return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Employee and shift are required'));
+    }
+
+    const result = await createTemporaryAssignment(req.user.userId, employeeId, shiftId, notes);
+
+    if (!result.success) {
+      return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent(result.error));
+    }
+
+    // Broadcast to both stores that assignment was created
+    broadcast('temporary-assignment:created', {
+      roles: ['store_manager'],
+      data: { message: 'Temporary assignment created' }
+    });
+
+    res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Temporary assignment created successfully'));
+  } catch (e) {
+    console.error('[Manager] create temporary assignment error', e);
+    res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Failed to create assignment'));
+  }
+});
+
+// Cancel a temporary assignment
+router.post('/temporary-assignments/cancel/:assignmentId', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const result = await cancelTemporaryAssignment(req.user.userId, assignmentId);
+
+    if (!result.success) {
+      return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent(result.error));
+    }
+
+    broadcast('temporary-assignment:cancelled', {
+      roles: ['store_manager'],
+      data: { message: 'Temporary assignment cancelled' }
+    });
+
+    res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Assignment cancelled successfully'));
+  } catch (e) {
+    console.error('[Manager] cancel temporary assignment error', e);
+    res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Failed to cancel assignment'));
   }
 });
 

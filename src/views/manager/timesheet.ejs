@@ -111,6 +111,11 @@
                           <div style="font-weight: 600; color: #333;"><%= cell.startLabel %></div>
                           <div style="color: #555;"><%= cell.endLabel %></div>
                           <div style="font-weight: 700; color: var(--green); margin-top: 0.1rem;"><%= cell.hours_worked.toFixed(1) %>h</div>
+                          <% if (cell.is_temporary_assignment && cell.worked_at_store_name) { %>
+                            <div style="font-size: 0.6rem; color: #ff9800; font-weight: 600; margin-top: 0.2rem;" title="Worked at <%= cell.worked_at_store_name %>">
+                              (<%= cell.worked_at_store_name %>)
+                            </div>
+                          <% } %>
                         <% } %>
                       </div>
                     <% } else { %>

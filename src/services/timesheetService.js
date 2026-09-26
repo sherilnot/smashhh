@@ -94,7 +94,10 @@ function aggregateTimesheet(entries) {
       actual_clock_out: entry.actual_clock_out || null,
       hours_worked: entry.hours_worked,
       no_show: entry.no_show || false,
-      adjusted: entry.adjusted_hours !== null && entry.adjusted_hours !== undefined
+      adjusted: entry.adjusted_hours !== null && entry.adjusted_hours !== undefined,
+      is_temporary_assignment: entry.is_temporary_assignment || false,
+      worked_at_store_name: entry.worked_at_store_name || null,
+      worked_at_store_id: entry.worked_at_store_id || null
     });
     emp.totalHours = Math.round((emp.totalHours + entry.hours_worked) * 100) / 100;
   }
@@ -139,19 +142,29 @@ async function generateTimesheet(managerId, weekStart, weekEnd) {
   const alreadySubmitted = existingRes.rows.length > 0;
   const status = alreadySubmitted ? existingRes.rows[0].status : null;
 
-  // Fetch completed bookings for this store during the week
+  // Fetch completed bookings for employees FROM this store during the week
+  // Shows all shifts worked by home store employees, regardless of location
   const bookingsRes = await pool.query(
     `SELECT
        sb.id AS booking_id, sb.no_show, sb.adjusted_hours,
        sb.actual_clock_in, sb.actual_clock_out, sb.completed_at,
+       sb.is_temporary_assignment,
        u.id AS employee_id, u.first_name, u.last_name, u.employment_type,
-       s.start_time AS shift_start, CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time THEN sb.completed_at ELSE s.end_time END AS shift_end,
+       s.start_time AS shift_start, 
+       CASE WHEN sb.completed_at IS NOT NULL AND sb.completed_at < s.end_time 
+            THEN sb.completed_at 
+            ELSE s.end_time 
+       END AS shift_end,
        s.start_time::date AS shift_date,
-       s.updated_at AS shift_updated_at
+       s.updated_at AS shift_updated_at,
+       s.store_id AS worked_at_store_id,
+       worked_store.name AS worked_at_store_name
      FROM shift_bookings sb
      JOIN shifts s ON s.id = sb.shift_id
      JOIN users u ON u.id = sb.employee_id
-     WHERE s.store_id = $1
+     JOIN store_employee_assignments sea ON sea.employee_id = u.id
+     JOIN stores worked_store ON s.store_id = worked_store.id
+     WHERE sea.store_id = $1
        AND sb.booking_status = 'completed'
        AND s.start_time >= $2
        AND s.start_time <= $3
@@ -320,9 +333,9 @@ async function submitTimesheet(managerId, weekStart, weekEnd) {
     for (const emp of aggregated.employees) {
       for (const shift of emp.shifts) {
         await client.query(
-          `INSERT INTO timesheet_entries (timesheet_id, employee_id, shift_date, shift_start, shift_end, hours_worked)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [timesheetId, emp.employee_id, shift.shift_date, shift.shift_start, shift.shift_end, shift.hours_worked]
+          `INSERT INTO timesheet_entries (timesheet_id, employee_id, shift_date, shift_start, shift_end, hours_worked, worked_at_store_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [timesheetId, emp.employee_id, shift.shift_date, shift.shift_start, shift.shift_end, shift.hours_worked, shift.worked_at_store_id]
         );
       }
     }

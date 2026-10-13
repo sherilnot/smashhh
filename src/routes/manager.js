@@ -140,6 +140,56 @@ const SHIFT_TYPES = [
   { label: '11:00 – 9:00', startH: 11, startM: 0, endH: 21, endM: 0, color: '#B3E5FC' }    // soft blue
 ];
 
+// Shift type codes used by roster/temporary-assignment forms
+const SHIFT_MAP = {
+  '11-1730': { startH: 11, startM: 0, endH: 17, endM: 30 },
+  '1730-2100': { startH: 17, startM: 30, endH: 21, endM: 0 },
+  '11-2100': { startH: 11, startM: 0, endH: 21, endM: 0 }
+};
+
+/**
+ * Shift rows are only created when first booked, so find the store's shift
+ * for a day (YYYY-MM-DD) + shift type code, creating it if needed.
+ * @returns {Promise<string|null>} shift id, or null for an unknown shift type
+ */
+async function findOrCreateStoreShift(storeId, day, shiftType) {
+  const st = SHIFT_MAP[shiftType];
+  if (!st || !/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return null;
+
+  const [y, m, d2] = day.split('-').map(Number);
+  const startTime = new Date(y, m - 1, d2, st.startH, st.startM, 0);
+  const endTime = new Date(y, m - 1, d2, st.endH, st.endM, 0);
+
+  const existingShift = await pool.query(
+    `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+    [storeId, startTime, endTime]
+  );
+  if (existingShift.rows.length > 0) return existingShift.rows[0].id;
+
+  // Get store name for location
+  const storeNameRes = await pool.query(`SELECT name FROM stores WHERE id = $1`, [storeId]);
+  const location = storeNameRes.rows[0]?.name || 'Store';
+  const newShift = await pool.query(
+    `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id)
+     VALUES ($1, $2, $3, 5, $4)
+     ON CONFLICT (store_id, start_time, end_time) WHERE store_id IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [startTime, endTime, location, storeId]
+  );
+  if (newShift.rows.length > 0) return newShift.rows[0].id;
+
+  // Lost a race with a concurrent insert - use the winner's row
+  const winner = await pool.query(
+    `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
+    [storeId, startTime, endTime]
+  );
+  return winner.rows[0].id;
+}
+
+function toYmd(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 // Manager dashboard: active (confirmed, started) bookings
 router.get('/dashboard', async (req, res) => {
   try {
@@ -704,47 +754,8 @@ router.post('/roster/assign', async (req, res) => {
 
     // If shiftType + day provided (new format), find or create the shift
     if (!targetShiftId && shiftType && day) {
-      const SHIFT_MAP = {
-        '11-1730': { startH: 11, startM: 0, endH: 17, endM: 30 },
-        '1730-2100': { startH: 17, startM: 30, endH: 21, endM: 0 },
-        '11-2100': { startH: 11, startM: 0, endH: 21, endM: 0 }
-      };
-      const st = SHIFT_MAP[shiftType];
-      if (!st) return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
-
-      const [y, m, d2] = day.split('-').map(Number);
-      const startTime = new Date(y, m - 1, d2, st.startH, st.startM, 0);
-      const endTime = new Date(y, m - 1, d2, st.endH, st.endM, 0);
-
-      // Find existing shift or create one
-      const existingShift = await pool.query(
-        `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
-        [storeId, startTime, endTime]
-      );
-
-      if (existingShift.rows.length > 0) {
-        targetShiftId = existingShift.rows[0].id;
-      } else {
-        // Get store name for location
-        const storeNameRes = await pool.query(`SELECT name FROM stores WHERE id = $1`, [storeId]);
-        const location = storeNameRes.rows[0]?.name || 'Store';
-        const newShift = await pool.query(
-          `INSERT INTO shifts (start_time, end_time, store_location, capacity, store_id)
-           VALUES ($1, $2, $3, 5, $4)
-           ON CONFLICT (store_id, start_time, end_time) WHERE store_id IS NOT NULL DO NOTHING
-           RETURNING id`,
-          [startTime, endTime, location, storeId]
-        );
-        if (newShift.rows.length > 0) {
-          targetShiftId = newShift.rows[0].id;
-        } else {
-          const winner = await pool.query(
-            `SELECT id FROM shifts WHERE store_id = $1 AND start_time = $2 AND end_time = $3`,
-            [storeId, startTime, endTime]
-          );
-          targetShiftId = winner.rows[0].id;
-        }
-      }
+      targetShiftId = await findOrCreateStoreShift(storeId, day, shiftType);
+      if (!targetShiftId) return res.redirect(`/manager/roster?date=${weekStart || ''}&edit=1`);
     }
 
     if (!targetShiftId) {
@@ -1944,32 +1955,53 @@ router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (
 // View temporary assignments page
 router.get('/temporary-assignments', async (req, res) => {
   try {
-    const [incoming, outgoing, employees, shifts] = await Promise.all([
+    const [incoming, outgoing, employees, existingShifts] = await Promise.all([
       getIncomingAssignments(req.user.userId),
       getOutgoingAssignments(req.user.userId),
       getAvailableEmployees(req.user.userId),
-      // Get available shifts for the next 2 weeks at the manager's store
+      // Shift rows that already exist (booked at least once) in the next 2 weeks
       pool.query(
-        `SELECT s.id, s.start_time, s.end_time, s.store_location, s.capacity,
+        `SELECT s.start_time, s.end_time, s.capacity,
                 COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) AS current_bookings
          FROM shifts s
          LEFT JOIN shift_bookings sb ON sb.shift_id = s.id
          WHERE s.store_id = (SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1)
          AND s.start_time > NOW()
-         AND s.start_time < NOW() + INTERVAL '14 days'
-         GROUP BY s.id
-         HAVING COUNT(sb.id) FILTER (WHERE sb.booking_status IN ('pending','confirmed')) < s.capacity
-         ORDER BY s.start_time ASC`,
+         AND s.start_time < NOW() + INTERVAL '15 days'
+         GROUP BY s.id`,
         [req.user.userId]
       )
     ]);
+
+    // Every standard shift slot for the next 14 days, minus ones already full.
+    // Slots nobody has booked yet have no shift row; it's created on assign.
+    const existingBySlot = {};
+    existingShifts.rows.forEach(s => {
+      existingBySlot[`${new Date(s.start_time).getTime()}-${new Date(s.end_time).getTime()}`] = s;
+    });
+    const now = new Date();
+    const shifts = [];
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      Object.entries(SHIFT_MAP).forEach(([code, st]) => {
+        const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), st.startH, st.startM, 0);
+        const end = new Date(date.getFullYear(), date.getMonth(), date.getDate(), st.endH, st.endM, 0);
+        if (start <= now) return;
+        const existing = existingBySlot[`${start.getTime()}-${end.getTime()}`];
+        const capacity = existing ? existing.capacity : 5;
+        const booked = existing ? Number(existing.current_bookings) : 0;
+        if (booked >= capacity) return;
+        shifts.push({ id: `${toYmd(date)}|${code}`, start_time: start, end_time: end, capacity, current_bookings: booked });
+      });
+    }
+    shifts.sort((a, b) => a.start_time - b.start_time || a.end_time - b.end_time);
 
     res.render('manager/temporary-assignments', {
       user: req.user,
       incoming,
       outgoing,
       employees,
-      shifts: shifts.rows,
+      shifts,
       error: req.query.error || null,
       success: req.query.success || null
     });
@@ -2018,10 +2050,27 @@ router.get('/api/temporary-assignments/shifts/:storeId', async (req, res) => {
 // Create a temporary assignment
 router.post('/temporary-assignments/create', async (req, res) => {
   try {
-    const { employeeId, shiftId, notes } = req.body;
+    const { employeeId, notes } = req.body;
+    let { shiftId } = req.body;
 
     if (!employeeId || !shiftId) {
       return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Employee and shift are required'));
+    }
+
+    // Slots are sent as "YYYY-MM-DD|shiftType"; resolve to a shift row at the manager's store
+    if (shiftId.includes('|')) {
+      const [day, shiftType] = shiftId.split('|');
+      const storeRes = await pool.query(
+        `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+        [req.user.userId]
+      );
+      if (storeRes.rows.length === 0) {
+        return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Manager has no store assignment'));
+      }
+      shiftId = await findOrCreateStoreShift(storeRes.rows[0].store_id, day, shiftType);
+      if (!shiftId) {
+        return res.redirect('/manager/temporary-assignments?error=' + encodeURIComponent('Invalid shift'));
+      }
     }
 
     const result = await createTemporaryAssignment(req.user.userId, employeeId, shiftId, notes);

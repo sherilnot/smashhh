@@ -5,6 +5,7 @@ const { getAvailableShifts, bookShift, cancelShift, getEmployeeShifts } = requir
 const { savePushSubscription, removePushSubscription, getNotificationData } = require('../services/notificationService');
 const { getVapidPublicKey, saveWebPushSubscription, removeWebPushSubscription, sendPushNotification } = require('../services/webPushService');
 const { hasSubmittedThisWeek, recordSubmission, getSubmissionStatus } = require('../services/weeklySubmissionService');
+const { saveNativeToken, removeNativeToken } = require('../services/apnsService');
 
 const router = express.Router();
 
@@ -506,6 +507,24 @@ router.post('/notifications/webpush-unsubscribe', async (req, res) => {
     console.error('[Employee] webpush-unsubscribe error:', error);
     res.status(500).json({ success: false, error: 'Failed to unsubscribe' });
   }
+});
+
+// Register an iOS app device token (APNs)
+router.post('/notifications/native-register', async (req, res) => {
+  const { token, platform } = req.body;
+  const result = await saveNativeToken(req.user.userId, token, platform === 'android' ? 'android' : 'ios');
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ success: false, error: result.error });
+  }
+});
+
+// Unregister an iOS app device token
+router.post('/notifications/native-unregister', async (req, res) => {
+  const { token } = req.body;
+  if (token) await removeNativeToken(token, req.user.userId);
+  res.json({ success: true });
 });
 
 // Test push notification

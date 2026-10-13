@@ -1,6 +1,7 @@
 const webPush = require('web-push');
 const { pool } = require('../config/database');
 const { logNotificationSent } = require('./notificationTrackerService');
+const { sendNativePushNotification } = require('./apnsService');
 
 /**
  * Web Push Notification Service
@@ -129,8 +130,15 @@ async function getEmployeeSubscriptions(employeeId) {
 async function sendPushNotification(employeeId, payload) {
   try {
     const subscriptions = await getEmployeeSubscriptions(employeeId);
-    
-    if (subscriptions.length === 0) {
+
+    // Also deliver to the employee's iOS app devices (APNs)
+    const native = await sendNativePushNotification(employeeId, {
+      title: payload.title || 'Book Your Shifts',
+      message: payload.message || payload.body || 'Don\'t forget to book your shifts!',
+      data: payload.data || { url: '/employee/shifts' }
+    });
+
+    if (subscriptions.length === 0 && native.sent + native.failed === 0) {
       console.log(`[WebPush] No subscriptions found for employee ${employeeId}`);
       return { success: false, sent: 0, failed: 0, error: 'No subscriptions' };
     }
@@ -141,8 +149,8 @@ async function sendPushNotification(employeeId, payload) {
       data: payload.data || { url: '/employee/shifts' }
     });
 
-    let sent = 0;
-    let failed = 0;
+    let sent = native.sent;
+    let failed = native.failed;
 
     // Send to all subscriptions for this employee
     const sendPromises = subscriptions.map(async (subscription) => {

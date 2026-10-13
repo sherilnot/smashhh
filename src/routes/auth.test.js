@@ -16,6 +16,12 @@ jest.mock('../services/authService', () => ({
   logout: (...args) => mockLogout(...args)
 }));
 
+const mockRemoveNativeToken = jest.fn();
+
+jest.mock('../services/apnsService', () => ({
+  removeNativeToken: (...args) => mockRemoveNativeToken(...args)
+}));
+
 const { SESSION_COOKIE_NAME } = require('../middleware/auth');
 const router = require('./auth');
 
@@ -189,6 +195,17 @@ describe('POST /logout', () => {
       httpOnly: true,
       sameSite: 'strict'
     }));
+    expect(res.redirect).toHaveBeenCalledWith('/login');
+  });
+
+  test('removes the iOS app push token for this device', async () => {
+    mockLogout.mockResolvedValueOnce(undefined);
+    const req = { cookies: { [SESSION_COOKIE_NAME]: 'tok', native_push_token: 'abc123' } };
+    const res = makeRes();
+
+    await handler(req, res);
+
+    expect(mockRemoveNativeToken).toHaveBeenCalledWith('abc123');
     expect(res.redirect).toHaveBeenCalledWith('/login');
   });
 

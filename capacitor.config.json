@@ -1,0 +1,19 @@
+{
+  "appId": "com.rizins.smash",
+  "appName": "Rizins Smash",
+  "webDir": "www",
+  "server": {
+    "url": "https://www.rizinssmash.com/login",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#1a1a1a",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

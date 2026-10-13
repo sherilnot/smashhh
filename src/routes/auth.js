@@ -2,6 +2,9 @@ const express = require('express');
 const AuthenticationService = require('../services/authService');
 const { SESSION_COOKIE_NAME, LOGIN_PATH } = require('../middleware/auth');
 
+// Set by public/js/native-push.js inside the iOS app.
+const NATIVE_PUSH_COOKIE_NAME = 'native_push_token';
+
 /**
  * Authentication Routes
  *
@@ -148,6 +151,12 @@ router.post('/logout', async (req, res) => {
     if (sessionToken) {
       // Req 2.4: mark the session inactive server-side.
       await AuthenticationService.logout(sessionToken);
+    }
+    // iOS app: stop sending this device push notifications for the logged-out user.
+    const nativePushToken = req.cookies && req.cookies[NATIVE_PUSH_COOKIE_NAME];
+    if (nativePushToken) {
+      const { removeNativeToken } = require('../services/apnsService');
+      await removeNativeToken(nativePushToken);
     }
   } catch (error) {
     // Even if server-side invalidation fails, still clear the cookie and

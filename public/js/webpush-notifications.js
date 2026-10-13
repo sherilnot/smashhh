@@ -369,6 +369,12 @@ class WebPushNotificationManager {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
+  // Inside the iOS app, native-push.js provides the manager instead.
+  if (window.nativePushManager) {
+    window.webPushManager = window.nativePushManager;
+    return;
+  }
+
   window.webPushManager = new WebPushNotificationManager();
   
   const initialized = await window.webPushManager.initialize();

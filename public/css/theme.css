@@ -442,3 +442,67 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
   vertical-align: middle;
 }
 .btn-sm:hover { opacity: 0.85; }
+
+/* ---------- iPhone safe areas (notch / home bar) ----------
+   env() is 0 in a normal browser, so this only kicks in on iPhones when the
+   page is drawn under the status bar (iOS app, home-screen web app). */
+.topbar {
+  height: calc(60px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+}
+.layout { min-height: calc(100vh - 60px - env(safe-area-inset-top)); }
+.content { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
+.login-wrap {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+@media (max-width: 768px) {
+  .sidebar {
+    top: calc(60px + env(safe-area-inset-top));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+  .content { padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- iOS app only (html.native-app, set by native-app.js) ---------- */
+.native-app body {
+  -webkit-tap-highlight-color: transparent;
+  background-color: var(--cream);
+}
+/* No long-press link previews or text selection on navigation chrome */
+.native-app a,
+.native-app button,
+.native-app .topbar,
+.native-app .sidebar { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* The app is already installed */
+.native-app #pwa-install-banner { display: none !important; }
+.native-app.native-busy, .native-app.native-busy * { cursor: progress; }
+.native-app.native-busy body { opacity: 0.85; transition: opacity 0.2s; }
+
+/* Pull to refresh */
+.ptr-indicator {
+  position: fixed;
+  top: calc(60px + env(safe-area-inset-top) - 36px);
+  left: 50%;
+  transform: translate(-50%, 0);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--warm-white);
+  box-shadow: var(--shadow-md);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.ptr-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--ketchup);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.ptr-indicator.ready .ptr-spinner { transform: rotate(180deg); border-top-color: var(--mustard); }
+.ptr-indicator.refreshing .ptr-spinner { animation: ptr-spin 0.7s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }

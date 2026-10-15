@@ -107,12 +107,12 @@
     }
 
     function downloadMonth() {
-      window.location = '/receiving-manager/timesheets-monthly/download?month=' + currentMonth();
+      openDownload('/receiving-manager/timesheets-monthly/download?month=' + currentMonth());
     }
 
     function downloadStoreMonth(store) {
-      window.location = '/receiving-manager/timesheets-monthly/download?month=' + currentMonth()
-        + '&store=' + encodeURIComponent(store);
+      openDownload('/receiving-manager/timesheets-monthly/download?month=' + currentMonth()
+        + '&store=' + encodeURIComponent(store));
     }
   </script>
 

@@ -168,13 +168,23 @@ Once everything works, go back to the RDS security group and change the inbound 
 
 ## Updating the App
 
+Pushing to `main` deploys automatically: `.github/workflows/deploy.yml` SSHes into the
+server (secrets `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`) and runs `scripts/deploy.sh`, which
+pulls the code, installs dependencies, applies any new `db/NN-*.sql` files (tracked in the
+`schema_migrations` table so each runs once), restarts pm2 and checks the app responds.
+
 ```bash
-ssh -i your-key.pem ec2-user@YOUR_EC2_PUBLIC_IP
-cd smashhh
-git pull
-npm install --production
-pm2 restart smashhh
+git push                          # deploys; watch it with: gh run watch
 ```
+
+To deploy by hand, or re-run a deploy:
+
+```bash
+ssh -i ~/.ssh/Rizins.pem ec2-user@3.104.152.193 'bash ~/smashhh/scripts/deploy.sh'
+```
+
+New schema changes go in a new numbered file (e.g. `db/28-something.sql`) — never edit one
+that has already been applied.
 
 ---
 

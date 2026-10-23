@@ -73,6 +73,11 @@ app.use('/warehouse', warehouseRoutes);
 app.use('/receiving-manager', receivingManagerRoutes);
 app.use('/operation-manager', operationManagerRoutes);
 
+// Public pages (linked from the App Store listing)
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'sheril4440@gmail.com';
+app.get('/privacy', (req, res) => res.render('legal/privacy', { contactEmail: CONTACT_EMAIL, updated: '23 October 2026' }));
+app.get('/support', (req, res) => res.render('legal/support', { contactEmail: CONTACT_EMAIL }));
+
 // Root redirect based on session role
 app.get('/', requireAuth, (req, res) => {
   const role = req.user.userRole;

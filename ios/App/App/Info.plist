@@ -26,6 +26,12 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos and videos to attach to cash submissions and maintenance reports.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record sound with videos attached to maintenance reports.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose photos and videos to attach to cash submissions and maintenance reports.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

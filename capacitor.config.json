@@ -3,7 +3,8 @@
   "appName": "Rizins Smash",
   "webDir": "www",
   "server": {
-    "url": "https://www.rizinssmash.com/login",
+    "url": "https://www.rizinssmash.com",
+    "allowNavigation": ["www.rizinssmash.com", "rizinssmash.com"],
     "cleartext": false
   },
   "ios": {

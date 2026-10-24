@@ -8,6 +8,8 @@
 (function () {
   var Capacitor = window.Capacitor;
   if (!Capacitor || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return;
+  // Android push needs Firebase (google-services.json); without it register() crashes the app
+  if (Capacitor.getPlatform() !== 'ios') return;
 
   var PushNotifications = Capacitor.Plugins && Capacitor.Plugins.PushNotifications;
   if (!PushNotifications) {

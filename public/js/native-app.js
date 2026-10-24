@@ -1,12 +1,13 @@
 /**
- * Native App Enhancements (iOS app only)
+ * Native App Enhancements (iOS and Android apps)
  * Loaded on every page. In a normal browser it does nothing. Inside the
- * Capacitor iOS app it:
+ * Capacitor app it:
  *  - tags <html> with .native-app so theme.css can apply app-only styles
  *  - opens file downloads (PDF/CSV/ZIP) in the iOS share sheet, because the
  *    web view can't save "attachment" responses by itself
  *  - shows a loading bar as soon as a link or form is tapped
  *  - adds pull-to-refresh
+ *  - makes the Android back button go back a page instead of closing the app
  * Pages that start a download from script can call window.openDownload(url).
  */
 
@@ -122,6 +123,26 @@
   window.addEventListener('pageshow', function () {
     document.documentElement.classList.remove('native-navigating');
   });
+
+  // ─── Android back button ────────────────────────────────────────────────────
+  // Without a listener Android closes the app on back. Close the menu first,
+  // then go back through pages, and only exit from the first screen.
+
+  if (Plugins.App && Capacitor.getPlatform() === 'android') {
+    Plugins.App.addListener('backButton', function (event) {
+      var sidebar = document.querySelector('.sidebar.open');
+      if (sidebar) {
+        sidebar.classList.remove('open');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (overlay) overlay.classList.remove('open');
+      } else if (event.canGoBack) {
+        startNavigating();
+        window.history.back();
+      } else {
+        Plugins.App.exitApp();
+      }
+    });
+  }
 
   // ─── Pull to refresh ────────────────────────────────────────────────────────
 

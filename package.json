@@ -13,6 +13,8 @@
     "ios:open": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "8.1.2",
     "archiver": "7.0.1",
     "bcrypt": "6.0.0",
     "body-parser": "1.20.5",

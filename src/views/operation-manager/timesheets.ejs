@@ -9,7 +9,7 @@
   <% if (timesheets.length === 0 && !error) { %>
     <div class="empty">No timesheets have been submitted yet.</div>
   <% } else if (timesheets.length > 0) { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr>
           <th>Store</th>
@@ -40,7 +40,7 @@
           </tr>
         <% }); %>
       </tbody>
-    </table>
+    </table></div>
 
     <% if (totalPages > 1) { %>
       <div style="margin-top: 1.25rem; display: flex; gap: 8px; justify-content: center;">

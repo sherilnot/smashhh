@@ -9,7 +9,7 @@
   <% if (permanent.length === 0) { %>
     <div class="empty">No permanent employees at this store.</div>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr><th>User ID</th><th>Name</th><th>Hourly Rate</th></tr>
       </thead>
@@ -22,14 +22,14 @@
         </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 
   <h2 style="margin-top: 2rem;">Casual Staff</h2>
   <% if (casual.length === 0) { %>
     <div class="empty">No casual employees at this store.</div>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr><th>User ID</th><th>Name</th><th>Hourly Rate</th></tr>
       </thead>
@@ -42,7 +42,7 @@
         </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 
 <%- include('../partials/footer') %>

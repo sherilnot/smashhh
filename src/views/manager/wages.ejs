@@ -22,7 +22,7 @@
   <% if (reports.length === 0) { %>
     <p class="empty">No completed shifts in this period.</p>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr><th>Employee</th><th>Hours</th><th>Rate ($/hr)</th><th>Total Wages</th><th>Breakdown</th></tr>
       </thead>
@@ -36,7 +36,7 @@
           <td>
             <details>
               <summary><%= r.shiftBreakdown.length %> shift(s)</summary>
-              <table class="breakdown-table">
+              <div class="table-scroll"><table class="breakdown-table">
                 <tr><th>Date</th><th>Hours</th><th>Wage</th></tr>
                 <% r.shiftBreakdown.forEach(s => { %>
                 <tr>
@@ -45,13 +45,13 @@
                   <td>$<%= s.wageEarned.toFixed(2) %></td>
                 </tr>
                 <% }) %>
-              </table>
+              </table></div>
             </details>
           </td>
         </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 
 <%- include('../partials/footer') %>

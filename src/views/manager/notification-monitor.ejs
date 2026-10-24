@@ -91,7 +91,7 @@
   <% if (stats.length === 0) { %>
     <p class="empty">No notification data available yet.</p>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr>
           <th>Employee</th>
@@ -126,7 +126,7 @@
           </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 </div>
 
@@ -138,7 +138,7 @@
     <p style="background: #fff3cd; padding: 1rem; border-radius: 4px; border-left: 4px solid #ffc107;">
       <strong>⚠️ <%= needingReminder.length %> employee(s)</strong> have not booked shifts for next week and need reminders.
     </p>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr>
           <th>Employee</th>
@@ -163,7 +163,7 @@
           </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 </div>
 
@@ -172,7 +172,7 @@
   <% if (recentLogs.length === 0) { %>
     <p class="empty">No recent notifications.</p>
   <% } else { %>
-    <table class="log-table">
+    <div class="table-scroll"><table class="log-table">
       <thead>
         <tr>
           <th>Time</th>
@@ -211,7 +211,7 @@
           </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 </div>
 

@@ -34,6 +34,12 @@
 
 * { box-sizing: border-box; margin: 0; }
 
+html {
+  /* No double-tap zoom, and no text resizing when the phone is rotated */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', system-ui, sans-serif;
   background: var(--cream);
@@ -208,6 +214,13 @@ tbody tr:last-child td { border-bottom: none; }
 td { font-size: 0.9rem; color: var(--text-secondary); }
 td strong { color: var(--ink); }
 td.amount, th.amount { text-align: right; }
+/* Wide tables scroll inside this box instead of making the whole page scroll sideways */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
 tfoot td { font-weight: 700; background: linear-gradient(135deg, #fef3e2, #fdefd8); color: var(--ketchup); border-top: 2px solid var(--border-strong); border-bottom: none; }
 
 /* ---------- Buttons ---------- */
@@ -422,7 +435,15 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
   .summary strong { font-size: 1.1rem; }
   .card { padding: 0.75rem 1rem; }
 
-  /* Tables: make them scroll horizontally on mobile */
+  /* Nothing may push the page wider than the screen: flex children can shrink,
+     media and long words fit, and anything else that still sticks out is cut
+     off at the edge (clip, unlike hidden, keeps the sticky top bar working). */
+  .layout { overflow-x: hidden; overflow-x: clip; }
+  .content { min-width: 0; overflow-wrap: break-word; }
+  .content img, .content video, .content iframe { max-width: 100%; height: auto; }
+  .content pre { white-space: pre-wrap; }
+
+  /* Tables: smaller text on mobile; wide ones scroll inside .table-scroll */
   table { font-size: 0.8rem; }
   th, td { padding: 0.45rem 0.5rem; }
   th { font-size: 0.65rem; }

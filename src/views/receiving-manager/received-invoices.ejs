@@ -5,7 +5,7 @@
   <% if (!invoices || invoices.length === 0) { %>
     <div class="empty">No invoices have been submitted yet.</div>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr>
           <th>Store</th>
@@ -32,7 +32,7 @@
           </tr>
         <% }); %>
       </tbody>
-    </table>
+    </table></div>
 
     <% if (totalPages > 1) { %>
       <div style="display: flex; justify-content: center; gap: 8px; margin-top: 1.5rem;">

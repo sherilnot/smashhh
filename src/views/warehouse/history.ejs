@@ -7,7 +7,7 @@
   <% if (history.length === 0) { %>
     <p class="empty">No checklist history in the last 30 days.</p>
   <% } else { %>
-    <table>
+    <div class="table-scroll"><table>
       <thead>
         <tr><th>Date</th><th>Status</th><th>Items</th><th>Checked</th><th>Action</th></tr>
       </thead>
@@ -24,7 +24,7 @@
         </tr>
         <% }) %>
       </tbody>
-    </table>
+    </table></div>
   <% } %>
 
 <%- include('../partials/footer') %>

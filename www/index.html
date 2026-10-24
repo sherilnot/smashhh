@@ -2,20 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Rizins Smash</title>
   <style>
     body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-           background: #1a1a1a; color: #f5f5f5; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 2rem; box-sizing: border-box; }
-    button { margin-top: 1.25rem; padding: 0.75rem 1.5rem; border: 0; border-radius: 8px; background: #f4a261; color: #1a1a1a; font-weight: 600; font-size: 1rem; }
+           background: #1f2730; color: #f5f5f5; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 2rem; box-sizing: border-box; }
+    h1 { font-size: 1.4rem; margin: 0 0 0.5rem; }
+    p { color: rgba(255, 255, 255, 0.6); margin: 0; }
+    button { margin-top: 1.5rem; padding: 0.8rem 1.75rem; border: 0; border-radius: 12px; background: linear-gradient(135deg, #e63946, #f4a300); color: #fff; font-weight: 700; font-size: 1rem; }
   </style>
 </head>
 <body>
-  <!-- Shown by the iOS app only when the server can't be reached. -->
+  <!-- Shown by the iOS app (server.errorPath) when the server can't be reached. -->
   <div>
     <h1>You're offline</h1>
     <p>Check your internet connection and try again.</p>
-    <button onclick="location.reload()">Retry</button>
+    <button onclick="retry()">Retry</button>
   </div>
+  <script>
+    function retry() { location.href = 'https://www.rizinssmash.com/'; }
+    // Try again by itself as soon as the connection comes back
+    window.addEventListener('online', retry);
+  </script>
 </body>
 </html>

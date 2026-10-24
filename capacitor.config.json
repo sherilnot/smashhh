@@ -4,6 +4,7 @@
   "webDir": "www",
   "server": {
     "url": "https://www.rizinssmash.com",
+    "errorPath": "index.html",
     "allowNavigation": ["www.rizinssmash.com", "rizinssmash.com"],
     "cleartext": false
   },

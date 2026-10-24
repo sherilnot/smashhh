@@ -12,7 +12,7 @@ const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotification
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
-const { broadcast } = require('../services/realtimeService');
+const { broadcast, notifyOnSuccess } = require('../services/realtimeService');
 const { 
   createTemporaryAssignment, 
   getIncomingAssignments, 
@@ -234,7 +234,7 @@ router.get('/pending', async (req, res) => {
 });
 
 // Confirm a pending booking (Req 5.1, 12.1, 12.2).
-router.post('/confirm', async (req, res) => {
+router.post('/confirm', notifyOnSuccess('shifts:changed', ['employee', 'store_manager']), async (req, res) => {
   const { bookingId } = req.body;
   const result = await confirmBooking(req.user.userId, req.user.userRole, bookingId);
   if (result.status === 403) {
@@ -253,7 +253,7 @@ router.post('/confirm', async (req, res) => {
 });
 
 // Confirm all pending bookings for an employee at once
-router.post('/confirm-all', async (req, res) => {
+router.post('/confirm-all', notifyOnSuccess('shifts:changed', ['employee', 'store_manager']), async (req, res) => {
   let bookingIds = req.body['bookingIds[]'] || req.body.bookingIds || [];
   if (!Array.isArray(bookingIds)) bookingIds = [bookingIds];
   
@@ -264,7 +264,7 @@ router.post('/confirm-all', async (req, res) => {
 });
 
 // Reject a pending booking (Req 6.1, 12.1, 12.2).
-router.post('/reject', async (req, res) => {
+router.post('/reject', notifyOnSuccess('shifts:changed', ['employee', 'store_manager']), async (req, res) => {
   const { bookingId } = req.body;
   const result = await rejectBooking(req.user.userId, req.user.userRole, bookingId);
   if (result.status === 403) {
@@ -283,7 +283,7 @@ router.post('/reject', async (req, res) => {
 });
 
 // End (complete) a confirmed shift (Req 7.1, 12.1, 12.2).
-router.post('/end-shift', async (req, res) => {
+router.post('/end-shift', notifyOnSuccess('shifts:changed', ['employee', 'store_manager']), async (req, res) => {
   const { bookingId } = req.body;
   const result = await endShift(req.user.userId, bookingId);
   if (result.status === 403) {
@@ -736,7 +736,7 @@ router.get('/roster/employees', async (req, res) => {
 });
 
 // Assign an employee to a shift
-router.post('/roster/assign', async (req, res) => {
+router.post('/roster/assign', notifyOnSuccess('roster:updated', ['employee', 'store_manager']), async (req, res) => {
   try {
     const { shiftId, employeeId, weekStart, shiftType, day } = req.body;
 
@@ -817,7 +817,7 @@ router.post('/roster/assign', async (req, res) => {
 });
 
 // Unassign an employee from a shift
-router.post('/roster/unassign', async (req, res) => {
+router.post('/roster/unassign', notifyOnSuccess('roster:updated', ['employee', 'store_manager']), async (req, res) => {
   try {
     const { bookingId, weekStart } = req.body;
 
@@ -844,7 +844,7 @@ router.post('/roster/unassign', async (req, res) => {
 });
 
 // Edit shift times
-router.post('/roster/edit-shift', async (req, res) => {
+router.post('/roster/edit-shift', notifyOnSuccess('roster:updated', ['employee', 'store_manager']), async (req, res) => {
   try {
     const { shiftId, startTime, endTime, weekStart } = req.body;
 
@@ -879,7 +879,7 @@ router.post('/roster/edit-shift', async (req, res) => {
 });
 
 // Record actual clock-in time for an employee
-router.post('/roster/clock-in', async (req, res) => {
+router.post('/roster/clock-in', notifyOnSuccess('roster:updated', ['employee', 'store_manager']), async (req, res) => {
   try {
     const { bookingId, clockIn, clockOut, weekStart } = req.body;
 
@@ -946,7 +946,7 @@ router.post('/roster/clock-in', async (req, res) => {
 });
 
 // Auto-fill roster with priority employees
-router.post('/roster/auto-fill', async (req, res) => {
+router.post('/roster/auto-fill', notifyOnSuccess('roster:updated', ['employee', 'store_manager']), async (req, res) => {
   try {
     const { weekStart } = req.body;
     const storeRes = await pool.query(
@@ -1150,7 +1150,7 @@ router.get('/timesheet', async (req, res) => {
 
 // ─── Timesheet Edit: mark no-show or adjust hours ───────────────────────────
 
-router.post('/timesheet/edit', async (req, res) => {
+router.post('/timesheet/edit', notifyOnSuccess('timesheet:updated', ['store_manager', 'receiving_manager', 'operation_manager']), async (req, res) => {
   try {
     const { bookingId, action, adjustedHours, startTime, endTime, weekStart } = req.body;
 
@@ -1273,7 +1273,7 @@ router.post('/timesheet/edit', async (req, res) => {
 });
 
 // AJAX endpoint for smooth timesheet edits
-router.post('/timesheet/edit-ajax', async (req, res) => {
+router.post('/timesheet/edit-ajax', notifyOnSuccess('timesheet:updated', ['store_manager', 'receiving_manager', 'operation_manager']), async (req, res) => {
   try {
     const { bookingId, action, startTime, endTime } = req.body;
 
@@ -1355,7 +1355,7 @@ router.post('/timesheet/edit-ajax', async (req, res) => {
   }
 });
 
-router.post('/timesheet/submit', async (req, res) => {
+router.post('/timesheet/submit', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated'), async (req, res) => {
   try {
     const { weekStart, weekEnd } = req.body;
 
@@ -1418,7 +1418,7 @@ router.post('/timesheet/submit', async (req, res) => {
 });
 
 // Confirm and lock timesheet (final submission to receiving manager)
-router.post('/timesheet/confirm', async (req, res) => {
+router.post('/timesheet/confirm', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated'), async (req, res) => {
   try {
     const { weekStart } = req.body;
     const [y, m, d] = weekStart.split('-').map(Number);
@@ -1618,7 +1618,7 @@ router.get('/received-invoice', async (req, res) => {
   }
 });
 
-router.post('/received-invoice/add-item', async (req, res) => {
+router.post('/received-invoice/add-item', notifyOnSuccess('invoice:updated', ['operation_manager', 'receiving_manager']), async (req, res) => {
   try {
     const { invoiceId, productName } = req.body;
 
@@ -1695,7 +1695,7 @@ router.post('/received-invoice/submit', async (req, res) => {
 });
 
 // Reopen a submitted invoice (reverts to draft and re-syncs from checklist)
-router.post('/received-invoice/reopen', async (req, res) => {
+router.post('/received-invoice/reopen', notifyOnSuccess('invoice:updated', ['operation_manager', 'receiving_manager']), async (req, res) => {
   try {
     const { invoiceId } = req.body;
 
@@ -1726,7 +1726,7 @@ router.post('/received-invoice/reopen', async (req, res) => {
 });
 
 // Auto-save a single invoice item quantity (inline edit)
-router.post('/received-invoice/update-item', async (req, res) => {
+router.post('/received-invoice/update-item', notifyOnSuccess('invoice:updated', ['operation_manager', 'receiving_manager']), async (req, res) => {
   try {
     const { invoiceId, itemId, quantityReceived } = req.body;
     if (!invoiceId || !itemId) return res.json({ success: false });
@@ -2084,6 +2084,8 @@ router.post('/temporary-assignments/create', async (req, res) => {
       roles: ['store_manager'],
       data: { message: 'Temporary assignment created' }
     });
+    // Employees' rosters refresh quietly (no toast for everyone)
+    broadcast('temporary-assignment:created', { roles: ['employee'] });
 
     res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Temporary assignment created successfully'));
   } catch (e) {
@@ -2106,6 +2108,8 @@ router.post('/temporary-assignments/cancel/:assignmentId', async (req, res) => {
       roles: ['store_manager'],
       data: { message: 'Temporary assignment cancelled' }
     });
+    // Employees' rosters refresh quietly (no toast for everyone)
+    broadcast('temporary-assignment:cancelled', { roles: ['employee'] });
 
     res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Assignment cancelled successfully'));
   } catch (e) {

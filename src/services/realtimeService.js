@@ -14,6 +14,8 @@
  *    nudge and will see fresh data on its next page load.
  */
 
+const { pool } = require('../config/database');
+
 // clientId -> { res, userId, role, storeId }
 const clients = new Map();
 let nextClientId = 1;
@@ -142,10 +144,91 @@ function heartbeat() {
 
 setInterval(heartbeat, HEARTBEAT_MS).unref();
 
+/**
+ * The store a user belongs to: the one they manage, or the one they work at.
+ * Head-office roles (warehouse, payroll, operations) return null and
+ * therefore receive events from every store.
+ */
+async function resolveStoreId(userId, role) {
+  try {
+    if (role === 'store_manager') {
+      const r = await pool.query(
+        `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
+        [userId]
+      );
+      return r.rows[0] ? r.rows[0].store_id : null;
+    }
+    if (role === 'employee') {
+      const r = await pool.query(
+        `SELECT store_id FROM store_employee_assignments WHERE employee_id = $1 LIMIT 1`,
+        [userId]
+      );
+      return r.rows[0] ? r.rows[0].store_id : null;
+    }
+    return null;
+  } catch (e) {
+    console.error('[Realtime] store lookup failed', e);
+    return null;
+  }
+}
+
+/**
+ * Broadcast to `roles` in the acting user's store (every store when the actor
+ * is head office), skipping the actor, whose own page reloads anyway.
+ * Fire-and-forget: never delays or fails the request that triggered it.
+ */
+function broadcastFromUser(topic, user, roles, message) {
+  if (!user) return;
+  resolveStoreId(user.userId, user.userRole)
+    .then((storeId) => broadcast(topic, {
+      roles,
+      storeId,
+      exceptUserId: user.userId,
+      data: message ? { message } : undefined
+    }))
+    .catch((e) => console.error('[Realtime] broadcast failed', e));
+}
+
+/**
+ * Route middleware: once the handler succeeds, tell other people's open pages
+ * that listen for `topic` to refresh. Success means a redirect without
+ * ?error=, or a JSON reply below 400 that isn't { success: false } / { error }.
+ *
+ *   router.post('/cancel', notifyOnSuccess('shifts:changed', ['store_manager']), handler)
+ */
+function notifyOnSuccess(topic, roles, message) {
+  return (req, res, next) => {
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      broadcastFromUser(topic, req.user, roles, message);
+    };
+
+    const redirect = res.redirect.bind(res);
+    res.redirect = (...args) => {
+      if (!/[?&]error=/.test(String(args[args.length - 1]))) send();
+      return redirect(...args);
+    };
+
+    const json = res.json.bind(res);
+    res.json = (body) => {
+      const failed = res.statusCode >= 400 || (body && (body.success === false || body.error));
+      if (!failed) send();
+      return json(body);
+    };
+
+    next();
+  };
+}
+
 module.exports = {
   addClient,
   removeClient,
   clientCount,
   broadcast,
+  broadcastFromUser,
+  notifyOnSuccess,
+  resolveStoreId,
   eventsSince
 };

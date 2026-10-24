@@ -41,7 +41,9 @@
   var isRefreshing = false;
   var sseHealthy = false;
   var gaveUpOnSse = false;
-  var lastSeenStamp = 0;
+  // The page already shows everything up to when the server rendered it, so
+  // only react to events after that (server clock, so no device clock skew).
+  var lastSeenStamp = Number(document.body && document.body.getAttribute('data-rendered-at')) || Date.now();
   var debugEnabled = false;
   var destroyed = false; // Set when Turbo swaps to another page
 
@@ -112,7 +114,8 @@
       'font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif',
       'max-width:90vw', 'text-align:center'
     ].join(';');
-    document.body.appendChild(el);
+    // On <html>, not <body>: the Turbo refresh that follows replaces <body>
+    document.documentElement.appendChild(el);
     requestAnimationFrame(function () { el.style.opacity = '1'; });
     setTimeout(function () {
       el.style.opacity = '0';
@@ -135,12 +138,24 @@
   }
 
   function refreshNow() {
-    if (isRefreshing) return;
+    if (isRefreshing || destroyed) return;
 
     // Don't yank the page out from under someone who's mid-edit.
     var active = document.activeElement;
     if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) {
       scheduleRefresh(4000);
+      return;
+    }
+
+    // With Turbo, refresh the whole page in place: its scripts run again (so
+    // buttons keep working) and the scroll position is kept. This script is
+    // re-run by that refresh and picks up from the new page's render time.
+    if (window.Turbo && window.Turbo.visit) {
+      window.Turbo.visit(window.location.href, {
+        action: 'replace',
+        shouldCacheSnapshot: false,
+        refresh: { scroll: 'preserve' }
+      });
       return;
     }
 

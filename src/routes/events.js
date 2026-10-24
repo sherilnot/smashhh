@@ -1,42 +1,14 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
-const { pool } = require('../config/database');
 const {
   addClient,
   removeClient,
   clientCount,
-  eventsSince
+  eventsSince,
+  resolveStoreId
 } = require('../services/realtimeService');
 
 const router = express.Router();
-
-/**
- * Resolve which store a user belongs to, so events can be scoped to it.
- * Head-office roles (warehouse, payroll, operations) return null and
- * therefore receive events from every store.
- */
-async function resolveStoreId(userId, role) {
-  try {
-    if (role === 'store_manager') {
-      const r = await pool.query(
-        `SELECT store_id FROM store_manager_assignments WHERE manager_id = $1 LIMIT 1`,
-        [userId]
-      );
-      return r.rows[0] ? r.rows[0].store_id : null;
-    }
-    if (role === 'employee') {
-      const r = await pool.query(
-        `SELECT store_id FROM store_employee_assignments WHERE employee_id = $1 LIMIT 1`,
-        [userId]
-      );
-      return r.rows[0] ? r.rows[0].store_id : null;
-    }
-    return null;
-  } catch (e) {
-    console.error('[Events] store lookup failed', e);
-    return null;
-  }
-}
 
 /**
  * GET /events — Server-Sent Events stream.

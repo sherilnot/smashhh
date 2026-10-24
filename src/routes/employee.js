@@ -9,6 +9,8 @@ const { saveNativeToken, removeNativeToken } = require('../services/apnsService'
 
 const router = express.Router();
 
+const { notifyOnSuccess } = require('../services/realtimeService');
+
 router.use(requireAuth, roleGuard('employee'));
 
 // Dashboard - shows the employee's own completed-shift wage entries and total
@@ -319,7 +321,7 @@ router.post('/book-weekly-shifts', async (req, res) => {
 });
 
 // Book a shift using day + shift type selection (legacy route - kept for backwards compatibility)
-router.post('/book-shift', async (req, res) => {
+router.post('/book-shift', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
   const { day, shiftType, customStart, customEnd } = req.body;
   try {
     const SHIFT_MAP = {
@@ -445,7 +447,7 @@ router.get('/my-shifts', async (req, res) => {
 });
 
 // Book a shift
-router.post('/book', async (req, res) => {
+router.post('/book', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
   const { shiftId } = req.body;
   const result = await bookShift(req.user.userId, shiftId);
   if (result.success) return res.redirect('/employee/my-shifts');
@@ -459,7 +461,7 @@ router.post('/book', async (req, res) => {
 });
 
 // Cancel a shift
-router.post('/cancel', async (req, res) => {
+router.post('/cancel', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
   const { shiftId } = req.body;
   const result = await cancelShift(req.user.userId, shiftId);
   if (result.success) return res.redirect('/employee/my-shifts');

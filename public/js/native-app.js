@@ -5,6 +5,7 @@
  *  - tags <html> with .native-app so theme.css can apply app-only styles
  *  - opens file downloads (PDF/CSV/ZIP) in the iOS share sheet, because the
  *    web view can't save "attachment" responses by itself
+ *  - shows a loading bar as soon as a link or form is tapped
  *  - adds pull-to-refresh
  * Pages that start a download from script can call window.openDownload(url).
  */
@@ -86,6 +87,40 @@
     if (!DOWNLOAD_PATH.test(link.pathname)) return;
     e.preventDefault();
     nativeDownload(link.href);
+  });
+
+  // ─── Navigation feedback ────────────────────────────────────────────────────
+  // Every tap loads a new page from the server, so show a loading bar right away
+  // instead of leaving the old screen looking frozen.
+
+  var navTimer;
+
+  function startNavigating() {
+    document.documentElement.classList.add('native-navigating');
+    // Safety net for responses that don't replace the page (e.g. an unexpected download)
+    clearTimeout(navTimer);
+    navTimer = setTimeout(function () {
+      document.documentElement.classList.remove('native-navigating');
+    }, 10000);
+  }
+
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented) return;
+    var link = e.target.closest && e.target.closest('a[href]');
+    if (!link || link.origin !== window.location.origin || link.target === '_blank' || link.hasAttribute('download')) return;
+    if (link.getAttribute('href').charAt(0) === '#') return;
+    if (link.pathname === window.location.pathname && link.search === window.location.search && link.hash) return;
+    if (DOWNLOAD_PATH.test(link.pathname)) return;
+    startNavigating();
+  });
+
+  document.addEventListener('submit', function (e) {
+    if (!e.defaultPrevented) startNavigating();
+  });
+
+  // Coming back to a cached page (or a cancelled navigation) shouldn't keep the bar
+  window.addEventListener('pageshow', function () {
+    document.documentElement.classList.remove('native-navigating');
   });
 
   // ─── Pull to refresh ────────────────────────────────────────────────────────

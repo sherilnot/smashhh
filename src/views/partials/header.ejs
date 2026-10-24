@@ -60,12 +60,12 @@
   <meta name="apple-mobile-web-app-title" content="Rizins" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-  <link rel="stylesheet" href="/css/theme.css?v=6" />
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="/js/native-app.js?v=1"></script>
+  <link rel="stylesheet" href="/css/theme.css?v=<%= assetVersion %>" />
+  <script src="/js/vendor/lucide.min.js?v=<%= assetVersion %>"></script>
+  <script src="/js/native-app.js?v=<%= assetVersion %>"></script>
   <% if (navRole === 'employee') { %>
-  <script src="/js/native-push.js"></script>
-  <script src="/js/webpush-notifications.js"></script>
+  <script src="/js/native-push.js?v=<%= assetVersion %>"></script>
+  <script src="/js/webpush-notifications.js?v=<%= assetVersion %>"></script>
   <% } %>
 </head>
 <%

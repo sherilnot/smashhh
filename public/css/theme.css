@@ -481,6 +481,25 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
 .native-app.native-busy, .native-app.native-busy * { cursor: progress; }
 .native-app.native-busy body { opacity: 0.85; transition: opacity 0.2s; }
 
+/* Loading bar shown as soon as a link or form is tapped, until the next page paints */
+.native-app.native-navigating::after {
+  content: '';
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--ketchup), var(--mustard));
+  transform-origin: left;
+  animation: native-nav-progress 2.5s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+  z-index: 1000;
+  pointer-events: none;
+}
+@keyframes native-nav-progress {
+  from { transform: scaleX(0.05); }
+  to { transform: scaleX(0.9); }
+}
+
 /* Pull to refresh */
 .ptr-indicator {
   position: fixed;

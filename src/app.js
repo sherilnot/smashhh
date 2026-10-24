@@ -4,6 +4,7 @@ require('dotenv').config();
 process.env.TZ = 'Australia/Melbourne';
 
 const express = require('express');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -33,10 +34,34 @@ app.use((req, res, next) => {
   next();
 });
 
+// Log slow requests so we can spot pages that need optimising
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    if (ms > 500) console.warn(`[Slow] ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+  });
+  next();
+});
+
+// Gzip responses, except the SSE stream (compression would buffer events)
+app.use(compression({
+  filter: (req, res) => !String(res.getHeader('Content-Type') || '').includes('text/event-stream')
+    && compression.filter(req, res)
+}));
+
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
+
+// Asset URLs carry ?v=<assetVersion>, which changes on every restart (i.e. every
+// deploy), so browsers can cache them forever instead of re-checking on every page.
+app.locals.assetVersion = Date.now().toString(36);
+app.use((req, res, next) => {
+  if (req.query.v) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+});
 app.use(express.static(path.join(__dirname, '../public')));
 
 // View engine

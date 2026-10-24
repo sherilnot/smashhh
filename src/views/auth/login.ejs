@@ -20,7 +20,8 @@
         <div class="error"><%= error %></div>
       <% } %>
 
-      <form method="POST" action="/login">
+      <!-- Full page load: the dashboard's <head> has scripts the login page doesn't -->
+      <form method="POST" action="/login" data-turbo="false">
         <div class="form-group">
           <label for="user_id">User ID</label>
           <input type="text" id="user_id" name="user_id"

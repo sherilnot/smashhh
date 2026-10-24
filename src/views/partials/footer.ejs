@@ -36,49 +36,62 @@
     })();
   </script>
   <script>
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('[PWA] SW registered, scope:', reg.scope))
-        .catch(err => console.warn('[PWA] SW registration failed:', err));
-    }
-
-    // PWA Install prompt
-    let deferredPrompt;
-    const banner = document.getElementById('pwa-install-banner');
-    const installBtn = document.getElementById('pwa-install-btn');
-    const dismissBtn = document.getElementById('pwa-dismiss-btn');
-
-    window.addEventListener('beforeinstallprompt', e => {
-      e.preventDefault();
-      deferredPrompt = e;
-      if (!localStorage.getItem('pwa-dismissed')) {
-        banner.style.display = 'flex';
+    // Wrapped in a function because Turbo re-runs body scripts on every page
+    // swap, and top-level let/const would throw the second time.
+    (function() {
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('[PWA] SW registered, scope:', reg.scope))
+          .catch(err => console.warn('[PWA] SW registration failed:', err));
       }
-    });
 
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log('[PWA] Install outcome:', outcome);
-        deferredPrompt = null;
-        banner.style.display = 'none';
-      });
-    }
+      // PWA Install prompt. Window listeners are added once; they look the
+      // banner up each time because Turbo replaces it with every page.
+      const banner = () => document.getElementById('pwa-install-banner');
+      const installBtn = document.getElementById('pwa-install-btn');
+      const dismissBtn = document.getElementById('pwa-dismiss-btn');
 
-    if (dismissBtn) {
-      dismissBtn.addEventListener('click', () => {
-        banner.style.display = 'none';
-        localStorage.setItem('pwa-dismissed', '1');
-      });
-    }
+      if (!window.pwaPromptListening) {
+        window.pwaPromptListening = true;
 
-    window.addEventListener('appinstalled', () => {
-      banner.style.display = 'none';
-      console.log('[PWA] App installed');
-    });
+        window.addEventListener('beforeinstallprompt', e => {
+          e.preventDefault();
+          window.pwaDeferredPrompt = e;
+          if (!localStorage.getItem('pwa-dismissed') && banner()) {
+            banner().style.display = 'flex';
+          }
+        });
+
+        window.addEventListener('appinstalled', () => {
+          if (banner()) banner().style.display = 'none';
+          console.log('[PWA] App installed');
+        });
+      }
+
+      if (window.pwaDeferredPrompt && !localStorage.getItem('pwa-dismissed') && banner()) {
+        banner().style.display = 'flex';
+      }
+
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          const deferredPrompt = window.pwaDeferredPrompt;
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          console.log('[PWA] Install outcome:', outcome);
+          window.pwaDeferredPrompt = null;
+          banner().style.display = 'none';
+        });
+      }
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+          banner().style.display = 'none';
+          localStorage.setItem('pwa-dismissed', '1');
+        });
+      }
+    })();
   </script>
   <!-- Live updates (only connects on pages that opt in via data-realtime) -->
   <script src="/js/realtime.js?v=<%= assetVersion %>"></script>

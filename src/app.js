@@ -55,6 +55,20 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
+// Turbo only displays a form response if it's a redirect or an error status, but
+// several POST routes re-render the page with a 200 (e.g. a validation error).
+// Mark those as 422 so Turbo shows them, as a normal form post would.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.get('X-Turbo-Request-Id')) {
+    const render = res.render.bind(res);
+    res.render = (...args) => {
+      if (res.statusCode === 200) res.status(422);
+      return render(...args);
+    };
+  }
+  next();
+});
+
 // Asset URLs carry ?v=<assetVersion>, which changes on every restart (i.e. every
 // deploy), so browsers can cache them forever instead of re-checking on every page.
 app.locals.assetVersion = Date.now().toString(36);

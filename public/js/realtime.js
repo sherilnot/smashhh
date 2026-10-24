@@ -20,6 +20,13 @@
  * transports only triggers one refresh.
  */
 (function () {
+  // Turbo re-runs this script on every page swap. Shut the previous page's
+  // connection down first so they don't pile up.
+  if (window.realtimeClient) {
+    window.realtimeClient.destroy();
+    window.realtimeClient = null;
+  }
+
   var SSE_POLL_MS = 10000;   // Safety-net poll while SSE looks healthy.
   var FALLBACK_POLL_MS = 5000; // Faster poll once we've given up on SSE.
   var SSE_PROVE_MS = 6000;   // Stream must greet us within this window.
@@ -36,6 +43,7 @@
   var gaveUpOnSse = false;
   var lastSeenStamp = 0;
   var debugEnabled = false;
+  var destroyed = false; // Set when Turbo swaps to another page
 
   /* ── Optional on-screen status, for diagnosing on a phone ──────────
      Enable by adding ?rtdebug=1 to the URL, or localStorage.rtdebug = '1'. */
@@ -149,6 +157,7 @@
         return r.text();
       })
       .then(function (html) {
+        if (destroyed) return; // We've moved to another page meanwhile
         var doc = new DOMParser().parseFromString(html, 'text/html');
         var target = findSwapTarget(doc);
         if (!target) return;
@@ -167,6 +176,7 @@
   }
 
   function scheduleRefresh(delay) {
+    if (destroyed) return;
     clearTimeout(refreshTimer);
     // Debounce so a burst of events causes one refresh, not several.
     refreshTimer = setTimeout(refreshNow, delay || 400);
@@ -187,7 +197,7 @@
   /* ── Transport A: Server-Sent Events ─────────────────────────────── */
 
   function startSse() {
-    if (!window.EventSource || gaveUpOnSse) return;
+    if (!window.EventSource || gaveUpOnSse || destroyed) return;
 
     try {
       source = new EventSource('/events');
@@ -251,6 +261,7 @@
 
   function restartPoll() {
     clearInterval(pollTimer);
+    if (destroyed) return;
     pollTimer = setInterval(pollOnce, pollInterval());
   }
 
@@ -295,19 +306,32 @@
     scheduleRefresh(300);
   }
 
-  document.addEventListener('visibilitychange', function () {
+  function onVisibilityChange() {
     if (document.hidden) stop();
     else resume();
-  });
+  }
 
   // Safari restores pages from its back/forward cache without firing
   // visibilitychange, so catch that separately.
-  window.addEventListener('pageshow', function (e) {
+  function onPageShow(e) {
     if (e.persisted) resume();
-  });
+  }
 
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pageshow', onPageShow);
   // Coming back online after a dropout.
   window.addEventListener('online', resume);
+
+  window.realtimeClient = {
+    destroy: function () {
+      destroyed = true;
+      stop();
+      clearTimeout(refreshTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('online', resume);
+    }
+  };
 
   start();
 })();

@@ -38,7 +38,7 @@
       { key: 'dashboard', href: '/operation-manager/dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
       { key: 'invoices',  href: '/operation-manager/invoices',  icon: 'package-check',    label: 'Invoices' },
       { key: 'cash',      href: '/operation-manager/cash',      icon: 'banknote',         label: 'Cash Reports' },
-      { key: 'maintenance', href: '/operation-manager/maintenance', icon: 'tool',          label: 'Maintenance' }
+      { key: 'maintenance', href: '/operation-manager/maintenance', icon: 'wrench',        label: 'Maintenance' }
     ]
   };
   var items = menus[navRole] || [];
@@ -60,7 +60,11 @@
   <meta name="apple-mobile-web-app-title" content="Rizins" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-  <link rel="stylesheet" href="/css/theme.css?v=<%= assetVersion %>" />
+  <link rel="stylesheet" href="/css/theme.css?v=<%= assetVersion %>" data-turbo-track="reload" />
+  <!-- Turbo Drive: links and forms swap the page body in place instead of a full reload.
+       Hover prefetch is off: it would download files twice and fetch GET links that do things. -->
+  <meta name="turbo-prefetch" content="false" />
+  <script src="/js/vendor/turbo.js?v=<%= assetVersion %>" data-turbo-track="reload"></script>
   <script src="/js/vendor/lucide.min.js?v=<%= assetVersion %>"></script>
   <script src="/js/native-app.js?v=<%= assetVersion %>"></script>
   <% if (navRole === 'employee') { %>
@@ -102,7 +106,7 @@
         </a>
       <% }); %>
       <div class="logout">
-        <form method="POST" action="/logout">
+        <form method="POST" action="/logout" data-turbo="false">
           <button type="submit"><i data-lucide="log-out" class="nav-icon"></i><span>Sign out</span></button>
         </form>
       </div>

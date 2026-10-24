@@ -168,7 +168,9 @@
       }
 
       tick();
-      setInterval(tick, 1000);
+      var timer = setInterval(tick, 1000);
+      // Turbo keeps the page alive between swaps; stop ticking once we leave
+      document.addEventListener('turbo:before-render', function () { clearInterval(timer); }, { once: true });
     })();
 
     /* ── Next shift countdown ── */
@@ -188,13 +190,15 @@
       }
 
       tick();
-      setInterval(tick, 30000);
+      var timer = setInterval(tick, 30000);
+      document.addEventListener('turbo:before-render', function () { clearInterval(timer); }, { once: true });
     })();
 
     /* ── Notifications ── */
     async function updateNotificationStatus() {
       var statusText = document.getElementById('status-text');
       var toggleBtn = document.getElementById('toggle-notifications');
+      if (!statusText || !toggleBtn) return; // Left the dashboard before this ran
       if (!window.webPushManager) { setTimeout(updateNotificationStatus, 500); return; }
       var status = await window.webPushManager.getStatus();
       if (!status.supported) { statusText.textContent = 'Not supported'; toggleBtn.style.display='none'; return; }

@@ -495,6 +495,8 @@ details summary { cursor: pointer; color: var(--ketchup); font-weight: 600; font
   z-index: 1000;
   pointer-events: none;
 }
+/* The app has its own bar above; Turbo's would sit under the status bar */
+.native-app .turbo-progress-bar { display: none; }
 @keyframes native-nav-progress {
   from { transform: scaleX(0.05); }
   to { transform: scaleX(0.9); }

@@ -119,9 +119,19 @@
     if (!e.defaultPrevented) startNavigating();
   });
 
-  // Coming back to a cached page (or a cancelled navigation) shouldn't keep the bar
-  window.addEventListener('pageshow', function () {
+  function stopNavigating() {
+    clearTimeout(navTimer);
     document.documentElement.classList.remove('native-navigating');
+  }
+
+  // Coming back to a cached page (or a cancelled navigation) shouldn't keep the bar
+  window.addEventListener('pageshow', stopNavigating);
+  // Turbo swaps pages without a load, so clear it when the new page is shown
+  document.addEventListener('turbo:render', stopNavigating);
+  document.addEventListener('turbo:load', stopNavigating);
+  document.addEventListener('turbo:fetch-request-error', stopNavigating);
+  document.addEventListener('turbo:submit-end', function (e) {
+    if (!e.detail.success) stopNavigating();
   });
 
   // ─── Android back button ────────────────────────────────────────────────────
@@ -152,7 +162,8 @@
   var indicator;
 
   function ensureIndicator() {
-    if (indicator) return indicator;
+    // Turbo replaces <body> on every page, taking the old indicator with it
+    if (indicator && indicator.isConnected) return indicator;
     indicator = document.createElement('div');
     indicator.className = 'ptr-indicator';
     indicator.innerHTML = '<span class="ptr-spinner"></span>';

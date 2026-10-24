@@ -66,6 +66,8 @@
   <meta name="turbo-prefetch" content="false" />
   <script src="/js/vendor/turbo.js?v=<%= assetVersion %>" data-turbo-track="reload"></script>
   <script src="/js/vendor/lucide.min.js?v=<%= assetVersion %>"></script>
+  <!-- Before native-app.js so its submit handler sees upload forms as already handled -->
+  <script src="/js/upload-form.js?v=<%= assetVersion %>"></script>
   <script src="/js/native-app.js?v=<%= assetVersion %>"></script>
   <% if (navRole === 'employee') { %>
   <script src="/js/native-push.js?v=<%= assetVersion %>"></script>

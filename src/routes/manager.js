@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { requireAuth, roleGuard } = require('../middleware/auth');
@@ -12,6 +13,12 @@ const { getNotificationStats, getEmployeesNeedingReminder, getRecentNotification
 const { getOrCreateTodayInvoice, submitInvoice: submitReceivedInvoice, addInvoiceItem } = require('../services/receivedInvoiceService');
 const { createCashSubmission, getManagerCashSubmissions } = require('../services/cashSubmissionService');
 const { createMaintenanceReport, getManagerMaintenanceReports } = require('../services/maintenanceService');
+const {
+  CATEGORIES: EXPENSE_CATEGORIES,
+  createExpense,
+  getManagerExpenses,
+  deleteExpense
+} = require('../services/shopExpenseService');
 const { broadcast, notifyOnSuccess } = require('../services/realtimeService');
 const { 
   createTemporaryAssignment, 
@@ -1948,6 +1955,59 @@ router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (
     console.error('[Manager] maintenance submit error', e);
     res.redirect('/manager/maintenance?error=' + encodeURIComponent('Failed to submit'));
   }
+});
+
+// ─── Shop Expenses ──────────────────────────────────────────────────────────────
+
+const EXPENSE_UPLOAD_DIR = path.join(__dirname, '../../public/uploads/expenses');
+const expenseUpload = multer({
+  storage: multer.diskStorage({
+    destination: EXPENSE_UPLOAD_DIR,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, 'expense-' + uniqueSuffix + path.extname(file.originalname));
+    }
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per receipt photo
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'), false);
+  }
+});
+
+router.get('/expenses', async (req, res) => {
+  const result = await getManagerExpenses(req.user.userId);
+  res.render('manager/expenses', {
+    user: req.user,
+    categories: EXPENSE_CATEGORIES,
+    storeName: result.storeName || '',
+    months: result.months || [],
+    thisMonth: result.thisMonth || null,
+    today: new Date().toLocaleDateString('en-CA'),
+    error: result.success ? (req.query.error || null) : result.error,
+    success: req.query.success || null
+  });
+});
+
+router.post('/expenses/submit', expenseUpload.array('receipts', 5),
+  notifyOnSuccess('expense:submitted', ['receiving_manager'], 'New shop expense'),
+  async (req, res) => {
+    const result = await createExpense(req.user.userId, req.body, req.files);
+    if (!result.success) {
+      return res.redirect('/manager/expenses?error=' + encodeURIComponent(result.error));
+    }
+    res.redirect('/manager/expenses?success=added');
+  });
+
+router.post('/expenses/:id/delete', notifyOnSuccess('expense:updated', ['receiving_manager']), async (req, res) => {
+  const result = await deleteExpense(req.user.userId, req.params.id);
+  if (!result.success) {
+    return res.redirect('/manager/expenses?error=' + encodeURIComponent(result.error));
+  }
+  result.files.forEach(name => {
+    fs.unlink(path.join(EXPENSE_UPLOAD_DIR, path.basename(name)), () => {});
+  });
+  res.redirect('/manager/expenses?success=deleted');
 });
 
 // ─── Temporary Store Assignments ─────────────────────────────────────────────

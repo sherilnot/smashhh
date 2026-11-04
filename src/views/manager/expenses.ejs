@@ -1,0 +1,151 @@
+<%- include('../partials/header', { title: 'Shop Expenses', role: 'store_manager', active: 'expenses' }) %>
+
+  <style>
+    .xp-month { background:linear-gradient(135deg, #2a1507, #3d1e06); color:#fff; border-radius:14px;
+                padding:1rem 1.15rem; margin-bottom:1.25rem; display:flex; align-items:center;
+                justify-content:space-between; gap:1rem; box-shadow:var(--shadow-md); }
+    .xp-month-lbl { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.6px; opacity:0.7; }
+    .xp-month-val { font-size:1.7rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.15; }
+    .xp-month-sub { font-size:0.78rem; opacity:0.75; text-align:right; }
+
+    .xp-box { background:var(--warm-white); border:1px solid var(--border); border-radius:12px; padding:0.85rem 1rem; }
+    .xp-lbl { font-weight:600; font-size:0.8rem; color:var(--muted); text-transform:uppercase;
+              letter-spacing:0.5px; display:block; margin-bottom:0.45rem; }
+    .xp-amount { display:flex; align-items:center; gap:0.35rem; }
+    .xp-amount span { font-size:1.6rem; font-weight:700; color:var(--muted); }
+    .xp-amount input { flex:1; min-width:0; padding:0.55rem 0.6rem; border:1px solid var(--border); border-radius:8px;
+                       font-size:1.6rem; font-weight:700; background:var(--cream); font-variant-numeric:tabular-nums; }
+
+    .xp-cats { display:grid; grid-template-columns:repeat(3, 1fr); gap:0.45rem; }
+    .xp-cat input { position:absolute; opacity:0; pointer-events:none; }
+    .xp-cat span { display:flex; flex-direction:column; align-items:center; gap:0.15rem; padding:0.55rem 0.25rem;
+                   border:1.5px solid var(--border); border-radius:10px; background:var(--cream);
+                   font-size:0.78rem; font-weight:600; color:var(--text-secondary); cursor:pointer;
+                   transition:border-color 0.15s, background 0.15s; }
+    .xp-cat span b { font-size:1.3rem; line-height:1; }
+    .xp-cat input:checked + span { border-color:var(--ketchup); background:#fff0ef; color:var(--ketchup-dark); }
+
+    .xp-input { width:100%; padding:0.6rem; border:1px solid var(--border); border-radius:8px;
+                font-size:1rem; background:var(--cream); font-family:inherit; }
+    .xp-photo-btn { padding:0.6rem 1rem; font-size:0.9rem; font-weight:600; background:var(--cream); color:var(--ink);
+                    border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+    .xp-submit { width:100%; padding:0.95rem; font-size:1rem; font-weight:700; color:#fff; border:none;
+                 border-radius:12px; cursor:pointer; background:linear-gradient(135deg, var(--ketchup), var(--ketchup-dark));
+                 box-shadow:0 4px 16px rgba(230,57,70,0.3); }
+
+    .xp-group { margin-top:1.75rem; }
+    .xp-group-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.5rem; }
+    .xp-group-head h2 { font-size:0.95rem; color:var(--muted); margin:0; }
+    .xp-group-head strong { font-variant-numeric:tabular-nums; }
+    .xp-row { display:flex; align-items:center; gap:0.7rem; padding:0.7rem 0.8rem; background:var(--warm-white);
+              border:1px solid var(--border); border-radius:10px; margin-bottom:0.4rem; }
+    .xp-icon { width:2.2rem; height:2.2rem; flex-shrink:0; border-radius:50%; background:var(--cream);
+               display:flex; align-items:center; justify-content:center; font-size:1.05rem; }
+    .xp-main { flex:1; min-width:0; }
+    .xp-desc { font-weight:600; font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .xp-meta { font-size:0.74rem; color:var(--muted); }
+    .xp-amt { font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .xp-del { background:none; border:none; color:var(--muted); padding:0.3rem; cursor:pointer; line-height:0; }
+  </style>
+
+  <h1>Shop Expenses</h1>
+  <p style="font-size:0.85rem; color:var(--muted); margin:-0.4rem 0 1rem;">
+    Money spent on <%= storeName || 'your shop' %> – repairs, supplies, anything paid for the shop. Payroll sees it straight away.
+  </p>
+
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success === 'added') { %><div class="msg">✅ Expense sent to payroll</div><% } %>
+  <% if (success === 'deleted') { %><div class="msg">Expense deleted</div><% } %>
+
+  <% if (thisMonth) { %>
+    <div class="xp-month">
+      <div>
+        <div class="xp-month-lbl">This month · <%= thisMonth.label %></div>
+        <div class="xp-month-val">$<%= thisMonth.total.toFixed(2) %></div>
+      </div>
+      <div class="xp-month-sub"><%= thisMonth.expenses.length %> expense<%= thisMonth.expenses.length !== 1 ? 's' : '' %></div>
+    </div>
+  <% } %>
+
+  <form method="POST" action="/manager/expenses/submit" enctype="multipart/form-data" data-upload>
+    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+      <div class="xp-box">
+        <label class="xp-lbl" for="xpAmount">Amount spent</label>
+        <div class="xp-amount">
+          <span>$</span>
+          <input id="xpAmount" type="number" name="amount" step="0.01" min="0.01" inputmode="decimal" required placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="xp-box">
+        <span class="xp-lbl">Type</span>
+        <div class="xp-cats">
+          <% categories.forEach(function(c, i) { %>
+            <label class="xp-cat">
+              <input type="radio" name="category" value="<%= c.key %>" <%= i === 0 ? 'checked' : '' %>>
+              <span><b><%= c.icon %></b><%= c.label %></span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+
+      <div class="xp-box">
+        <label class="xp-lbl" for="xpDesc">What was it for?</label>
+        <textarea id="xpDesc" name="description" required class="xp-input" style="min-height:70px; resize:vertical;"
+                  placeholder="e.g. Plumber fixed broken pipe under the sink"></textarea>
+      </div>
+
+      <div class="xp-box" style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; align-items:end;">
+        <div>
+          <label class="xp-lbl" for="xpDate">Date paid</label>
+          <input id="xpDate" type="date" name="spentOn" value="<%= today %>" max="<%= today %>" class="xp-input">
+        </div>
+        <div>
+          <span class="xp-lbl">Receipt</span>
+          <input type="file" id="xpReceipts" name="receipts" accept="image/*" multiple style="display:none;"
+                 onchange="updateReceiptList(this)">
+          <button type="button" class="xp-photo-btn" onclick="document.getElementById('xpReceipts').click()">📷 Add photo</button>
+        </div>
+        <div id="xpReceiptList" style="grid-column:1 / -1; font-size:0.8rem; color:var(--muted);"></div>
+      </div>
+
+      <button type="submit" class="xp-submit">Send to Payroll</button>
+    </div>
+  </form>
+
+  <% months.forEach(function(group) { %>
+    <div class="xp-group">
+      <div class="xp-group-head">
+        <h2><%= group.label %></h2>
+        <strong>$<%= group.total.toFixed(2) %></strong>
+      </div>
+      <% group.expenses.forEach(function(x) {
+           var cat = categories.find(function(c) { return c.key === x.category; }) || categories[categories.length - 1]; %>
+        <div class="xp-row">
+          <div class="xp-icon"><%= cat.icon %></div>
+          <div class="xp-main">
+            <div class="xp-desc"><%= x.description %></div>
+            <div class="xp-meta"><%= formatDateShort(x.spent_on) %> · <%= cat.label %><% if (x.image_count > 0) { %> · 📷 <%= x.image_count %><% } %></div>
+          </div>
+          <div class="xp-amt">$<%= parseFloat(x.amount).toFixed(2) %></div>
+          <% if (x.canDelete) { %>
+            <form method="POST" action="/manager/expenses/<%= x.id %>/delete" onsubmit="return confirm('Delete this expense?')">
+              <button type="submit" class="xp-del" aria-label="Delete expense"><i data-lucide="trash-2" style="width:18px; height:18px;"></i></button>
+            </form>
+          <% } %>
+        </div>
+      <% }); %>
+    </div>
+  <% }); %>
+
+  <script>
+    function updateReceiptList(input) {
+      var list = document.getElementById('xpReceiptList');
+      var names = [];
+      for (var i = 0; i < input.files.length; i++) names.push('📷 ' + input.files[i].name);
+      list.innerHTML = '';
+      list.textContent = names.join('  ');
+    }
+  </script>
+
+<%- include('../partials/footer') %>

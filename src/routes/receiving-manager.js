@@ -4,6 +4,15 @@ const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/time
 const { pool } = require('../config/database');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
 const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
+const {
+  CATEGORIES: EXPENSE_CATEGORIES,
+  normaliseMonth,
+  addMonths,
+  monthKey,
+  monthLabel,
+  getMonthlyReport,
+  getMonthlyTrend
+} = require('../services/shopExpenseService');
 
 const router = express.Router();
 router.use(requireAuth, roleGuard('receiving_manager'));
@@ -823,6 +832,74 @@ router.get('/cash', async (req, res) => {
       total: 0,
       cashPeriods: {}
     });
+  }
+});
+
+// ─── Shop Expenses (money store managers spent on their shop) ──────────────────
+
+router.get('/expenses', async (req, res) => {
+  const month = normaliseMonth(req.query.month);
+  const prevMonth = addMonths(month, -1);
+  const nextMonth = addMonths(month, 1);
+  try {
+    const [report, previous, trend] = await Promise.all([
+      getMonthlyReport(month),
+      getMonthlyReport(prevMonth),
+      getMonthlyTrend(month, 6)
+    ]);
+    res.render('receiving-manager/expenses', {
+      user: req.user,
+      categories: EXPENSE_CATEGORIES,
+      month,
+      monthLabel: monthLabel(month),
+      prevMonth,
+      nextMonth: nextMonth <= monthKey() ? nextMonth : null,
+      report,
+      previousTotal: previous.total,
+      trend,
+      error: null
+    });
+  } catch (e) {
+    console.error('[ReceivingManager] expenses error', e);
+    res.render('receiving-manager/expenses', {
+      user: req.user, categories: EXPENSE_CATEGORIES, month, monthLabel: monthLabel(month),
+      prevMonth, nextMonth: null, report: { stores: [], total: 0, count: 0 }, previousTotal: 0,
+      trend: { months: [], rows: [], columnTotals: [] }, error: 'Failed to load expenses'
+    });
+  }
+});
+
+// One month's expenses for every shop as a CSV (for the accountant)
+router.get('/expenses-export', async (req, res) => {
+  const month = normaliseMonth(req.query.month);
+  try {
+    const { stores } = await getMonthlyReport(month);
+    const label = Object.fromEntries(EXPENSE_CATEGORIES.map(c => [c.key, c.label]));
+    const csv = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+    const lines = [['Shop', 'Date', 'Type', 'Description', 'Amount', 'Entered by', 'Receipts'].map(csv).join(',')];
+    stores.forEach(store => {
+      store.expenses.forEach(x => {
+        lines.push([
+          store.name,
+          new Date(x.spent_on).toLocaleDateString('en-CA'),
+          label[x.category] || x.category,
+          x.description,
+          parseFloat(x.amount).toFixed(2),
+          `${x.first_name} ${x.last_name || ''}`.trim(),
+          x.images.length
+        ].map(csv).join(','));
+      });
+    });
+    stores.forEach(store => {
+      lines.push([`${store.name} total`, '', '', '', store.total.toFixed(2), '', ''].map(csv).join(','));
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Shop_Expenses_${month}.csv"`);
+    res.send('﻿' + lines.join('\r\n')); // BOM so Excel reads it as UTF-8
+  } catch (e) {
+    console.error('[ReceivingManager] expenses export error', e);
+    res.status(500).send('Failed to generate download');
   }
 });
 

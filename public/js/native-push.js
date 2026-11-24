@@ -140,6 +140,16 @@
 
   window.nativePushManager = manager;
 
+  // Signing out unlinks this device from that user on the server. Forget the
+  // "already registered this launch" flag so the next login (possibly another
+  // user on the same phone) links the device to them.
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (form && form.getAttribute && form.getAttribute('action') === '/logout') {
+      try { sessionStorage.removeItem('nativePushChecked'); } catch (err) { /* storage unavailable */ }
+    }
+  }, true);
+
   // Once per app launch: re-register so the server always has the current token
   // (APNs tokens can change, and the logged-in employee may have changed).
   // On first use, ask for permission straight away like a normal app.

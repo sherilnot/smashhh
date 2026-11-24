@@ -222,6 +222,10 @@ td.amount, th.amount { text-align: right; }
 .upload-status-error { color: var(--ketchup-dark); }
 form[data-upload] button:disabled { opacity: 0.7; cursor: progress; }
 
+/* Inline icon next to text (<i data-lucide="..." class="ico">), sized to the text */
+.ico { width: 1.1em; height: 1.1em; vertical-align: -0.2em; margin-right: 0.3em; flex-shrink: 0; }
+button > .ico:only-child { margin-right: 0; }
+
 /* Wide tables scroll inside this box instead of making the whole page scroll sideways */
 .table-scroll {
   max-width: 100%;

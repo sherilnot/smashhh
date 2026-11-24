@@ -4,7 +4,7 @@
 
   <% if (error) { %><div class="error"><%= error %></div><% } %>
   <% if (typeof query !== 'undefined' && query.success === 'roster_published') { %>
-    <div class="msg">✅ Roster sent! Employees can now see their shifts.</div>
+    <div class="msg"><i data-lucide="circle-check" class="ico"></i>Roster sent! Employees can now see their shifts.</div>
   <% } %>
 
   <% if (!hasManagedStore) { %>
@@ -33,7 +33,7 @@
         <a href="/manager/roster?date=<%= weekStartFormatted %>&edit=1" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; background: var(--warm-white); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; text-decoration: none;">Edit</a>
         <form method="POST" action="/manager/roster/publish" style="margin: 0;">
           <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-          <button type="submit" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 700; background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; border: none; border-radius: 8px; cursor: pointer;">📤 Send</button>
+          <button type="submit" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 700; background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; border: none; border-radius: 8px; cursor: pointer;"><i data-lucide="send" class="ico"></i>Send</button>
         </form>
       <% } else { %>
         <a href="/manager/roster?date=<%= weekStartFormatted %>" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; background: var(--warm-white); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; text-decoration: none;">Done</a>
@@ -44,7 +44,7 @@
     <% if (typeof nextWeekRequests !== 'undefined' && nextWeekRequests > 0) { %>
       <a href="/manager/roster?date=<%= nextWeekDate %><%= editMode ? '&edit=1' : '' %>"
          style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:1rem; padding:0.8rem 1rem; background:#1a1a2e; color:#fff; border-radius:12px; text-decoration:none; box-shadow:var(--shadow);">
-        <span style="font-size:0.9rem;">📋 <strong><%= nextWeekRequests %></strong> availability request<%= nextWeekRequests !== 1 ? 's' : '' %> for next week</span>
+        <span style="font-size:0.9rem;"><i data-lucide="calendar-check" class="ico"></i><strong><%= nextWeekRequests %></strong> availability request<%= nextWeekRequests !== 1 ? 's' : '' %> for next week</span>
         <span style="font-weight:700; white-space:nowrap;">View →</span>
       </a>
     <% } %>
@@ -70,9 +70,9 @@
                   <span style="font-size:0.7rem; color:var(--muted);"><%= formatDateShort(day.date) %></span>
                   <% if (day.total > 0) { %>
                     <span style="font-size:0.68rem; padding:0.15rem 0.45rem; background:#1a1a2e; color:#fff; border-radius:20px; font-weight:700;"><%= day.total %> available</span>
-                    <% if (day.counts.Morning > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#C8E6C9; color:#1b5e20; border-radius:5px; font-weight:600;">🌅 <%= day.counts.Morning %></span><% } %>
-                    <% if (day.counts.Evening > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#BBDEFB; color:#0d47a1; border-radius:5px; font-weight:600;">🌆 <%= day.counts.Evening %></span><% } %>
-                    <% if (day.counts['Full Day'] > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#FFE0B2; color:#e65100; border-radius:5px; font-weight:600;">☀ <%= day.counts['Full Day'] %></span><% } %>
+                    <% if (day.counts.Morning > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#C8E6C9; color:#1b5e20; border-radius:5px; font-weight:600;"><i data-lucide="sunrise" class="ico"></i><%= day.counts.Morning %></span><% } %>
+                    <% if (day.counts.Evening > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#BBDEFB; color:#0d47a1; border-radius:5px; font-weight:600;"><i data-lucide="sunset" class="ico"></i><%= day.counts.Evening %></span><% } %>
+                    <% if (day.counts['Full Day'] > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#FFE0B2; color:#e65100; border-radius:5px; font-weight:600;"><i data-lucide="sun" class="ico"></i><%= day.counts['Full Day'] %></span><% } %>
                   <% } else { %>
                     <span style="font-size:0.7rem; color:var(--muted);">No requests</span>
                   <% } %>
@@ -105,7 +105,7 @@
                         <input type="hidden" name="shiftType" value="<%= p.shiftCode %>">
                         <input type="hidden" name="day" value="<%= day.date %>">
                         <button type="submit" style="padding:0.35rem 0.75rem; font-size:0.75rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap;">
-                          ✓ Assign
+                          <i data-lucide="check" class="ico"></i>Assign
                         </button>
                       </form>
                       <% } %>
@@ -156,7 +156,7 @@
                       <div style="font-weight: 600; color: #333;"><%= shift.label %></div>
                       <% if (shift.is_temporary_assignment && shift.from_store_name) { %>
                         <div style="font-size: 0.55rem; color: #ff9800; font-weight: 600; background: #fff3e0; padding: 0.1rem 0.2rem; border-radius: 3px; margin: 0.1rem 0;" title="Temporary from <%= shift.from_store_name %>">
-                          📥 From <%= shift.from_store_name %>
+                          <i data-lucide="arrow-down-left" class="ico"></i>From <%= shift.from_store_name %>
                         </div>
                       <% } %>
                       <% if (shift.actual_clock_in) { %>
@@ -166,7 +166,7 @@
                         <form method="POST" action="/manager/roster/unassign" style="margin-top: 0.2rem;">
                           <input type="hidden" name="bookingId" value="<%= shift.booking_id %>">
                           <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
-                          <button type="submit" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; background: white; color: #c62828; border: 1px solid #f3c6c6; border-radius: 3px; cursor: pointer;">✕</button>
+                          <button type="submit" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; background: white; color: #c62828; border: 1px solid #f3c6c6; border-radius: 3px; cursor: pointer;"><i data-lucide="x" class="ico"></i></button>
                         </form>
                       <% } %>
                     </div>

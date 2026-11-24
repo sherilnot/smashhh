@@ -22,6 +22,7 @@ const { scheduleNightlyJob } = require('./services/schedulerService');
 const { generateNightlyChecklists } = require('./services/inventoryService');
 const { sendShiftBookingReminders } = require('./services/webPushService');
 const { autoCompleteShifts } = require('./services/shiftService');
+const { sendUpcomingShiftReminders } = require('./services/shiftReminderService');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -171,6 +172,9 @@ scheduleNightlyJob('auto-complete-shifts', '*/15 * * * *', async () => {
     console.log(`[Scheduler] auto-complete-shifts: completed ${completed} booking(s)`);
   }
 });
+
+// Remind employees of approved shifts starting in the next 3 hours (once per shift)
+scheduleNightlyJob('upcoming-shift-reminders', '*/5 * * * *', sendUpcomingShiftReminders);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

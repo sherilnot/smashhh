@@ -40,7 +40,7 @@ class WebPushNotificationManager {
 
     try {
       // Fetch VAPID public key from server
-      const response = await fetch('/employee/notifications/vapid-public-key');
+      const response = await fetch('/notifications/vapid-public-key');
       const data = await response.json();
       this.vapidPublicKey = data.publicKey;
 
@@ -157,7 +157,7 @@ class WebPushNotificationManager {
       console.log('[WebPush] Push subscription successful:', subscription.endpoint);
 
       // Send subscription to server
-      const response = await fetch('/employee/notifications/webpush-subscribe', {
+      const response = await fetch('/notifications/webpush-subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -198,7 +198,7 @@ class WebPushNotificationManager {
         console.log('[WebPush] Unsubscribed from push');
 
         // Notify server
-        await fetch('/employee/notifications/webpush-unsubscribe', {
+        await fetch('/notifications/webpush-unsubscribe', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -239,7 +239,7 @@ class WebPushNotificationManager {
    */
   async testPushNotification() {
     try {
-      const response = await fetch('/employee/notifications/test-push', {
+      const response = await fetch('/notifications/test-push', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

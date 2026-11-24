@@ -20,6 +20,7 @@ const {
   deleteExpense
 } = require('../services/shopExpenseService');
 const { broadcast, notifyOnSuccess } = require('../services/realtimeService');
+const { notifyFromUser, notifyStaff } = require('../services/staffNotifyService');
 const { 
   createTemporaryAssignment, 
   getIncomingAssignments, 
@@ -1390,7 +1391,12 @@ router.post('/timesheet/edit-ajax', notifyOnSuccess('timesheet:updated', ['store
   }
 });
 
-router.post('/timesheet/submit', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated'), async (req, res) => {
+router.post('/timesheet/submit', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated', {
+  roles: ['receiving_manager', 'operation_manager'],
+  title: a => `Timesheet submitted – ${a.storeName}`,
+  message: a => `${a.storeName}'s timesheet is ready to review.`,
+  urlByRole: { receiving_manager: '/receiving-manager/timesheets', operation_manager: '/operation-manager/timesheets' }
+}), async (req, res) => {
   try {
     const { weekStart, weekEnd } = req.body;
 
@@ -1453,7 +1459,12 @@ router.post('/timesheet/submit', notifyOnSuccess('timesheet:submitted', ['store_
 });
 
 // Confirm and lock timesheet (final submission to receiving manager)
-router.post('/timesheet/confirm', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated'), async (req, res) => {
+router.post('/timesheet/confirm', notifyOnSuccess('timesheet:submitted', ['store_manager', 'receiving_manager', 'operation_manager'], 'Timesheet updated', {
+  roles: ['receiving_manager', 'operation_manager'],
+  title: a => `Timesheet confirmed – ${a.storeName}`,
+  message: a => `${a.storeName}'s timesheet was confirmed.`,
+  urlByRole: { receiving_manager: '/receiving-manager/timesheets', operation_manager: '/operation-manager/timesheets' }
+}), async (req, res) => {
   try {
     const { weekStart } = req.body;
     const [y, m, d] = weekStart.split('-').map(Number);
@@ -1519,6 +1530,12 @@ router.post('/store-checklist/submit', async (req, res) => {
     broadcast('checklist:submitted', {
       roles: ['warehouse_manager'],
       data: { message: 'New store order received' }
+    });
+    notifyFromUser(req.user.userId, {
+      roles: ['warehouse_manager'],
+      title: a => `New store order – ${a.storeName}`,
+      message: a => `${a.storeName} sent today's store order.`,
+      urlByRole: { warehouse_manager: '/warehouse/store-checklists' }
     });
 
     res.redirect('/manager/store-checklist?success=1');
@@ -1721,6 +1738,12 @@ router.post('/received-invoice/submit', async (req, res) => {
       roles: ['operation_manager', 'receiving_manager'],
       data: { message: 'New invoice submitted' }
     });
+    notifyFromUser(req.user.userId, {
+      roles: ['operation_manager', 'receiving_manager'],
+      title: a => `New invoice – ${a.storeName}`,
+      message: a => `${a.storeName} submitted a received invoice.`,
+      urlByRole: { operation_manager: '/operation-manager/invoices', receiving_manager: '/receiving-manager/received-invoices' }
+    });
 
     res.redirect('/manager/received-invoice?success=1');
   } catch (e) {
@@ -1916,6 +1939,12 @@ router.post('/cash/submit', cashUpload.array('photos', 5), async (req, res) => {
       roles: ['receiving_manager', 'operation_manager'],
       data: { message: 'New cash report received' }
     });
+    notifyFromUser(req.user.userId, {
+      roles: ['receiving_manager', 'operation_manager'],
+      title: a => `New cash report – ${a.storeName}`,
+      message: a => `${a.storeName} submitted a cash report of $${parsedAmount.toFixed(2)}.`,
+      urlByRole: { receiving_manager: '/receiving-manager/cash', operation_manager: '/operation-manager/cash' }
+    });
 
     res.redirect('/manager/cash?success=1');
   } catch (e) {
@@ -1977,6 +2006,13 @@ router.post('/maintenance/submit', maintenanceUpload.array('media', 10), async (
       roles: ['operation_manager'],
       data: { message: 'New maintenance report' }
     });
+    const issue = description.trim();
+    notifyFromUser(req.user.userId, {
+      roles: ['operation_manager'],
+      title: a => `New maintenance report – ${a.storeName}`,
+      message: issue.length > 90 ? issue.slice(0, 87) + '…' : issue,
+      urlByRole: { operation_manager: '/operation-manager/maintenance' }
+    });
 
     res.redirect('/manager/maintenance?success=1');
   } catch (e) {
@@ -2018,7 +2054,16 @@ router.get('/expenses', async (req, res) => {
 });
 
 router.post('/expenses/submit', expenseUpload.array('receipts', 5),
-  notifyOnSuccess('expense:submitted', ['receiving_manager'], 'New shop expense'),
+  notifyOnSuccess('expense:submitted', ['receiving_manager'], 'New shop expense', req => {
+    const amount = parseFloat(req.body.amount) || 0;
+    const what = String(req.body.description || '').trim();
+    return {
+      roles: ['receiving_manager'],
+      title: a => `New shop expense – ${a.storeName}`,
+      message: `$${amount.toFixed(2)} – ${what.length > 80 ? what.slice(0, 77) + '…' : what}`,
+      urlByRole: { receiving_manager: '/receiving-manager/expenses' }
+    };
+  }),
   async (req, res) => {
     const result = await createExpense(req.user.userId, req.body, req.files);
     if (!result.success) {
@@ -2136,6 +2181,35 @@ router.get('/api/temporary-assignments/shifts/:storeId', async (req, res) => {
 });
 
 // Create a temporary assignment
+/**
+ * Who/where/when of a temporary assignment, for notifying the employee's home store.
+ * Looked up by assignment id, or by employee + shift right after creating it.
+ */
+async function temporaryAssignmentInfo({ assignmentId, employeeId, shiftId }) {
+  const res = await pool.query(
+    `SELECT t.from_store_id, fs.name AS from_store, ts.name AS to_store,
+            u.first_name, u.last_name, s.start_time
+     FROM temporary_store_assignments t
+     JOIN users u ON u.id = t.employee_id
+     JOIN stores fs ON fs.id = t.from_store_id
+     JOIN stores ts ON ts.id = t.to_store_id
+     JOIN shift_bookings sb ON sb.id = t.shift_booking_id
+     JOIN shifts s ON s.id = sb.shift_id
+     WHERE ${assignmentId ? 't.id = $1' : 't.employee_id = $1 AND sb.shift_id = $2'}
+     ORDER BY t.assigned_at DESC LIMIT 1`,
+    assignmentId ? [assignmentId] : [employeeId, shiftId]
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    fromStoreId: r.from_store_id,
+    fromStore: r.from_store,
+    toStore: r.to_store,
+    name: r.last_name ? `${r.first_name} ${r.last_name}` : r.first_name,
+    day: new Date(r.start_time).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+  };
+}
+
 router.post('/temporary-assignments/create', async (req, res) => {
   try {
     const { employeeId, notes } = req.body;
@@ -2175,6 +2249,15 @@ router.post('/temporary-assignments/create', async (req, res) => {
     // Employees' rosters refresh quietly (no toast for everyone)
     broadcast('temporary-assignment:created', { roles: ['employee'] });
 
+    temporaryAssignmentInfo({ employeeId, shiftId }).then(info => info && notifyStaff({
+      roles: ['store_manager'],
+      storeId: info.fromStoreId,
+      exceptUserId: req.user.userId,
+      title: `Temporary staff – ${info.fromStore}`,
+      message: `${info.name} will work at ${info.toStore} on ${info.day}.`,
+      urlByRole: { store_manager: '/manager/temporary-assignments' }
+    })).catch(e => console.error('[Manager] temp assignment notify failed', e.message));
+
     res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Temporary assignment created successfully'));
   } catch (e) {
     console.error('[Manager] create temporary assignment error', e);
@@ -2186,6 +2269,7 @@ router.post('/temporary-assignments/create', async (req, res) => {
 router.post('/temporary-assignments/cancel/:assignmentId', async (req, res) => {
   try {
     const { assignmentId } = req.params;
+    const info = await temporaryAssignmentInfo({ assignmentId }).catch(() => null);
     const result = await cancelTemporaryAssignment(req.user.userId, assignmentId);
 
     if (!result.success) {
@@ -2198,6 +2282,17 @@ router.post('/temporary-assignments/cancel/:assignmentId', async (req, res) => {
     });
     // Employees' rosters refresh quietly (no toast for everyone)
     broadcast('temporary-assignment:cancelled', { roles: ['employee'] });
+
+    if (info) {
+      notifyStaff({
+        roles: ['store_manager'],
+        storeId: info.fromStoreId,
+        exceptUserId: req.user.userId,
+        title: `Temporary staff cancelled – ${info.fromStore}`,
+        message: `${info.name} is no longer working at ${info.toStore} on ${info.day}.`,
+        urlByRole: { store_manager: '/manager/temporary-assignments' }
+      });
+    }
 
     res.redirect('/manager/temporary-assignments?success=' + encodeURIComponent('Assignment cancelled successfully'));
   } catch (e) {

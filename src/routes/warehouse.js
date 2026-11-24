@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedChecklists, getChecklistDetail, markReviewed } = require('../services/storeChecklistService');
 const { broadcast } = require('../services/realtimeService');
+const { notifyStaff } = require('../services/staffNotifyService');
 const { pool } = require('../config/database');
 
 const router = express.Router();
@@ -67,6 +68,15 @@ router.post('/store-checklists/:id/review', async (req, res) => {
       storeId,
       data: { message: 'Warehouse reviewed your order' }
     });
+    if (storeId) {
+      notifyStaff({
+        roles: ['store_manager'],
+        storeId,
+        title: 'Store order reviewed',
+        message: 'The warehouse has reviewed your store order.',
+        urlByRole: { store_manager: '/manager/store-checklist' }
+      });
+    }
 
     res.redirect(`/warehouse/store-checklists/${req.params.id}`);
   } catch (e) {

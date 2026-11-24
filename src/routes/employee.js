@@ -10,6 +10,21 @@ const { saveNativeToken, removeNativeToken } = require('../services/apnsService'
 const router = express.Router();
 
 const { notifyOnSuccess } = require('../services/realtimeService');
+const { notifyFromUser } = require('../services/staffNotifyService');
+
+// Phone notifications to the store's managers about crew shift requests
+const PUSH_SHIFT_REQUEST = {
+  roles: ['store_manager'],
+  title: a => `New shift request – ${a.storeName}`,
+  message: a => `${a.name} requested a shift. Review it under Pending.`,
+  urlByRole: { store_manager: '/manager/pending' }
+};
+const PUSH_SHIFT_CANCELLED = {
+  roles: ['store_manager'],
+  title: a => `Shift request cancelled – ${a.storeName}`,
+  message: a => `${a.name} cancelled a shift request.`,
+  urlByRole: { store_manager: '/manager/pending' }
+};
 
 router.use(requireAuth, roleGuard('employee'));
 
@@ -297,12 +312,14 @@ router.post('/book-weekly-shifts', async (req, res) => {
 
     // Save each day's answer (including "No shift" days) so the manager's
     // roster can show who is and isn't available, separate from bookings
+    let availableDays = 0;
     for (const key in req.body) {
       if (!key.startsWith('shift_')) continue;
       const date = key.replace('shift_', '');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       const code = req.body[key];
       const available = code !== 'none';
+      if (available) availableDays++;
       const preset = { '11-1730': ['11:00', '17:30'], '1730-2100': ['17:30', '21:00'], '11-2100': ['11:00', '21:00'] }[code];
       const times = !available ? [null, null]
         : preset || [req.body[`custom_start_${date}`] || null, req.body[`custom_end_${date}`] || null];
@@ -333,6 +350,12 @@ router.post('/book-weekly-shifts', async (req, res) => {
         data: { message: 'New availability submitted' }
       });
     } catch (e) { /* non-fatal */ }
+    notifyFromUser(req.user.userId, {
+      roles: ['store_manager'],
+      title: a => `New availability – ${a.storeName}`,
+      message: a => `${a.name} sent availability for next week (${availableDays} day${availableDays !== 1 ? 's' : ''}).`,
+      urlByRole: { store_manager: '/manager/roster' }
+    });
 
     return res.redirect('/employee/my-shifts?success=' + encodeURIComponent(`Successfully submitted ${bookedCount} shift request(s) for manager approval.`));
   } catch (e) {
@@ -342,7 +365,7 @@ router.post('/book-weekly-shifts', async (req, res) => {
 });
 
 // Book a shift using day + shift type selection (legacy route - kept for backwards compatibility)
-router.post('/book-shift', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
+router.post('/book-shift', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated', PUSH_SHIFT_REQUEST), async (req, res) => {
   const { day, shiftType, customStart, customEnd } = req.body;
   try {
     const SHIFT_MAP = {
@@ -468,7 +491,7 @@ router.get('/my-shifts', async (req, res) => {
 });
 
 // Book a shift
-router.post('/book', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
+router.post('/book', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated', PUSH_SHIFT_REQUEST), async (req, res) => {
   const { shiftId } = req.body;
   const result = await bookShift(req.user.userId, shiftId);
   if (result.success) return res.redirect('/employee/my-shifts');
@@ -482,7 +505,7 @@ router.post('/book', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift
 });
 
 // Cancel a shift
-router.post('/cancel', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated'), async (req, res) => {
+router.post('/cancel', notifyOnSuccess('shifts:changed', ['store_manager'], 'Shift requests updated', PUSH_SHIFT_CANCELLED), async (req, res) => {
   const { shiftId } = req.body;
   const result = await cancelShift(req.user.userId, shiftId);
   if (result.success) return res.redirect('/employee/my-shifts');

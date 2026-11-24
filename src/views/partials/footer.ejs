@@ -10,6 +10,46 @@
 
   <script>lucide.createIcons();</script>
   <script>
+    // Side menu "Notifications" switch: shows On/Off for this device and toggles it
+    (function() {
+      const btn = document.getElementById('navPushToggle');
+      const state = document.getElementById('navPushState');
+      if (!btn || !state) return;
+      let tries = 0;
+
+      async function refresh() {
+        const mgr = window.webPushManager;
+        if (!mgr) { if (tries++ < 20) setTimeout(refresh, 300); return; }
+        if (!document.body.contains(btn)) return; // left this page meanwhile
+        const status = await mgr.getStatus();
+        if (!status.supported) return;
+        btn.hidden = false;
+        const on = status.subscribed;
+        state.textContent = status.permission === 'denied' ? 'Blocked' : (on ? 'On' : 'Off');
+        state.classList.toggle('on', on);
+        btn.dataset.on = on ? '1' : '';
+        btn.dataset.denied = status.permission === 'denied' ? '1' : '';
+      }
+
+      btn.addEventListener('click', async () => {
+        const mgr = window.webPushManager;
+        if (!mgr) return;
+        if (btn.dataset.denied) {
+          alert('Notifications are blocked for this app. Turn them on in your phone\'s Settings > Notifications, then try again.');
+          return;
+        }
+        state.textContent = '…';
+        const result = btn.dataset.on ? await mgr.unsubscribe() : await mgr.subscribe();
+        if (result && result.success === false && !btn.dataset.on) {
+          alert('Could not turn on notifications. Check your phone\'s notification settings for this app.');
+        }
+        refresh();
+      });
+
+      refresh();
+    })();
+  </script>
+  <script>
     // Sidebar toggle for mobile
     (function() {
       const toggle = document.getElementById('menuToggle');

@@ -71,7 +71,7 @@
   <!-- Before native-app.js so its submit handler sees upload forms as already handled -->
   <script src="/js/upload-form.js?v=<%= assetVersion %>"></script>
   <script src="/js/native-app.js?v=<%= assetVersion %>"></script>
-  <% if (navRole === 'employee') { %>
+  <% if (navRole) { %>
   <script src="/js/native-push.js?v=<%= assetVersion %>"></script>
   <script src="/js/webpush-notifications.js?v=<%= assetVersion %>"></script>
   <% } %>
@@ -110,6 +110,10 @@
         </a>
       <% }); %>
       <div class="logout">
+        <!-- Push notifications on/off for this device (footer script fills in the state) -->
+        <button type="button" id="navPushToggle" class="push-toggle" hidden>
+          <i data-lucide="bell" class="nav-icon"></i><span>Notifications</span><span class="push-state" id="navPushState"></span>
+        </button>
         <form method="POST" action="/logout" data-turbo="false">
           <button type="submit"><i data-lucide="log-out" class="nav-icon"></i><span>Sign out</span></button>
         </form>

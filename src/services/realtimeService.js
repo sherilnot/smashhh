@@ -195,14 +195,21 @@ function broadcastFromUser(topic, user, roles, message) {
  * ?error=, or a JSON reply below 400 that isn't { success: false } / { error }.
  *
  *   router.post('/cancel', notifyOnSuccess('shifts:changed', ['store_manager']), handler)
+ *
+ * `push` (optional) also sends a phone notification through staffNotifyService:
+ * an options object for notifyFromUser, or a function of req returning one.
  */
-function notifyOnSuccess(topic, roles, message) {
+function notifyOnSuccess(topic, roles, message, push) {
   return (req, res, next) => {
     let sent = false;
     const send = () => {
       if (sent) return;
       sent = true;
       broadcastFromUser(topic, req.user, roles, message);
+      if (push && req.user) {
+        // Required here, not at the top, to keep the two services independent
+        require('./staffNotifyService').notifyFromUser(req.user.userId, typeof push === 'function' ? push(req) : push);
+      }
     };
 
     const redirect = res.redirect.bind(res);

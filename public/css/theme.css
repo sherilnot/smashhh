@@ -151,6 +151,10 @@ a:hover { color: var(--ketchup-dark); }
 }
 .sidebar .logout button .nav-icon { width: 18px; height: 18px; flex-shrink: 0; stroke-width: 1.75; }
 .sidebar .logout button:hover { background: var(--red-bg); color: var(--ketchup); }
+.sidebar .logout .push-toggle:hover { background: var(--mustard-glow); color: var(--bun-dark); }
+.push-state { margin-left: auto; font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 999px;
+              background: var(--border); color: var(--muted); }
+.push-state.on { background: var(--green-bg); color: var(--lettuce-dark); }
 
 /* ---------- Content ---------- */
 .content {

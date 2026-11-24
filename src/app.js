@@ -17,6 +17,7 @@ const warehouseRoutes = require('./routes/warehouse');
 const receivingManagerRoutes = require('./routes/receiving-manager');
 const operationManagerRoutes = require('./routes/operation-manager');
 const eventRoutes = require('./routes/events');
+const notificationRoutes = require('./routes/notifications');
 
 const { scheduleNightlyJob } = require('./services/schedulerService');
 const { generateNightlyChecklists } = require('./services/inventoryService');
@@ -108,6 +109,7 @@ app.locals.formatDateShort = function(date) {
 // Routes
 app.use('/', authRoutes);
 app.use('/', eventRoutes);
+app.use('/notifications', notificationRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/manager', managerRoutes);
 app.use('/warehouse', warehouseRoutes);

@@ -50,7 +50,7 @@
 
   PushNotifications.addListener('registration', function (token) {
     var value = token.value;
-    postJson('/employee/notifications/native-register', { token: value, platform: Capacitor.getPlatform() })
+    postJson('/notifications/native-register', { token: value, platform: Capacitor.getPlatform() })
       .then(function (res) {
         if (!res.ok) throw new Error('Server rejected device token');
         storage(TOKEN_KEY, value);
@@ -117,7 +117,7 @@
     unsubscribe: async function () {
       var token = storage(TOKEN_KEY);
       if (token) {
-        try { await postJson('/employee/notifications/native-unregister', { token: token }); } catch (e) { /* offline */ }
+        try { await postJson('/notifications/native-unregister', { token: token }); } catch (e) { /* offline */ }
       }
       storage(ENABLED_KEY, 'false');
       storage(TOKEN_KEY, null);
@@ -133,7 +133,7 @@
     dismissBanner: function () {},
 
     testPushNotification: async function () {
-      var res = await postJson('/employee/notifications/test-push', {});
+      var res = await postJson('/notifications/test-push', {});
       return res.json();
     }
   };

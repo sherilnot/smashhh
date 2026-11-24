@@ -513,9 +513,15 @@ router.get('/roster', async (req, res) => {
     // manager approves or assigns shifts. Reference only: nothing here puts
     // anyone on the roster.
     const AVAIL_SHIFTS = {
-      '11-1730': { label: 'Morning', start: '11:00', end: '17:30' },
-      '1730-2100': { label: 'Evening', start: '17:30', end: '21:00' },
-      '11-2100': { label: 'Full Day', start: '11:00', end: '21:00' }
+      '11-1730': { label: 'Morning', cls: 'am', start: '11:00', end: '17:30' },
+      '1730-2100': { label: 'Evening', cls: 'pm', start: '17:30', end: '21:00' },
+      '11-2100': { label: 'Full Day', cls: 'full', start: '11:00', end: '21:00' }
+    };
+    /** "17:30" -> "5:30", "11:00" -> "11": short times for the availability pills */
+    const shortTime = (hhmm) => {
+      if (!hhmm) return '';
+      const [h, m] = hhmm.split(':').map(Number);
+      return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''}`;
     };
     const availRes = await pool.query(
       `SELECT ea.employee_id, to_char(ea.day, 'YYYY-MM-DD') AS day, ea.available, ea.shift_code,
@@ -551,7 +557,7 @@ router.get('/roster', async (req, res) => {
           available: r.available
         };
         if (!r.available) {
-          return { ...base, shiftLabel: 'Not available', shiftCode: null, color: '#E0E0E0', timeRange: '' };
+          return { ...base, shiftLabel: 'Not available', shiftCode: null, cls: 'off', color: '#E0E0E0', timeRange: '', shortRange: '' };
         }
         const preset = AVAIL_SHIFTS[r.shift_code];
         const start = preset ? preset.start : r.start_time;
@@ -560,8 +566,10 @@ router.get('/roster', async (req, res) => {
           ...base,
           shiftLabel: preset ? preset.label : 'Custom',
           shiftCode: preset ? r.shift_code : 'custom',
+          cls: preset ? preset.cls : 'custom',
           color: start && end ? colorFor(start, end) : '#F8BBD0',
-          timeRange: start && end ? `${toAmPm(start)}–${toAmPm(end)}` : ''
+          timeRange: start && end ? `${toAmPm(start)}–${toAmPm(end)}` : '',
+          shortRange: start && end ? `${shortTime(start)}–${shortTime(end)}` : ''
         };
       });
 

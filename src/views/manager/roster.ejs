@@ -60,58 +60,84 @@
         <div style="font-size:0.72rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">
           Availability Requests (<%= totalAvailable %>)
         </div>
-        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+        <style>
+          /* Availability list: one compact row per person, one colour per shift (same as Book Shifts) */
+          .av-days { display:flex; flex-direction:column; gap:0.45rem; }
+          .av-card { background:var(--warm-white); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+          .av-head { display:flex; align-items:center; gap:0.5rem; padding:0.7rem 0.9rem; cursor:pointer; user-select:none; }
+          .av-head-day { font-weight:700; color:var(--bun-dark); width:2.6rem; }
+          .av-head-date { font-size:0.75rem; color:var(--muted); flex:1; }
+          .av-head-none { font-size:0.75rem; color:var(--muted); }
+          .av-arrow { color:var(--muted); font-size:0.8rem; transition:transform 0.2s; margin-left:0.25rem; }
+          .av-count { display:inline-flex; align-items:center; gap:0.2rem; font-size:0.72rem; font-weight:700;
+                      padding:0.15rem 0.45rem; border-radius:999px; }
+          .av-count .ico { width:13px; height:13px; margin:0; }
+          .av-list { border-top:1px solid var(--border); }
+          .av-row { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.9rem; }
+          .av-row + .av-row { border-top:1px solid #f2ede6; }
+          .av-name { flex:1; min-width:0; font-weight:600; font-size:0.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .av-pill { display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:600;
+                     padding:0.25rem 0.55rem; border-radius:999px; white-space:nowrap; }
+          .av-pill .ico { width:14px; height:14px; margin:0; }
+          .av-pill small { font-weight:500; opacity:0.8; font-size:0.7rem; }
+          .av-am { background:#e8f5e9; color:#2e7d32; }
+          .av-pm { background:#fff3e0; color:#e65100; }
+          .av-full { background:#e3f2fd; color:#1565c0; }
+          .av-custom { background:#f3e5f5; color:#7b1fa2; }
+          .av-off { background:#f1efec; color:#9a8f84; }
+          .av-assign { width:2rem; height:2rem; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+                       border:none; border-radius:50%; background:#2e7d32; color:#fff; cursor:pointer; padding:0; }
+          .av-assign .ico { width:16px; height:16px; margin:0; }
+          .av-spacer { width:2rem; flex-shrink:0; }
+        </style>
+        <%
+          var AV_ICON = { am: 'sunrise', pm: 'sunset', full: 'sun', custom: 'clock', off: 'x' };
+          var AV_COUNT = [['Morning', 'am'], ['Evening', 'pm'], ['Full Day', 'full'], ['Custom', 'custom']];
+        %>
+        <div class="av-days">
           <% avail.forEach(function(day, dIdx) { %>
-            <div style="background:var(--warm-white); border:1px solid var(--border); border-radius:10px; overflow:hidden;">
-              <!-- Day header -->
-              <div onclick="toggleDay(<%= dIdx %>)" style="display:flex; align-items:center; justify-content:space-between; padding:0.65rem 0.9rem; cursor:pointer; user-select:none;">
-                <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
-                  <span style="font-weight:700; font-size:0.9rem; color:var(--bun-dark); min-width:4.5rem;"><%= day.label %></span>
-                  <span style="font-size:0.7rem; color:var(--muted);"><%= formatDateShort(day.date) %></span>
-                  <% if (day.total > 0) { %>
-                    <span style="font-size:0.68rem; padding:0.15rem 0.45rem; background:#1a1a2e; color:#fff; border-radius:20px; font-weight:700;"><%= day.total %> available</span>
-                    <% if (day.counts.Morning > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#C8E6C9; color:#1b5e20; border-radius:5px; font-weight:600;"><i data-lucide="sunrise" class="ico"></i><%= day.counts.Morning %></span><% } %>
-                    <% if (day.counts.Evening > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#BBDEFB; color:#0d47a1; border-radius:5px; font-weight:600;"><i data-lucide="sunset" class="ico"></i><%= day.counts.Evening %></span><% } %>
-                    <% if (day.counts['Full Day'] > 0) { %><span style="font-size:0.65rem; padding:0.12rem 0.4rem; background:#FFE0B2; color:#e65100; border-radius:5px; font-weight:600;"><i data-lucide="sun" class="ico"></i><%= day.counts['Full Day'] %></span><% } %>
-                  <% } else { %>
-                    <span style="font-size:0.7rem; color:var(--muted);">No requests</span>
-                  <% } %>
-                </div>
-                <span id="dayArrow-<%= dIdx %>" style="font-size:0.9rem; color:var(--muted); transition:transform 0.2s;<%= day.total > 0 ? ' transform:rotate(180deg);' : '' %>">▾</span>
+            <div class="av-card">
+              <div class="av-head" onclick="toggleDay(<%= dIdx %>)">
+                <span class="av-head-day"><%= day.label %></span>
+                <span class="av-head-date"><%= formatDateShort(day.date) %></span>
+                <% if (day.total > 0) { %>
+                  <% AV_COUNT.forEach(function(c) { if (day.counts[c[0]] > 0) { %>
+                    <span class="av-count av-<%= c[1] %>" title="<%= c[0] %>"><i data-lucide="<%= AV_ICON[c[1]] %>" class="ico"></i><%= day.counts[c[0]] %></span>
+                  <% } }); %>
+                <% } else if (day.people.length > 0) { %>
+                  <span class="av-head-none"><%= day.people.length %> not available</span>
+                <% } else { %>
+                  <span class="av-head-none">No requests</span>
+                <% } %>
+                <span id="dayArrow-<%= dIdx %>" class="av-arrow" style="<%= day.total > 0 ? 'transform:rotate(180deg);' : '' %>">▾</span>
               </div>
 
-              <!-- People list: open when the day has requests -->
-              <div id="dayPanel-<%= dIdx %>" style="display:<%= day.total > 0 ? 'block' : 'none' %>; border-top:1px solid var(--border);">
+              <div id="dayPanel-<%= dIdx %>" class="av-list" style="display:<%= day.total > 0 ? 'block' : 'none' %>;">
                 <% if (day.people.length === 0) { %>
-                  <div style="padding:0.75rem 0.9rem; font-size:0.8rem; color:var(--muted);">No availability requests for this day.</div>
-                <% } else { %>
-                  <% day.people.forEach(function(p) { %>
-                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.9rem; border-top:1px solid var(--border); flex-wrap:wrap;">
-                      <div style="flex:1; min-width:120px;">
-                        <div style="font-weight:600; font-size:0.85rem;"><%= p.name %></div>
-                        <div style="font-size:0.68rem; color:var(--muted);">
-                          <%= p.employmentType === 'casual' ? 'Casual' : 'Permanent' %>
-                          <% if (p.priorityScore > 0) { %> · Priority <%= p.priorityScore %><% } %>
-                        </div>
-                      </div>
-                      <span style="font-size:0.7rem; padding:0.2rem 0.5rem; background:<%= p.color %>; color:#333; border-radius:6px; font-weight:700; white-space:nowrap;">
-                        <%= p.shiftLabel %>
-                      </span>
-                      <span style="font-size:0.68rem; color:var(--muted); white-space:nowrap;"><%= p.timeRange %></span>
-                      <% if (p.available !== false) { %>
+                  <div class="av-row" style="color:var(--muted); font-size:0.8rem;">No availability for this day.</div>
+                <% } %>
+                <% day.people.forEach(function(p) { %>
+                  <div class="av-row">
+                    <span class="av-name"><%= p.name %></span>
+                    <span class="av-pill av-<%= p.cls %>">
+                      <i data-lucide="<%= AV_ICON[p.cls] || 'clock' %>" class="ico"></i>
+                      <% if (p.cls === 'off') { %>Off<% } else if (p.cls === 'custom') { %><%= p.shortRange %><% } else { %><%= p.shiftLabel === 'Full Day' ? 'Full day' : p.shiftLabel %> <small><%= p.shortRange %></small><% } %>
+                    </span>
+                    <% if (p.available !== false) { %>
                       <form method="POST" action="/manager/roster/assign" style="margin:0;">
                         <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
                         <input type="hidden" name="employeeId" value="<%= p.employeeId %>">
                         <input type="hidden" name="shiftType" value="<%= p.shiftCode %>">
                         <input type="hidden" name="day" value="<%= day.date %>">
-                        <button type="submit" style="padding:0.35rem 0.75rem; font-size:0.75rem; font-weight:700; background:linear-gradient(135deg,#2e7d32,#388e3c); color:#fff; border:none; border-radius:6px; cursor:pointer; white-space:nowrap;">
-                          <i data-lucide="check" class="ico"></i>Assign
+                        <button type="submit" class="av-assign" title="Assign <%= p.name %> to this shift" aria-label="Assign <%= p.name %>">
+                          <i data-lucide="check" class="ico"></i>
                         </button>
                       </form>
-                      <% } %>
-                    </div>
-                  <% }); %>
-                <% } %>
+                    <% } else { %>
+                      <span class="av-spacer"></span>
+                    <% } %>
+                  </div>
+                <% }); %>
               </div>
             </div>
           <% }); %>

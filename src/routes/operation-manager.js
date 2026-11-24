@@ -49,7 +49,7 @@ router.get('/invoices/:id', async (req, res) => {
   try {
     const result = await getInvoiceDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('operation-manager/invoice-detail', {
+      return res.render('operation-manager/invoice-detail', {
         user: req.user,
         invoice: null,
         error: result.error
@@ -275,7 +275,7 @@ router.get('/timesheets/:id', async (req, res) => {
   try {
     const result = await getTimesheetDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('operation-manager/timesheet-detail', {
+      return res.render('operation-manager/timesheet-detail', {
         user: req.user,
         timesheet: null,
         error: result.error
@@ -330,7 +330,7 @@ router.get('/cash/:id', async (req, res) => {
   try {
     const result = await getCashSubmissionDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('operation-manager/cash-detail', {
+      return res.render('operation-manager/cash-detail', {
         user: req.user,
         submission: null,
         error: result.error
@@ -384,7 +384,7 @@ router.get('/maintenance/:id', async (req, res) => {
   try {
     const result = await getMaintenanceReportDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('operation-manager/maintenance-detail', {
+      return res.render('operation-manager/maintenance-detail', {
         user: req.user,
         report: null,
         error: 'Report not found'

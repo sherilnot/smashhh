@@ -35,7 +35,7 @@ router.get('/store-checklists/:id', async (req, res) => {
   try {
     const result = await getChecklistDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('warehouse/store-checklist-detail', {
+      return res.render('warehouse/store-checklist-detail', {
         user: req.user, checklist: null, error: result.error
       });
     }

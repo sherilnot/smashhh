@@ -9,18 +9,28 @@
            background: #1f2730; color: #f5f5f5; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 2rem; box-sizing: border-box; }
     h1 { font-size: 1.4rem; margin: 0 0 0.5rem; }
     p { color: rgba(255, 255, 255, 0.6); margin: 0; }
-    button { margin-top: 1.5rem; padding: 0.8rem 1.75rem; border: 0; border-radius: 12px; background: linear-gradient(135deg, #e63946, #f4a300); color: #fff; font-weight: 700; font-size: 1rem; }
+    button { margin: 1.5rem 0.3rem 0; padding: 0.8rem 1.5rem; border: 0; border-radius: 12px; background: linear-gradient(135deg, #e63946, #f4a300); color: #fff; font-weight: 700; font-size: 1rem; }
+    button.secondary { background: rgba(255, 255, 255, 0.12); }
   </style>
 </head>
 <body>
-  <!-- Shown by the iOS app (server.errorPath) when the server can't be reached. -->
+  <!-- Shown by the app (server.errorPath) when a page can't be loaded. On Android
+       that also happens for pages answered with an error status while online. -->
   <div>
-    <h1>You're offline</h1>
-    <p>Check your internet connection and try again.</p>
+    <h1 id="title">You're offline</h1>
+    <p id="message">Check your internet connection and try again.</p>
+    <button id="back" class="secondary" style="display: none;" onclick="history.back()">Back</button>
     <button onclick="retry()">Retry</button>
   </div>
   <script>
     function retry() { location.href = 'https://www.rizinssmash.com/'; }
+    if (navigator.onLine) {
+      // Connected, so the page itself failed rather than the internet
+      document.getElementById('title').textContent = "Couldn't load this page";
+      document.getElementById('message').textContent = 'Something went wrong. Go back, or try again from the start.';
+      document.querySelector('button[onclick="retry()"]').textContent = 'Home';
+      if (history.length > 1) document.getElementById('back').style.display = '';
+    }
     // Try again by itself as soon as the connection comes back
     window.addEventListener('online', retry);
   </script>

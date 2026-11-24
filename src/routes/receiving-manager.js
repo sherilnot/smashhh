@@ -68,7 +68,7 @@ router.get('/timesheets/:id', async (req, res) => {
     const result = await getTimesheetDetail(req.params.id);
 
     if (!result.success) {
-      return res.status(404).render('receiving-manager/timesheet-detail', {
+      return res.render('receiving-manager/timesheet-detail', {
         user: req.user,
         timesheet: null,
         error: result.error
@@ -453,7 +453,7 @@ router.get('/received-invoices/:id', async (req, res) => {
   try {
     const result = await getInvoiceDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('receiving-manager/received-invoice-detail', {
+      return res.render('receiving-manager/received-invoice-detail', {
         user: req.user,
         invoice: null,
         error: result.error
@@ -907,7 +907,7 @@ router.get('/cash/:id', async (req, res) => {
   try {
     const result = await getCashSubmissionDetail(req.params.id);
     if (!result.success) {
-      return res.status(404).render('receiving-manager/cash-detail', { user: req.user, submission: null, error: 'Not found' });
+      return res.render('receiving-manager/cash-detail', { user: req.user, submission: null, error: 'Not found' });
     }
     res.render('receiving-manager/cash-detail', { user: req.user, submission: result.submission, error: null });
   } catch (e) {

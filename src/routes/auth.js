@@ -114,7 +114,9 @@ router.post('/login', async (req, res) => {
     if (!result.success) {
       // Req 1.2: reject and re-render with an error. Use a generic message so
       // we don't reveal whether the user id or the password was wrong.
-      return res.status(401).render('auth/login', {
+      // Sent as a normal 200 page: the Android app replaces any error-status
+      // page with its "You're offline" screen, hiding this message.
+      return res.render('auth/login', {
         error: result.error || 'Invalid credentials',
         userId: typeof userId === 'string' ? userId : ''
       });

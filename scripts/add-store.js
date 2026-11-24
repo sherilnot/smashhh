@@ -9,24 +9,28 @@ const { hashPassword } = require('../src/services/authService');
  *   node scripts/add-store.js --store "Springvale" \
  *     --manager manager_springvale \
  *     --crew "Ali Khan, Priya, Sam Lee" \
+ *     [--move "richard, kai"] \
  *     [--copy-checklist-from Seaford] [--dry-run]
  *
  * - Never changes existing accounts: a user ID that is already taken stops the
  *   script before anything is written, so you can pick another name.
  * - Every new login gets its own random password, printed once at the end.
+ * - --move takes existing crew user IDs and moves them to this shop; their
+ *   login, password and history stay the same.
  * - Safe to run again: an existing shop and its checklist are left as they are,
  *   so you can rerun it with --crew to add more staff later (no new manager is
  *   made when the shop already has one).
  */
 
 function parseArgs(argv) {
-  const args = { crew: [], copyFrom: 'Seaford', dryRun: false };
+  const args = { crew: [], move: [], copyFrom: 'Seaford', dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const key = argv[i];
     const value = argv[i + 1];
     if (key === '--store') { args.store = value; i++; }
     else if (key === '--manager') { args.manager = value; i++; }
     else if (key === '--crew') { args.crew = value.split(',').map(s => s.trim()).filter(Boolean); i++; }
+    else if (key === '--move') { args.move = value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean); i++; }
     else if (key === '--copy-checklist-from') { args.copyFrom = value; i++; }
     else if (key === '--dry-run') { args.dryRun = true; }
     else throw new Error(`Unknown option ${key}`);
@@ -91,7 +95,25 @@ async function addStore(client, args, managerId) {
 
     const existing = await client.query(`SELECT id FROM stores WHERE name = $1`, [args.store]);
     console.log(`${existing.rows.length ? 'Using existing' : 'Creating'} shop: ${args.store}`);
+    const moving = args.move.length
+      ? (await client.query(
+          `SELECT u.id, u.user_id, u.role, s.name AS from_store
+           FROM users u
+           LEFT JOIN store_employee_assignments sea ON sea.employee_id = u.id
+           LEFT JOIN stores s ON s.id = sea.store_id
+           WHERE u.user_id = ANY($1)`,
+          [args.move]
+        )).rows
+      : [];
+    const missing = args.move.filter(id => !moving.some(m => m.user_id === id));
+    if (missing.length) throw new Error(`No such user to move: ${missing.join(', ')}`);
+    const notCrew = moving.filter(m => m.role !== 'employee');
+    if (notCrew.length) throw new Error(`Only crew can be moved with --move: ${notCrew.map(m => m.user_id).join(', ')}`);
+
     console.log(`Logins to create: ${people.map(p => `${p.userId} (${p.role === 'store_manager' ? 'manager' : 'crew'})`).join(', ') || 'none'}`);
+    if (moving.length) {
+      console.log(`Crew to move here: ${moving.map(m => `${m.user_id} (from ${m.from_store || 'no shop'})`).join(', ')}`);
+    }
     if (args.dryRun) { console.log('\nDry run: nothing was changed.'); return; }
 
     await client.query('BEGIN');
@@ -133,9 +155,18 @@ async function addStore(client, args, managerId) {
       created.push({ ...p, password });
     }
 
+    for (const m of moving) {
+      await client.query(
+        `INSERT INTO store_employee_assignments (store_id, employee_id) VALUES ($1, $2)
+         ON CONFLICT (employee_id) DO UPDATE SET store_id = EXCLUDED.store_id`,
+        [storeId, m.id]
+      );
+    }
+
     await client.query('COMMIT');
 
     console.log(`\nDone. Checklist items copied from ${args.copyFrom}: ${copied}`);
+    moving.forEach(m => console.log(`Moved ${m.user_id} from ${m.from_store || 'no shop'} to ${args.store} (same login and password)`));
     if (created.length) {
       console.log('\nNEW LOGINS (shown once, give each person their own):');
       created.forEach(p => {

@@ -1,0 +1,86 @@
+name: Build Android APK
+
+# Builds a signed release APK and publishes it at
+# https://www.rizinssmash.com/downloads/rizins-smash.apk for staff to install
+# until the app is on Google Play.
+# Needs secrets: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS
+# (plus the EC2_* secrets the deploy workflow uses).
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'android/**'
+      - 'capacitor.config.json'
+      - 'www/**'
+      - 'package-lock.json'
+      - '.github/workflows/android-apk.yml'
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install dependencies and sync Capacitor
+        run: |
+          npm ci --ignore-scripts
+          npx cap sync android
+
+      - name: Decode signing key
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "::error::ANDROID_KEYSTORE_B64 secret is missing"; exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/rizins-smash.apk
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rizins-smash-apk
+          path: dist/rizins-smash.apk
+
+      - name: Publish to the website
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: dist/rizins-smash.apk
+          target: smashhh/public/downloads   # relative to the server user's home
+          strip_components: 1

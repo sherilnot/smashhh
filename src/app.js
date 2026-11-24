@@ -7,6 +7,7 @@ const express = require('express');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
+const fs = require('fs');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
@@ -116,6 +117,17 @@ app.use('/operation-manager', operationManagerRoutes);
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'sheril4440@gmail.com';
 app.get('/privacy', (req, res) => res.render('legal/privacy', { contactEmail: CONTACT_EMAIL, updated: '23 October 2026' }));
 app.get('/support', (req, res) => res.render('legal/support', { contactEmail: CONTACT_EMAIL }));
+
+// Android install page while the app isn't on Google Play; the APK is uploaded by the android-apk workflow
+const ANDROID_APK = path.join(__dirname, '../public/downloads/rizins-smash.apk');
+app.get('/android', (req, res) => {
+  fs.stat(ANDROID_APK, (err, stat) => {
+    res.render('legal/android', {
+      available: !err,
+      updated: err ? '' : stat.mtime.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+    });
+  });
+});
 
 // Root redirect based on session role
 app.get('/', requireAuth, (req, res) => {

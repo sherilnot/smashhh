@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Android App — Rizins Smash</title>
+  <link rel="stylesheet" href="/css/theme.css?v=<%= assetVersion %>" />
+</head>
+<body>
+  <div style="max-width: 560px; margin: 0 auto; padding: 2rem 1rem 3rem;">
+    <div class="card" style="line-height: 1.6;">
+      <div style="text-align: center;">
+        <img src="/images/logo-large.png" alt="Rizins Smash" style="height: 90px; width: auto;">
+        <h1 style="margin: 0.5rem 0 0.25rem;">Rizins Smash for Android</h1>
+        <p style="color: var(--muted); margin: 0 0 1.25rem;">Staff app – rosters, shifts, timesheets and payslips</p>
+        <% if (available) { %>
+          <a href="/downloads/rizins-smash.apk" download
+             style="display: inline-block; padding: 0.9rem 1.6rem; border-radius: 12px; color: #fff; font-weight: 700; text-decoration: none; background: linear-gradient(135deg, var(--ketchup), var(--ketchup-dark));">
+            Download the app
+          </a>
+          <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem;">Updated <%= updated %></p>
+        <% } else { %>
+          <p><strong>The Android app isn't ready yet.</strong> Please check back soon, or use the website for now.</p>
+        <% } %>
+      </div>
+
+      <h2>How to install</h2>
+      <ol>
+        <li>Tap <strong>Download the app</strong> and open the file when it finishes.</li>
+        <li>If your phone says installing apps from this source isn't allowed, tap <strong>Settings</strong>, turn on <strong>Allow from this source</strong>, then go back.</li>
+        <li>Tap <strong>Install</strong>, then <strong>Open</strong>, and log in with the user ID and password your manager gave you.</li>
+      </ol>
+
+      <h2>Updating</h2>
+      <p>When there's a new version, download it again from this page and tap <strong>Install</strong>. It updates the app and keeps you logged in.</p>
+
+      <p style="font-size: 0.85rem; color: var(--muted);">Only install the app from this page. Questions? See <a href="/support">Support</a>.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -7,7 +7,8 @@ android {
         applicationId "com.rizins.smash"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // CI passes the build number so each APK installs over the previous one
+        versionCode((System.getenv('ANDROID_VERSION_CODE') ?: '1') as int)
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -16,8 +17,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing key comes from the environment (GitHub secrets in CI); it is never in the repo.
+    // Every update must be signed with the same key or Android refuses to install it over the old app.
+    signingConfigs {
+        release {
+            if (System.getenv('ANDROID_KEYSTORE_FILE')) {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_FILE'))
+                storeType 'pkcs12'
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv('ANDROID_KEYSTORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

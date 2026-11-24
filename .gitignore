@@ -3,3 +3,9 @@ node_modules/
 
 # Apple push key (never commit)
 *.p8
+
+# Android signing keys and built APKs (never commit)
+*.p12
+*.jks
+*.keystore
+public/downloads/

@@ -3,17 +3,17 @@ const { sendPushNotification } = require('./webPushService');
 
 /**
  * Shift Reminder Service
- * Pushes "your shift starts in 3 hours" to employees with an approved shift.
+ * Pushes "your shift starts in 2 hours" to employees with an approved shift.
  * Runs every few minutes; each booking is reminded once (reminder_sent_at).
  */
 
-const REMINDER_LEAD_MINUTES = 180;
+const REMINDER_LEAD_MINUTES = 120;
 
 function formatTime(date) {
   return date.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, ' ');
 }
 
-/** "in 3 hours", "in 1 hour", "in 40 minutes" */
+/** "in 2 hours", "in 1 hour", "in 40 minutes" */
 function startsIn(minutes) {
   if (minutes >= 60) {
     const hours = Math.round(minutes / 60);
@@ -23,9 +23,9 @@ function startsIn(minutes) {
 }
 
 /**
- * Send reminders for approved shifts starting within the next 3 hours that
+ * Send reminders for approved shifts starting within the next 2 hours that
  * haven't been reminded yet. A shift that is approved or assigned less than
- * 3 hours before it starts still gets one reminder, with the actual time left.
+ * 2 hours before it starts still gets one reminder, with the actual time left.
  * @returns {Promise<{ reminded: number, delivered: number }>}
  */
 async function sendUpcomingShiftReminders() {

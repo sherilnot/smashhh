@@ -173,7 +173,7 @@ scheduleNightlyJob('auto-complete-shifts', '*/15 * * * *', async () => {
   }
 });
 
-// Remind employees of approved shifts starting in the next 3 hours (once per shift)
+// Remind employees of approved shifts starting in the next 2 hours (once per shift)
 scheduleNightlyJob('upcoming-shift-reminders', '*/5 * * * *', sendUpcomingShiftReminders);
 
 const PORT = process.env.PORT || 3000;

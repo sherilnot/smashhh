@@ -86,8 +86,8 @@ function generateSecureToken() {
   return crypto.randomBytes(SESSION_TOKEN_BYTES).toString('hex');
 }
 
-// Session lifetime in milliseconds (8 hours).
-const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
+// Session lifetime in milliseconds (24 hours).
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Authenticate a user by user_id and password, creating a session on success.
@@ -97,7 +97,7 @@ const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
  *   2. Look up the user by user_id using a parameterized query.
  *   3. Reject deactivated accounts.
  *   4. Verify the password with bcrypt (via verifyPassword).
- *   5. On success, generate a secure session token, compute an 8-hour
+ *   5. On success, generate a secure session token, compute a 24-hour
  *      expiry, and persist the session.
  *   6. Return an AuthResult describing the outcome.
  *
@@ -164,7 +164,7 @@ async function authenticate(userId, password) {
     }
 
     // Step 5: Generate a cryptographically secure session token (Req 1.6) and
-    // compute an 8-hour expiration (Req 1.7).
+    // compute a 24-hour expiration (Req 1.7).
     const sessionToken = generateSecureToken();
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 

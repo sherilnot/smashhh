@@ -63,15 +63,15 @@ describe('authenticate()', () => {
     expect(typeof result.sessionToken).toBe('string');
     expect(result.sessionToken).toHaveLength(64);
 
-    // Verify session INSERT was parameterized with an 8-hour expiry.
+    // Verify session INSERT was parameterized with a 24-hour expiry.
     const insertCall = mockQuery.mock.calls[1];
     expect(insertCall[0]).toContain('INSERT INTO sessions');
     const [userIdParam, tokenParam, expiresAt] = insertCall[1];
     expect(userIdParam).toBe('u1');
     expect(tokenParam).toBe(result.sessionToken);
-    const eightHoursMs = 8 * 60 * 60 * 1000;
-    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(eightHoursMs - 5000);
-    expect(expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(eightHoursMs + 5000);
+    const sessionMs = 24 * 60 * 60 * 1000;
+    expect(expiresAt.getTime() - Date.now()).toBeGreaterThan(sessionMs - 5000);
+    expect(expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(sessionMs + 5000);
   });
 
   test('returns generic failure on database error', async () => {

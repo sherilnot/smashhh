@@ -118,10 +118,10 @@ describe('POST /login', () => {
     const [cookieName, cookieValue, options] = res.cookie.mock.calls[0];
     expect(cookieName).toBe(SESSION_COOKIE_NAME);
     expect(cookieValue).toBe('session-token-123');
-    // Req 2.5/17.1, 2.7/17.3, and 8-hour lifetime.
+    // Req 2.5/17.1, 2.7/17.3, and 24-hour lifetime.
     expect(options.httpOnly).toBe(true);
-    expect(options.sameSite).toBe('strict');
-    expect(options.maxAge).toBe(8 * 60 * 60 * 1000);
+    expect(options.sameSite).toBe('lax');
+    expect(options.maxAge).toBe(24 * 60 * 60 * 1000);
     expect(res.redirect).toHaveBeenCalledWith(dest);
   });
 
@@ -132,7 +132,8 @@ describe('POST /login', () => {
 
     await handler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(401);
+    // Sent as a normal page, not 401: the Android app shows its offline screen for error statuses
+    expect(res.status).not.toHaveBeenCalled();
     expect(res.render).toHaveBeenCalledWith('auth/login', {
       error: 'Invalid credentials',
       userId: 'alice'
@@ -193,7 +194,7 @@ describe('POST /logout', () => {
     expect(mockLogout).toHaveBeenCalledWith('tok');
     expect(res.clearCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, expect.objectContaining({
       httpOnly: true,
-      sameSite: 'strict'
+      sameSite: 'lax'
     }));
     expect(res.redirect).toHaveBeenCalledWith('/login');
   });

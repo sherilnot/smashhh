@@ -24,9 +24,9 @@ const NATIVE_PUSH_COOKIE_NAME = 'native_push_token';
 
 const router = express.Router();
 
-// Session lifetime in milliseconds (8 hours), matching the Authentication
+// Session lifetime in milliseconds (24 hours), matching the Authentication
 // Service session expiration (Req 1.7).
-const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Cookie options applied to the session cookie.
@@ -34,13 +34,16 @@ const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
  * - httpOnly: prevents JavaScript access to the cookie (Req 2.5, 17.1).
  * - secure: only sent over HTTPS. Enabled in production; disabled otherwise so
  *   local development over HTTP still works (Req 2.6, 17.2).
- * - sameSite: 'strict' to mitigate CSRF (Req 2.7, 17.3).
- * - maxAge: 8 hours, matching the session lifetime (Req 1.7).
+ * - sameSite: 'lax' to mitigate CSRF (Req 2.7, 17.3): other sites can't send
+ *   it with form posts. Not 'strict': the app's built-in offline page lives on
+ *   a different origin (capacitor://localhost), and with 'strict' tapping Retry
+ *   there arrived without the cookie and forced a new login.
+ * - maxAge: 24 hours, matching the session lifetime (Req 1.7).
  */
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: 'lax',
   maxAge: SESSION_MAX_AGE_MS
 };
 
@@ -174,7 +177,7 @@ router.post('/logout', async (req, res) => {
   res.clearCookie(SESSION_COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: 'lax'
   });
 
   return res.redirect(LOGIN_PATH);

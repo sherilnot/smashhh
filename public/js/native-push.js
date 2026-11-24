@@ -8,8 +8,9 @@
 (function () {
   var Capacitor = window.Capacitor;
   if (!Capacitor || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return;
-  // Android push needs Firebase (google-services.json); without it register() crashes the app
-  if (Capacitor.getPlatform() !== 'ios') return;
+  // Android push needs Firebase. APKs built with it include the RizinsApp plugin;
+  // older APKs without Firebase would crash on PushNotifications.register()
+  if (Capacitor.getPlatform() === 'android' && !(Capacitor.isPluginAvailable && Capacitor.isPluginAvailable('RizinsApp'))) return;
 
   var PushNotifications = Capacitor.Plugins && Capacitor.Plugins.PushNotifications;
   if (!PushNotifications) {

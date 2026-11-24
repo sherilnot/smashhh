@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tint for the push notification icon (brand red) -->
+    <color name="notification_accent">#E63946</color>
+</resources>

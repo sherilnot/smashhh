@@ -134,7 +134,9 @@ function sendToDevice(deviceToken, { title, body, data }) {
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
 async function saveNativeToken(employeeId, token, platform = 'ios') {
-  if (!token || !/^[0-9a-fA-F]{32,200}$/.test(token)) {
+  // APNs tokens are hex; Firebase (Android) tokens use letters, digits, ':', '_' and '-'
+  const valid = platform === 'android' ? /^[A-Za-z0-9:_-]{20,4096}$/ : /^[0-9a-fA-F]{32,200}$/;
+  if (!token || !valid.test(token)) {
     return { success: false, error: 'Invalid device token' };
   }
   try {
@@ -177,12 +179,14 @@ async function removeNativeToken(token, employeeId = null) {
  * @returns {Promise<{ sent: number, failed: number }>}
  */
 async function sendNativePushNotification(employeeId, payload) {
-  if (!isConfigured) return { sent: 0, failed: 0 };
+  // Android tokens go through Firebase (fcmService), iOS tokens through APNs
+  const fcm = require('./fcmService');
+  if (!isConfigured && !fcm.isConfigured) return { sent: 0, failed: 0 };
 
-  let tokens;
+  let devices;
   try {
-    const result = await pool.query(`SELECT token FROM native_push_tokens WHERE employee_id = $1`, [employeeId]);
-    tokens = result.rows.map(row => row.token);
+    const result = await pool.query(`SELECT token, platform FROM native_push_tokens WHERE employee_id = $1`, [employeeId]);
+    devices = result.rows.filter(row => (row.platform === 'android' ? fcm.isConfigured : isConfigured));
   } catch (error) {
     // Table may not exist yet if migration 27 hasn't been applied.
     console.error('[APNs] Failed to load device tokens:', error.message);
@@ -191,13 +195,11 @@ async function sendNativePushNotification(employeeId, payload) {
 
   let sent = 0;
   let failed = 0;
+  const message = { title: payload.title, body: payload.message || payload.body, data: payload.data };
 
-  await Promise.all(tokens.map(async (token) => {
-    const result = await sendToDevice(token, {
-      title: payload.title,
-      body: payload.message || payload.body,
-      data: payload.data
-    });
+  await Promise.all(devices.map(async ({ token, platform }) => {
+    const android = platform === 'android';
+    const result = android ? await fcm.sendToAndroidDevice(token, message) : await sendToDevice(token, message);
 
     if (result.ok) {
       sent++;
@@ -205,9 +207,9 @@ async function sendNativePushNotification(employeeId, payload) {
     }
 
     failed++;
-    console.error(`[APNs] Failed to send to ${token.substring(0, 12)}...: ${result.status} ${result.reason || ''}`);
+    console.error(`[${android ? 'FCM' : 'APNs'}] Failed to send to ${token.substring(0, 12)}...: ${result.status || ''} ${result.reason || ''}`);
     // Token no longer valid for this app/environment - stop sending to it.
-    if (result.status === 410 || result.reason === 'BadDeviceToken' || result.reason === 'Unregistered') {
+    if (result.status === 410 || ['BadDeviceToken', 'Unregistered', 'UNREGISTERED', 'INVALID_ARGUMENT'].includes(result.reason)) {
       await removeNativeToken(token);
     }
   }));

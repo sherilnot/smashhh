@@ -3,8 +3,8 @@ name: Build Android APK
 # Builds a signed release APK and publishes it at
 # https://www.rizinssmash.com/downloads/rizins-smash.apk for staff to install
 # until the app is on Google Play.
-# Needs secrets: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS
-# (plus the EC2_* secrets the deploy workflow uses).
+# Needs secrets: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+# GOOGLE_SERVICES_JSON_B64 (Firebase, for push) plus the EC2_* secrets the deploy workflow uses.
 
 on:
   workflow_dispatch:
@@ -44,6 +44,19 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npx cap sync android
+
+      # Firebase config for push notifications. Required: the app marks itself as
+      # push-capable (RizinsApp plugin), and without Firebase that would crash it.
+      - name: Add Firebase config
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON_B64" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON_B64 secret is missing"; exit 1
+          fi
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
+          grep -q '"package_name": "com.rizins.smash"' android/app/google-services.json \
+            || { echo "::error::google-services.json is not for com.rizins.smash"; exit 1; }
 
       - name: Decode signing key
         env:

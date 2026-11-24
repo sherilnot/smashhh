@@ -9,3 +9,7 @@ node_modules/
 *.jks
 *.keystore
 public/downloads/
+
+# Firebase config and service account (repo is public; CI and server get them from secrets)
+android/app/google-services.json
+*firebase-adminsdk*.json

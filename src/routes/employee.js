@@ -295,6 +295,27 @@ router.post('/book-weekly-shifts', async (req, res) => {
       return res.redirect('/employee/shifts?error=' + encodeURIComponent('No shifts were selected. Please select at least one shift (Morning, Evening, Full Day, or Custom) before submitting. Choose "No shift" only for days you\'re unavailable.'));
     }
 
+    // Save each day's answer (including "No shift" days) so the manager's
+    // roster can show who is and isn't available, separate from bookings
+    for (const key in req.body) {
+      if (!key.startsWith('shift_')) continue;
+      const date = key.replace('shift_', '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      const code = req.body[key];
+      const available = code !== 'none';
+      const preset = { '11-1730': ['11:00', '17:30'], '1730-2100': ['17:30', '21:00'], '11-2100': ['11:00', '21:00'] }[code];
+      const times = !available ? [null, null]
+        : preset || [req.body[`custom_start_${date}`] || null, req.body[`custom_end_${date}`] || null];
+      await pool.query(
+        `INSERT INTO employee_availability (employee_id, store_id, day, available, shift_code, start_time, end_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (employee_id, day) DO UPDATE SET
+           store_id = EXCLUDED.store_id, available = EXCLUDED.available, shift_code = EXCLUDED.shift_code,
+           start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, submitted_at = CURRENT_TIMESTAMP`,
+        [req.user.userId, storeId, date, available, available ? code : null, times[0], times[1]]
+      );
+    }
+
     // Record that employee has submitted for this week
     await recordSubmission(req.user.userId);
     console.log('[Employee] Recorded weekly submission for employee:', req.user.userId);

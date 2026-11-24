@@ -508,83 +508,86 @@ router.get('/roster', async (req, res) => {
       employees = await getEmployeesByPriority(storeId);
     }
 
-    // ─── Availability: pending shift requests grouped by day ───────────────
-    const pendingRes = await pool.query(
-      `SELECT sb.id AS booking_id, sb.employee_id, sb.booking_status,
-              u.first_name, u.last_name, u.employment_type, u.priority_score,
-              s.id AS shift_id, s.start_time, s.end_time
-       FROM shift_bookings sb
-       JOIN shifts s ON s.id = sb.shift_id
-       JOIN users u ON u.id = sb.employee_id
-       WHERE s.store_id = $1
-         AND sb.booking_status = 'pending'
-         AND s.start_time >= $2 AND s.start_time <= $3
-       ORDER BY u.priority_score DESC NULLS LAST, u.first_name`,
-      [storeId, weekStart, weekEnd]
+    // ─── Availability: what each employee said they can work, per day ──────
+    // Comes from the saved weekly availability, so it stays visible after the
+    // manager approves or assigns shifts. Reference only: nothing here puts
+    // anyone on the roster.
+    const AVAIL_SHIFTS = {
+      '11-1730': { label: 'Morning', start: '11:00', end: '17:30' },
+      '1730-2100': { label: 'Evening', start: '17:30', end: '21:00' },
+      '11-2100': { label: 'Full Day', start: '11:00', end: '21:00' }
+    };
+    const availRes = await pool.query(
+      `SELECT ea.employee_id, to_char(ea.day, 'YYYY-MM-DD') AS day, ea.available, ea.shift_code,
+              to_char(ea.start_time, 'HH24:MI') AS start_time, to_char(ea.end_time, 'HH24:MI') AS end_time,
+              u.first_name, u.last_name, u.employment_type, u.priority_score
+       FROM employee_availability ea
+       JOIN users u ON u.id = ea.employee_id
+       WHERE ea.store_id = $1 AND ea.day >= $2 AND ea.day <= $3
+       ORDER BY ea.available DESC, u.priority_score DESC NULLS LAST, u.first_name`,
+      [storeId, dayDates[0], dayDates[6]]
     );
 
-    // Build availability per day
+    /** "11:00" -> "11:00 am", matching the times shown elsewhere on this page */
+    const toAmPm = (hhmm) => {
+      if (!hhmm) return '';
+      const [h, m] = hhmm.split(':').map(Number);
+      return new Date(2000, 0, 1, h, m).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+    };
+    const colorFor = (start, end) => {
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      const st = SHIFT_TYPES.find(t => t.startH === sh && t.startM === sm && t.endH === eh && t.endM === em);
+      return st ? st.color : '#F8BBD0';
+    };
+
     const availabilityByDay = dayDates.map((dateStr, idx) => {
-      const requests = pendingRes.rows.filter(r => toLocalDateString(new Date(r.start_time)) === dateStr);
-
-      const mapped = requests.map(r => {
-        const bStart = new Date(r.start_time);
-        const bEnd = new Date(r.end_time);
-        let shiftLabel = 'Custom';
-        let shiftCode = 'custom';
-        let color = '#F8BBD0';
-
-        SHIFT_TYPES.forEach(st => {
-          if (bStart.getHours() === st.startH && bStart.getMinutes() === st.startM &&
-              bEnd.getHours() === st.endH && bEnd.getMinutes() === st.endM) {
-            color = st.color;
-            if (st.startH === 11 && st.endH === 17) { shiftLabel = 'Morning'; shiftCode = '11-1730'; }
-            else if (st.startH === 17) { shiftLabel = 'Evening'; shiftCode = '1730-2100'; }
-            else if (st.startH === 11 && st.endH === 21) { shiftLabel = 'Full Day'; shiftCode = '11-2100'; }
-            else { shiftLabel = st.label; }
-          }
-        });
-
-        return {
-          bookingId: r.booking_id,
+      const people = availRes.rows.filter(r => r.day === dateStr).map(r => {
+        const base = {
           employeeId: r.employee_id,
           name: r.last_name ? (r.first_name + ' ' + r.last_name) : r.first_name,
           employmentType: r.employment_type,
           priorityScore: r.priority_score || 0,
-          shiftLabel,
-          shiftCode,
-          color,
-          timeRange: bStart.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' }) + '–' +
-                     bEnd.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })
+          available: r.available
+        };
+        if (!r.available) {
+          return { ...base, shiftLabel: 'Not available', shiftCode: null, color: '#E0E0E0', timeRange: '' };
+        }
+        const preset = AVAIL_SHIFTS[r.shift_code];
+        const start = preset ? preset.start : r.start_time;
+        const end = preset ? preset.end : r.end_time;
+        return {
+          ...base,
+          shiftLabel: preset ? preset.label : 'Custom',
+          shiftCode: preset ? r.shift_code : 'custom',
+          color: start && end ? colorFor(start, end) : '#F8BBD0',
+          timeRange: start && end ? `${toAmPm(start)}–${toAmPm(end)}` : ''
         };
       });
 
-      // Count by shift type
+      const available = people.filter(p => p.available);
       const counts = { Morning: 0, Evening: 0, 'Full Day': 0, Custom: 0 };
-      mapped.forEach(m => { if (counts[m.shiftLabel] !== undefined) counts[m.shiftLabel]++; else counts.Custom++; });
+      available.forEach(m => { counts[m.shiftLabel] = (counts[m.shiftLabel] || 0) + 1; });
 
       return {
         date: dateStr,
         label: dayLabels[idx],
-        total: mapped.length,
+        total: available.length,
         counts,
-        people: mapped
+        people
       };
     });
 
     // Staff submit availability for next week, but the roster opens on this
-    // week; count next week's requests so the page can point the manager there.
+    // week; count next week's availability so the page can point there.
     let nextWeekRequests = 0;
-    if (pendingRes.rows.length === 0 && bounds.canGoNext) {
+    if (!availRes.rows.some(r => r.available) && bounds.canGoNext) {
       const nextWeekEnd = new Date(nextMon);
       nextWeekEnd.setDate(nextMon.getDate() + 6);
-      nextWeekEnd.setHours(23, 59, 59, 999);
       const nextRes = await pool.query(
-        `SELECT COUNT(*)::int AS n
-         FROM shift_bookings sb JOIN shifts s ON s.id = sb.shift_id
-         WHERE s.store_id = $1 AND sb.booking_status = 'pending'
-           AND s.start_time >= $2 AND s.start_time <= $3`,
-        [storeId, nextMon, nextWeekEnd]
+        `SELECT COUNT(*)::int AS n FROM employee_availability
+         WHERE store_id = $1 AND available AND day >= $2 AND day <= $3`,
+        [storeId, toLocalDateString(nextMon), toLocalDateString(nextWeekEnd)]
       );
       nextWeekRequests = nextRes.rows[0].n;
     }

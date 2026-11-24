@@ -98,6 +98,7 @@
                         <%= p.shiftLabel %>
                       </span>
                       <span style="font-size:0.68rem; color:var(--muted); white-space:nowrap;"><%= p.timeRange %></span>
+                      <% if (p.available !== false) { %>
                       <form method="POST" action="/manager/roster/assign" style="margin:0;">
                         <input type="hidden" name="weekStart" value="<%= weekStartFormatted %>">
                         <input type="hidden" name="employeeId" value="<%= p.employeeId %>">
@@ -107,6 +108,7 @@
                           ✓ Assign
                         </button>
                       </form>
+                      <% } %>
                     </div>
                   <% }); %>
                 <% } %>

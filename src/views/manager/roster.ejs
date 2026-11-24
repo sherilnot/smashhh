@@ -40,7 +40,16 @@
       <% } %>
     </div>
 
-    <!-- ═══ Availability by Day (collapsible) ═══ -->
+    <!-- Availability is submitted for next week: point there when this week has none -->
+    <% if (typeof nextWeekRequests !== 'undefined' && nextWeekRequests > 0) { %>
+      <a href="/manager/roster?date=<%= nextWeekDate %><%= editMode ? '&edit=1' : '' %>"
+         style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:1rem; padding:0.8rem 1rem; background:#1a1a2e; color:#fff; border-radius:12px; text-decoration:none; box-shadow:var(--shadow);">
+        <span style="font-size:0.9rem;">📋 <strong><%= nextWeekRequests %></strong> availability request<%= nextWeekRequests !== 1 ? 's' : '' %> for next week</span>
+        <span style="font-weight:700; white-space:nowrap;">View →</span>
+      </a>
+    <% } %>
+
+    <!-- ═══ Availability by Day (days with requests start open) ═══ -->
     <% var avail = (typeof availabilityByDay !== 'undefined') ? availabilityByDay : []; %>
     <% if (avail.length > 0) { %>
       <%
@@ -68,11 +77,11 @@
                     <span style="font-size:0.7rem; color:var(--muted);">No requests</span>
                   <% } %>
                 </div>
-                <span id="dayArrow-<%= dIdx %>" style="font-size:0.9rem; color:var(--muted); transition:transform 0.2s;">▾</span>
+                <span id="dayArrow-<%= dIdx %>" style="font-size:0.9rem; color:var(--muted); transition:transform 0.2s;<%= day.total > 0 ? ' transform:rotate(180deg);' : '' %>">▾</span>
               </div>
 
-              <!-- People list (collapsed by default) -->
-              <div id="dayPanel-<%= dIdx %>" style="display:none; border-top:1px solid var(--border);">
+              <!-- People list: open when the day has requests -->
+              <div id="dayPanel-<%= dIdx %>" style="display:<%= day.total > 0 ? 'block' : 'none' %>; border-top:1px solid var(--border);">
                 <% if (day.people.length === 0) { %>
                   <div style="padding:0.75rem 0.9rem; font-size:0.8rem; color:var(--muted);">No availability requests for this day.</div>
                 <% } else { %>

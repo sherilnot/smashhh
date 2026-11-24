@@ -572,10 +572,27 @@ router.get('/roster', async (req, res) => {
       };
     });
 
+    // Staff submit availability for next week, but the roster opens on this
+    // week; count next week's requests so the page can point the manager there.
+    let nextWeekRequests = 0;
+    if (pendingRes.rows.length === 0 && bounds.canGoNext) {
+      const nextWeekEnd = new Date(nextMon);
+      nextWeekEnd.setDate(nextMon.getDate() + 6);
+      nextWeekEnd.setHours(23, 59, 59, 999);
+      const nextRes = await pool.query(
+        `SELECT COUNT(*)::int AS n
+         FROM shift_bookings sb JOIN shifts s ON s.id = sb.shift_id
+         WHERE s.store_id = $1 AND sb.booking_status = 'pending'
+           AND s.start_time >= $2 AND s.start_time <= $3`,
+        [storeId, nextMon, nextWeekEnd]
+      );
+      nextWeekRequests = nextRes.rows[0].n;
+    }
+
     res.render('manager/roster', {
       user: req.user, error: req.query.error || null, hasManagedStore: true,
       shiftTypes: SHIFT_TYPES, dayLabels, dayDates, rosterRows,
-      query: req.query, employees, availabilityByDay,
+      query: req.query, employees, availabilityByDay, nextWeekRequests,
       weekStartFormatted: toLocalDateString(weekStart),
       weekEndFormatted: toLocalDateString(weekEnd),
       prevWeekDate: toLocalDateString(prevMonday),

@@ -161,9 +161,72 @@ async function getCashSubmissionDetail(submissionId) {
   }
 }
 
+/** Format a week's Monday into "3-9 Aug 2026", spelling out boundaries. */
+function weekLabel(weekStartValue) {
+  const start = new Date(weekStartValue);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const mon = (d) => d.toLocaleDateString('en-AU', { month: 'short' });
+  if (start.getFullYear() !== end.getFullYear()) {
+    return `${start.getDate()} ${mon(start)} ${start.getFullYear()} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
+  }
+  if (start.getMonth() !== end.getMonth()) {
+    return `${start.getDate()} ${mon(start)} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
+  }
+  return `${start.getDate()}-${end.getDate()} ${mon(start)} ${start.getFullYear()}`;
+}
+
+/**
+ * Cash reports grouped by store, with cash totals per week and per month, for
+ * the head-office Cash Reports pages (payroll and operations).
+ * date_trunc('week') in Postgres starts on Monday, matching the rest of the app.
+ * @returns {Promise<{ byStore: object, total: number, cashPeriods: object }>}
+ *   cashPeriods: { storeName: { weeks: [{ label, count, total }], months: [...] } }
+ */
+async function getCashReportsByStore() {
+  const { submissions, total } = await getAllCashSubmissions(1, 200);
+
+  const byStore = {};
+  submissions.forEach(sub => {
+    if (!byStore[sub.store_name]) byStore[sub.store_name] = [];
+    byStore[sub.store_name].push(sub);
+  });
+
+  const periodTotals = (unit) => pool.query(
+    `SELECT s.name AS store_name,
+            date_trunc('${unit}', cs.submitted_at) AS period_start,
+            COUNT(*) AS report_count,
+            SUM(cs.amount) AS total
+     FROM cash_submissions cs
+     JOIN stores s ON s.id = cs.store_id
+     GROUP BY s.name, date_trunc('${unit}', cs.submitted_at)
+     ORDER BY period_start DESC`
+  );
+  const [weekly, monthly] = await Promise.all([periodTotals('week'), periodTotals('month')]);
+
+  const cashPeriods = {};
+  const ensure = (name) => {
+    if (!cashPeriods[name]) cashPeriods[name] = { weeks: [], months: [] };
+    return cashPeriods[name];
+  };
+  const toPeriod = (r, label) => ({
+    label,
+    count: parseInt(r.report_count, 10) || 0,
+    total: Math.round((parseFloat(r.total) || 0) * 100) / 100
+  });
+
+  weekly.rows.forEach(r => ensure(r.store_name).weeks.push(toPeriod(r, weekLabel(r.period_start))));
+  monthly.rows.forEach(r => ensure(r.store_name).months.push(
+    toPeriod(r, new Date(r.period_start).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }))
+  ));
+
+  return { byStore, total, cashPeriods };
+}
+
 module.exports = {
   createCashSubmission,
   getManagerCashSubmissions,
   getAllCashSubmissions,
-  getCashSubmissionDetail
+  getCashSubmissionDetail,
+  getCashReportsByStore
 };

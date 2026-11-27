@@ -3,7 +3,7 @@ const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
 const { pool } = require('../config/database');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
-const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
+const { getCashSubmissionDetail, getCashReportsByStore } = require('../services/cashSubmissionService');
 const {
   CATEGORIES: EXPENSE_CATEGORIES,
   normaliseMonth,
@@ -746,160 +746,11 @@ router.get('/timesheets-monthly/download', async (req, res) => {
 
 router.get('/cash', async (req, res) => {
   try {
-    const { submissions, total } = await getAllCashSubmissions(1, 200);
-
-    // Group by store
-    const byStore = {};
-    submissions.forEach(sub => {
-      if (!byStore[sub.store_name]) byStore[sub.store_name] = [];
-      byStore[sub.store_name].push(sub);
-    });
-
-    // ─── Cash totals per store, grouped by week and by month ───────────
-    // date_trunc('week') in Postgres starts on Monday, matching the rest of
-    // the app. Only submitted cash counts toward these totals.
-    const weeklyCashRes = await pool.query(
-      `SELECT s.name AS store_name,
-              date_trunc('week', cs.submitted_at) AS week_start,
-              COUNT(*) AS report_count,
-              SUM(cs.amount) AS total
-       FROM cash_submissions cs
-       JOIN stores s ON s.id = cs.store_id
-       GROUP BY s.name, date_trunc('week', cs.submitted_at)
-       ORDER BY week_start DESC`
-    );
-
-    const monthlyCashRes = await pool.query(
-      `SELECT s.name AS store_name,
-              date_trunc('month', cs.submitted_at) AS month_start,
-              COUNT(*) AS report_count,
-              SUM(cs.amount) AS total
-       FROM cash_submissions cs
-       JOIN stores s ON s.id = cs.store_id
-       GROUP BY s.name, date_trunc('month', cs.submitted_at)
-       ORDER BY month_start DESC`
-    );
-
-    /** Format a week's Monday into "3-9 Aug 2026", spelling out boundaries. */
-    const weekLabel = (weekStartValue) => {
-      const start = new Date(weekStartValue);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      const mon = (d) => d.toLocaleDateString('en-AU', { month: 'short' });
-      if (start.getFullYear() !== end.getFullYear()) {
-        return `${start.getDate()} ${mon(start)} ${start.getFullYear()} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
-      }
-      if (start.getMonth() !== end.getMonth()) {
-        return `${start.getDate()} ${mon(start)} - ${end.getDate()} ${mon(end)} ${end.getFullYear()}`;
-      }
-      return `${start.getDate()}-${end.getDate()} ${mon(start)} ${start.getFullYear()}`;
-    };
-
-    // Group into { storeName: { weeks: [...], months: [...] } }
-    const cashPeriods = {};
-    const ensure = (name) => {
-      if (!cashPeriods[name]) cashPeriods[name] = { weeks: [], months: [] };
-      return cashPeriods[name];
-    };
-
-    weeklyCashRes.rows.forEach(r => {
-      ensure(r.store_name).weeks.push({
-        label: weekLabel(r.week_start),
-        count: parseInt(r.report_count, 10) || 0,
-        total: Math.round((parseFloat(r.total) || 0) * 100) / 100
-      });
-    });
-
-    monthlyCashRes.rows.forEach(r => {
-      ensure(r.store_name).months.push({
-        label: new Date(r.month_start).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
-        count: parseInt(r.report_count, 10) || 0,
-        total: Math.round((parseFloat(r.total) || 0) * 100) / 100
-      });
-    });
-
-    res.render('receiving-manager/cash', {
-      user: req.user,
-      byStore,
-      total,
-      cashPeriods
-    });
+    const { byStore, total, cashPeriods } = await getCashReportsByStore();
+    res.render('receiving-manager/cash', { user: req.user, byStore, total, cashPeriods });
   } catch (e) {
     console.error('[ReceivingManager] cash list error', e);
-    res.render('receiving-manager/cash', {
-      user: req.user,
-      byStore: {},
-      total: 0,
-      cashPeriods: {}
-    });
-  }
-});
-
-// ─── Shop Expenses (money store managers spent on their shop) ──────────────────
-
-router.get('/expenses', async (req, res) => {
-  const month = normaliseMonth(req.query.month);
-  const prevMonth = addMonths(month, -1);
-  const nextMonth = addMonths(month, 1);
-  try {
-    const [report, previous, trend] = await Promise.all([
-      getMonthlyReport(month),
-      getMonthlyReport(prevMonth),
-      getMonthlyTrend(month, 6)
-    ]);
-    res.render('receiving-manager/expenses', {
-      user: req.user,
-      categories: EXPENSE_CATEGORIES,
-      month,
-      monthLabel: monthLabel(month),
-      prevMonth,
-      nextMonth: nextMonth <= monthKey() ? nextMonth : null,
-      report,
-      previousTotal: previous.total,
-      trend,
-      error: null
-    });
-  } catch (e) {
-    console.error('[ReceivingManager] expenses error', e);
-    res.render('receiving-manager/expenses', {
-      user: req.user, categories: EXPENSE_CATEGORIES, month, monthLabel: monthLabel(month),
-      prevMonth, nextMonth: null, report: { stores: [], total: 0, count: 0 }, previousTotal: 0,
-      trend: { months: [], rows: [], columnTotals: [] }, error: 'Failed to load expenses'
-    });
-  }
-});
-
-// One month's expenses for every shop as a CSV (for the accountant)
-router.get('/expenses-export', async (req, res) => {
-  const month = normaliseMonth(req.query.month);
-  try {
-    const { stores } = await getMonthlyReport(month);
-    const label = Object.fromEntries(EXPENSE_CATEGORIES.map(c => [c.key, c.label]));
-    const csv = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-    const lines = [['Shop', 'Date', 'Type', 'Description', 'Amount', 'Entered by', 'Receipts'].map(csv).join(',')];
-    stores.forEach(store => {
-      store.expenses.forEach(x => {
-        lines.push([
-          store.name,
-          new Date(x.spent_on).toLocaleDateString('en-CA'),
-          label[x.category] || x.category,
-          x.description,
-          parseFloat(x.amount).toFixed(2),
-          `${x.first_name} ${x.last_name || ''}`.trim(),
-          x.images.length
-        ].map(csv).join(','));
-      });
-    });
-    stores.forEach(store => {
-      lines.push([`${store.name} total`, '', '', '', store.total.toFixed(2), '', ''].map(csv).join(','));
-    });
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="Shop_Expenses_${month}.csv"`);
-    res.send('﻿' + lines.join('\r\n')); // BOM so Excel reads it as UTF-8
-  } catch (e) {
-    console.error('[ReceivingManager] expenses export error', e);
-    res.status(500).send('Failed to generate download');
+    res.render('receiving-manager/cash', { user: req.user, byStore: {}, total: 0, cashPeriods: {} });
   }
 });
 

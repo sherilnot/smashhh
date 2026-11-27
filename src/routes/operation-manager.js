@@ -2,7 +2,7 @@ const express = require('express');
 const { requireAuth, roleGuard } = require('../middleware/auth');
 const { getSubmittedInvoices, getInvoiceDetail } = require('../services/receivedInvoiceService');
 const { getSubmittedTimesheets, getTimesheetDetail } = require('../services/timesheetService');
-const { getAllCashSubmissions, getCashSubmissionDetail } = require('../services/cashSubmissionService');
+const { getCashSubmissionDetail, getCashReportsByStore } = require('../services/cashSubmissionService');
 const { generateInvoicePdf } = require('../services/invoicePdfService');
 const { getAllMaintenanceReports, getMaintenanceReportDetail } = require('../services/maintenanceService');
 const { pool } = require('../config/database');
@@ -303,29 +303,14 @@ router.get('/timesheets/:id', async (req, res) => {
 // List all cash submissions — grouped by store
 router.get('/cash', async (req, res) => {
   try {
-    const { submissions, total } = await getAllCashSubmissions(1, 200);
-    const byStore = {};
-    submissions.forEach(sub => {
-      if (!byStore[sub.store_name]) byStore[sub.store_name] = [];
-      byStore[sub.store_name].push(sub);
-    });
-
-    res.render('operation-manager/cash', {
-      user: req.user,
-      byStore,
-      total
-    });
+    const { byStore, total, cashPeriods } = await getCashReportsByStore();
+    res.render('operation-manager/cash', { user: req.user, byStore, total, cashPeriods });
   } catch (e) {
     console.error('[OperationManager] cash list error', e);
-    res.render('operation-manager/cash', {
-      user: req.user,
-      byStore: {},
-      total: 0
-    });
+    res.render('operation-manager/cash', { user: req.user, byStore: {}, total: 0, cashPeriods: {} });
   }
 });
 
-// View cash submission detail
 router.get('/cash/:id', async (req, res) => {
   try {
     const result = await getCashSubmissionDetail(req.params.id);
